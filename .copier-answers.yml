@@ -1,0 +1,11 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: cc253fb
+_src_path: gh:jmfontaine/copier-python
+author_email: jm@jmfontaine.net
+author_name: Jean-Marc Fontaine
+cli: true
+description: Preservation and forensic toolkit for music collectors
+package_name: copyofa
+project_kind: app
+project_name: copyofa
+python_min: '3.11'

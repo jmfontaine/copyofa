@@ -6,6 +6,7 @@ CopyOfA is a preservation and forensic toolkit for music collectors that acquire
 maintains trustworthy evidence of recorded audio, then lets collectors analyze, compare,
 and share what that evidence reveals.
 
+<!-- rumdl-disable-next-line MD036 -->
 **Acquire → Preserve → Analyze → Compare → Share**
 
 So collectors can discover what is actually in their collections.

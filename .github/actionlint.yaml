@@ -1,0 +1,6 @@
+self-hosted-runner:
+  # KLUDGE: actionlint 1.7.12, the latest release, predates GitHub's ubuntu-26.04
+  # runner image and reports its label as unknown. Remove this once a release
+  # lists it.
+  labels:
+    - ubuntu-26.04

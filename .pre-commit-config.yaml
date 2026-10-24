@@ -1,0 +1,72 @@
+repos:
+  # General
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/streetsidesoftware/cspell-cli
+    rev: f6467e1f1ebecf5020560405c7b26e01786a43c8  # frozen: v10.4.0
+    hooks:
+      - id: cspell
+
+  # Through `uv run`, so the hooks use the versions pinned in uv.lock, as CI does.
+  - repo: local
+    hooks:
+      - id: pyproject-fmt
+        name: pyproject-fmt
+        entry: uv run pyproject-fmt
+        language: system
+        files: ^pyproject\.toml$
+
+      # Fixes first: they can leave code the formatter then changes.
+      - id: ruff-check
+        name: ruff-check
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+
+      - id: ruff-format
+        name: ruff-format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+
+      # Formatting first: it fixes what it can, and the check reports the rest.
+      - id: rumdl-fmt
+        name: rumdl-fmt
+        entry: uv run rumdl fmt
+        language: system
+        types: [markdown]
+        require_serial: true
+
+      - id: rumdl-check
+        name: rumdl-check
+        entry: uv run rumdl check
+        language: system
+        types: [markdown]
+        require_serial: true
+
+      - id: type-check
+        name: type-check
+        entry: uv run ty check
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+
+      - id: deps-unused
+        name: deps-unused
+        entry: uv run deptry src
+        language: system
+        files: (^pyproject\.toml$|\.py$)
+        pass_filenames: false

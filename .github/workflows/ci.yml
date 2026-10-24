@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A pull request's runs share its ref, so a newer push cancels the older run.
+# Every other run gets a group of its own commit, so no `main` commit is left
+# without a result: a group holds only one pending run, so even
+# `cancel-in-progress: false` would drop the middle one of three quick pushes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
+        with:
+          # Jobs on the same Python otherwise compute the same cache key and
+          # race to reserve it, which logs a warning in whichever loses.
+          cache-suffix: ${{ github.job }}
+      - run: uv sync --locked
+      # The one list of checks, shared with `just qa` and the git hooks. Hooks
+      # that fix files fail here when they change something, and the diff shows
+      # what they changed.
+      - run: uv run pre-commit run --all-files --show-diff-on-failure
+
+  test:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
+        with:
+          cache-suffix: ${{ github.job }}
+      - run: uv sync --locked --no-dev --group test
+      - run: uv run --no-sync pytest --cov
