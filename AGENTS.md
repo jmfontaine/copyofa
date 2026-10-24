@@ -1,65 +1,31 @@
 # Instructions for coding agents
 
-## Commands
+## Product
 
-The task runner is [just](https://github.com/casey/just); every recipe runs
-through `uv run`, so the tools come from the versions pinned in `uv.lock`.
+CopyOfA is being rebuilt from a clean slate. Read these before proposing or doing work:
 
-```bash
-just setup              # Install all dependency groups and the pre-commit hooks
-just test               # pytest with coverage; extra arguments go to pytest
-just qa                 # dead-code, deps-unused, format-check, lint, type-check
-just format             # ruff format + pyproject-fmt
-just lint-fix           # ruff check --fix
-just type-check         # strict mypy over src and tests
-just dead-code          # vulture over src and tests
-just deps-unused        # deptry src
-just deps-update        # Upgrade uv.lock and sync
-just pre-commit         # Run every pre-commit hook on all files
-```
+- [docs/manifesto.md](docs/manifesto.md) is the authority for purpose, principles and
+  boundaries.
+- [docs/product-map.md](docs/product-map.md) holds the capabilities, collector
+  scenarios, core concepts and the Now / Next / Later roadmap. Use its capitalized
+  concept names (Evidence Set, Audio Identity, Report, …) with the meanings it gives.
 
-Run a single test with `just test tests/test_cli.py -k discard`. Before finishing
-a change, run `just qa` and `just test`; CI runs the same checks on macOS.
-
-## Testing
-
-- `pilot` tests read real dumps from `$COPYOFA_PILOT_DUMPS` (default `~/Dumps`) and
-  skip when they are absent.
-- `macos_integration` tests attach a temporary disk image with `hdiutil`;
-  deselect them with `-m "not macos_integration"`.
-- The archive tests need `flac`, `jq`, `par2`, `xz` and `zstd` on `PATH`.
-- Files under `tests/fixtures/` are the tools' own output (redumper logs, drutil
-  status). Never edit them; the pre-commit fixers skip them.
+The previous implementation is retired; its last version is commit `0d04a38`. Consult
+its history for lessons learned, not as the architecture to follow. There is no
+toolchain yet.
 
 ## Language
 
-Write US English in everything: code, comments, docstrings, messages, tests,
-documentation and commit messages (`-ize`, `-or`, `-er`, `canceled`, `catalog`).
-Optical media are "discs"; "disk" stays correct for other storage and in macOS
-names such as `diskutil`.
+Write US English in everything: code, comments, documentation, messages, tests and
+commit messages (`-ize`, `-or`, `-er`, `canceled`, `catalog`). Optical media are
+"discs"; "disk" stays correct for other storage and in macOS names such as `diskutil`.
 
-The project is "CopyOfA" in prose (documentation, help text, schema titles) and
-`copyofa` everywhere else: the distribution, the Python package, the command, the
-repository, the `~/.config/copyofa/` directory, `COPYOFA_*` environment
-variables, schema URLs, and the tool name recorded in archive metadata and in
-`handled_by`. Class names use `CopyOfA` (`CopyOfAError`).
+The project is "CopyOfA" in prose and `copyofa` in identifiers: the repository,
+packages, commands, configuration directories, `COPYOFA_*` environment variables, and
+the tool name recorded in data. Type names use `CopyOfA` (`CopyOfAError`).
 
 ## Conventions
 
-- Lint and format with ruff at a line length of 88. Suppress a finding only with
-  `# noqa: CODE - reason`; repository-wide ignores live in `pyproject.toml`, each
-  with its reason.
-- Strict mypy covers `src` and `tests`. Narrow optional values instead of
-  silencing mypy: guard a value that can really be missing with a clear
-  `CopyOfAError`, and `assert` an invariant the code already guarantees.
-  `# type: ignore[code]` only at untyped boundaries (PyObjC), with a reason.
-- Declare every third-party module the code imports as a direct dependency;
-  `deptry` enforces it. Add dependencies with `uv add`, never by editing
-  `pyproject.toml` by hand.
-- Workarounds that are knowingly less than ideal carry a `KLUDGE:` comment that
-  states what is wrong and what removes it. Grep for `KLUDGE` before changing
-  such code, and do not add one without a removal condition.
-- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/):
-  `<type>: <description>` with `feat`, `fix`, `refactor`, `chore`, `docs`,
-  `test` or `ci`.
-- Run `git` commands directly, never with `git -C`.
+Workarounds that are knowingly less than ideal carry a `KLUDGE:` comment that states
+what is wrong and what removes it. Grep for `KLUDGE` before changing such code, and do
+not add one without a removal condition.
