@@ -196,9 +196,10 @@ Each criterion is verified by an automated test unless stated otherwise.
   references appear exactly as supplied; without them, those fields are absent rather
   than empty or invented.
 - **AC3 — Selection accounted for.** Every regular file under the selected sources is
-  either listed in `manifest-sha256.txt` or listed as an exclusion with its reason, and
-  so is every pattern match, operating system metadata file, symbolic link, special
-  file, and empty directory. `Payload-Oxum` matches the preserved files.
+  listed in `manifest-sha256.txt`, listed as an exclusion with its reason, or under a
+  directory listed as one. Every pattern match, operating system metadata file,
+  symbolic link, special file, and empty directory is listed as an exclusion.
+  `Payload-Oxum` matches the preserved files.
 - **AC4 — Unreadable input.** With a source file made unreadable, or a source
   subdirectory that cannot be listed, import exits 1, names it, and creates no
   destination. Excluding it makes the import succeed.
