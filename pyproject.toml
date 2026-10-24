@@ -7,6 +7,8 @@ name = "copyofa"
 version = "0.1.0"
 description = "Preservation and forensic toolkit for music collectors"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = [ "LICENSE.txt" ]
 authors = [ { name = "Jean-Marc Fontaine", email = "jm@jmfontaine.net" } ]
 requires-python = ">=3.11"
 classifiers = [

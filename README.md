@@ -10,8 +10,8 @@ The project is restarting from a clean slate. The repository holds a Python CLI
 skeleton with its tooling, and no features yet. No release has been planned.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
-retired. Its last version is commit `0d04a38` in the Git history. It does not define the
-new architecture or release sequence.
+retired. Its last code change is commit `0d04a38` in the Git history. It does not define
+the new architecture or release sequence.
 
 ## Documents
 

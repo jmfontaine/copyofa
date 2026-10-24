@@ -1,4 +1,4 @@
-"""Command-line interface for copyofa."""
+"""Command-line interface for CopyOfA."""
 
 from __future__ import annotations
 
