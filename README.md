@@ -6,8 +6,8 @@ and share what that evidence reveals.
 
 ## Status
 
-The project is restarting from a clean slate, and the repository holds no code yet. No
-release has been planned.
+The project is restarting from a clean slate. The repository holds a Python CLI
+skeleton with its tooling, and no features yet. No release has been planned.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
 retired. Its last version is commit `0d04a38` in the Git history. It does not define the
@@ -20,6 +20,20 @@ new architecture or release sequence.
   and the Now / Next / Later roadmap.
 
 GitHub release milestones and their issues will hold the committed work.
+
+## Development
+
+With [uv](https://docs.astral.sh/uv/) and [just](https://github.com/casey/just)
+installed:
+
+```bash
+just setup  # Install dependencies and git hooks
+just qa     # Run all checks
+just test   # Run the tests
+```
+
+[AGENTS.md](AGENTS.md) holds the commands and conventions for contributors and coding
+agents.
 
 ## License
 
