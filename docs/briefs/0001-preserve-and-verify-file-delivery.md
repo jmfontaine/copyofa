@@ -209,9 +209,8 @@ Each criterion is verified by an automated test unless stated otherwise.
   existing destination, a missing destination parent, a destination inside a source,
   a source that does not exist, sources sharing a base name, nested or repeated
   sources, a selection with nothing to preserve, and a leftover staging directory,
-  which the error names. Source files keep
-  their content and modification times. Ctrl-C leaves no staging directory and no
-  destination and exits 130.
+  which the error names. Source files keep their content and modification times.
+  Ctrl-C leaves no staging directory and no destination and exits 130.
 - **AC7 — Intact after relocation.** After the Evidence Set is moved to a different
   parent directory and a `.DS_Store` is added under `data/`, `copyofa verify` reports
   every item matching, reports no unexpected file, and exits 0.
