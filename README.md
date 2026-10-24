@@ -7,7 +7,8 @@ and share what that evidence reveals.
 ## Status
 
 The project is restarting from a clean slate. The repository holds a Python CLI
-skeleton with its tooling, and no features yet. No release has been planned.
+skeleton with its tooling, and no features yet. The first release, v0.1.0, is planned:
+see the roadmap in the Product Map.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
 retired. Its last code change is commit `0d04a38` in the Git history. It does not define
@@ -18,6 +19,8 @@ the new architecture or release sequence.
 - [Manifesto](docs/manifesto.md): vision, target users, principles and non-goals.
 - [Product Map](docs/product-map.md): capabilities, collector scenarios, core concepts,
   and the Now / Next / Later roadmap.
+- [Briefs](docs/briefs/): the scope and acceptance criteria of planned work.
+- [Decisions](docs/decisions/): architecture decision records.
 
 GitHub release milestones and their issues will hold the committed work.
 

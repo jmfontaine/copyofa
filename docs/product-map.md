@@ -244,7 +244,7 @@ the collector already owns.
 - **[v0.1.0](https://github.com/jmfontaine/copyofa/milestone/1): Preserve and Verify a
   Selected File Delivery** — Acquire Audio and Record Its Origins; Preserve Evidence
   Throughout Its Lifetime. S2 and S6. Specified in the
-  [brief](briefs/preserve-and-verify-file-delivery.md).
+  [brief](briefs/0001-preserve-and-verify-file-delivery.md).
 
 ### Next
 
