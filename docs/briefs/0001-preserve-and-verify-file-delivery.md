@@ -67,12 +67,13 @@ delivery) and [S6](../product-map.md#s6-check-an-archive-later) (check it later)
   there only once it is accepted.
 - **Payload layout.** Each source goes under `data/` by its base name, as `cp -R` would
   place it: `~/Downloads/Album` becomes `data/Album/…`, a file `notes.txt` becomes
-  `data/notes.txt`. Sources that share a base name, are the same path, or lie inside
-  one another are refused.
+  `data/notes.txt`. Sources that do not exist, share a base name, are the same path, or
+  lie inside one another are refused.
 - **Selection.** Every regular file under a selected directory is preserved, hidden
   files included, except:
-  - files matching an `--exclude <pattern>`, against their file name or their path
-    under `data/` (shell-style patterns);
+  - files and directories matching an `--exclude <pattern>`, against their name or
+    their path under `data/` (shell-style patterns); a matching directory is excluded
+    whole, without being listed, and recorded as one exclusion;
   - operating system metadata files, as defined in Design decisions;
   - symbolic links, which are not followed, and special files such as sockets;
   - empty directories, which BagIt cannot represent.
@@ -111,9 +112,10 @@ delivery) and [S6](../product-map.md#s6-check-an-archive-later) (check it later)
   - any entry in either manifest is not a normalized relative path inside the bag (an
     absolute path, or one with `.` or `..` components), or a payload manifest entry
     is not under `data/`. Verify never opens such a path.
-- **Unusable baseline.** Each entry of `manifest-sha256.txt`, when it can still be
-  read, is reported as not checked with the reason, and never as matching. When it
-  cannot be read, no payload item is reported. Unexpected files are not looked for.
+- **Unusable baseline.** Each entry of `manifest-sha256.txt`, when the file can still
+  be parsed, is reported as not checked with the reason, and never as matching. When it
+  cannot be read or parsed, no payload item is reported. Unexpected files are not
+  looked for.
 - **Payload outcomes.** With a usable baseline, each file listed in
   `manifest-sha256.txt` gets exactly one outcome, as defined in Design decisions:
   matching, changed, missing, unavailable, or not checked.
@@ -137,8 +139,8 @@ delivery) and [S6](../product-map.md#s6-check-an-archive-later) (check it later)
 - Exit 2: invalid arguments, or the verify target is not an Evidence Set (no
   `bagit.txt`).
 - Exit 130: canceled with Ctrl-C.
-- Stdout is empty whenever no result is produced: a failed import, exit 2, and
-  exit 130.
+- Stdout is empty whenever no result is produced: a refused or failed import, exit 2,
+  and exit 130.
 
 ## Design decisions
 
@@ -160,7 +162,7 @@ delivery) and [S6](../product-map.md#s6-check-an-archive-later) (check it later)
   path exists but could not be read completely, such as a permission or I/O error, or
   is not a regular file (a directory, symbolic link, or special file; symbolic links
   are not followed). Not checked: the check was not attempted, with the reason.
-- **Verification Report.** A JSON document with `report_kind`
+- **Verification Report format.** A JSON document with `report_kind`
   `copyofa.verification` and a `format_version`. It records: the CopyOfA version; the
   check time in UTC; the Integrity Baseline it used, identified by the SHA-256 of
   `manifest-sha256.txt`, or its absence when that file cannot be read; whether the
@@ -205,8 +207,9 @@ Each criterion is verified by an automated test unless stated otherwise.
   creates no destination.
 - **AC6 — Safe import.** Each of these refusals exits 1 before anything is copied: an
   existing destination, a missing destination parent, a destination inside a source,
-  sources sharing a base name, nested or repeated sources, a selection with nothing to
-  preserve, and a leftover staging directory, which the error names. Source files keep
+  a source that does not exist, sources sharing a base name, nested or repeated
+  sources, a selection with nothing to preserve, and a leftover staging directory,
+  which the error names. Source files keep
   their content and modification times. Ctrl-C leaves no staging directory and no
   destination and exits 130.
 - **AC7 — Intact after relocation.** After the Evidence Set is moved to a different
@@ -230,7 +233,7 @@ Each criterion is verified by an automated test unless stated otherwise.
 
   With only `copyofa/import-record.json` edited, verify reports that record failure,
   still checks the payload, and exits 1.
-- **AC10 — Verification Report.** `verify --json` prints a Report with the content in
+- **AC10 — Report content.** `verify --json` prints a Report with the content in
   Design decisions, and the Evidence Set's files are unchanged afterward.
 - **AC11 — Command conventions.** Both commands follow the output and exit-code rules
   above, including empty stdout when no result is produced. Import reports progress
