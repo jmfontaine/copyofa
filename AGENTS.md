@@ -99,7 +99,8 @@ makes PyPI reject any upload. The `copyofa` console script calls
 
 - `src/copyofa/`: the package (src layout)
 - `tests/`: the pytest suite
-- `docs/`: durable project documents: the Manifesto and the Product Map
+- `docs/`: durable project documents: the Manifesto, the Product Map, release briefs
+  (`docs/briefs/`), and architecture decision records (`docs/decisions/`)
 
 ### Testing
 

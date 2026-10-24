@@ -236,22 +236,22 @@ separate comparison service; CopyOfA does not become a central music database.
 
 Plan CopyOfA as a clean reboot from the Manifesto. Retire the previous implementation
 while retaining Git history; its code does not define the new architecture or release
-sequence. Establishing file workflows before integrating CD acquisition is a
-recommendation to assess when planning the first release.
+sequence. File workflows come before CD acquisition: the first release preserves files
+the collector already owns.
 
 ### Now
 
-No committed release. No GitHub release Milestone has been created.
+- **[v0.1.0](https://github.com/jmfontaine/copyofa/milestone/1): Preserve and Verify a
+  Selected File Delivery** — Acquire Audio and Record Its Origins; Preserve Evidence
+  Throughout Its Lifetime. S2 and S6. Specified in the
+  [brief](briefs/0001-preserve-and-verify-file-delivery.md).
 
 ### Next
 
-No release outcomes have been selected. Choose the first useful collector outcome, its
-supported boundary, and an effort appetite before committing work.
+Not selected. Choose the next outcome after the v0.1.0 release review.
 
 ### Later
 
-- **Preserve and Verify a Selected File Delivery** — Acquire Audio and Record Its
-  Origins; Preserve Evidence Throughout Its Lifetime. S2 and S6.
 - **Inspect Audio and Share Its Analysis** — Understand Audio; Share and Evaluate
   Findings. S2 and S5.
 - **Compare Selected Tracks or Editions** — Compare and Discover Relationships; Share
@@ -267,10 +267,6 @@ supported boundary, and an effort appetite before committing work.
 These are intended outcomes without release assignments. Their order here does not
 prescribe a release sequence.
 
-Preserving one selected file delivery and verifying it after relocation remains a
-candidate for the first release. It offers a useful end-to-end outcome using files the
-collector already owns. It has not been selected.
-
-Move the selected outcome into Now when its GitHub release Milestone establishes
+Move a selected outcome into Now when its GitHub release Milestone establishes
 commitment. Keep Next limited to the following one or two outcomes when planned, and
 review the roadmap after each release.
