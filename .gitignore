@@ -1,13 +1,8 @@
 __pycache__/
 .coverage
-.mypy_cache/
 .pytest_cache/
 .ruff_cache/
+.scratch/
 .venv/
 *.egg-info/
 *.py[cod]
-build/
-dist/
-
-# These redumper logs are required by the tests
-!tests/fixtures/logs/*.log

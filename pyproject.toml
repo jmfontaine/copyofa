@@ -1,117 +1,91 @@
 [build-system]
 build-backend = "uv_build"
-requires = [ "uv-build>=0.12.19,<0.13" ]
+requires = [ "uv-build>=0.13,<0.14" ]
 
 [project]
 name = "copyofa"
 version = "0.1.0"
-description = "Archive optical discs bit-exactly"
+description = "Preservation and forensic toolkit for music collectors"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = [ "LICENSE.txt" ]
 authors = [ { name = "Jean-Marc Fontaine", email = "jm@jmfontaine.net" } ]
-requires-python = ">=3.14,<3.15"
+requires-python = ">=3.11"
 classifiers = [
+  # PyPI rejects any upload carrying this classifier.
+  "Private :: Do Not Upload",
   "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
 ]
-dependencies = [
-  "click>=8.5",
-  "jsonschema>=4.26",
-  "pyobjc-core>=12.2.2",
-  "pyobjc-framework-cocoa>=12.2.2",
-  "pyobjc-framework-diskarbitration>=12.2.2",
-]
+dependencies = []
 scripts.copyofa = "copyofa.cli:main"
 
 [dependency-groups]
 dev = [
-  "deptry>=0.25.1",
-  "mypy>=2.4",
-  "pre-commit>=4.6.2",
-  "pyproject-fmt>=2.29.4",
-  "pytest>=9.1.1",
+  "deptry>=0.25",
+  "pre-commit>=4.6",
+  "pyproject-fmt>=2.30",
+  "ruff>=0.17",
+  "rumdl>=0.3",
+  "ty>=0.0.86",
+  { include-group = "test" },
+]
+test = [
+  "pytest>=9.1",
   "pytest-cov>=7.1",
-  "ruff>=0.16.10",
-  "types-jsonschema>=4.26.0.20260518",
-  "vulture>=2.16",
 ]
 
 [tool.ruff]
 line-length = 88
-src = [ "src", "tests" ]
 lint.select = [
-  "A",    # flake8-builtins
-  "B",    # flake8-bugbear
-  "BLE",  # flake8-blind-except
-  "C4",   # flake8-comprehensions
-  "E",    # pycodestyle errors
-  "EXE",  # flake8-executable
-  "F",    # pyflakes
-  "I",    # isort
-  "ISC",  # flake8-implicit-str-concat
-  "N",    # pep8-naming
-  "PERF", # perflint
-  "PGH",  # pygrep-hooks
-  "PIE",  # flake8-pie
-  "PLE",  # pylint errors
-  "PLW",  # pylint warnings
-  "PT",   # flake8-pytest-style
-  "PTH",  # flake8-use-pathlib
-  "RET",  # flake8-return
-  "RSE",  # flake8-raise
-  "RUF",
-  "SIM",  # flake8-simplify
-  "T10",  # flake8-debugger
-  "UP",   # pyupgrade
-  "W",    # pycodestyle warnings
+  "A",     # flake8-builtins
+  "ASYNC", # flake8-async
+  "B",     # flake8-bugbear
+  "BLE",   # flake8-blind-except
+  "C4",    # flake8-comprehensions
+  "DTZ",   # flake8-datetimez
+  "E",     # pycodestyle errors
+  "EXE",   # flake8-executable
+  "F",     # pyflakes
+  "FLY",   # flynt
+  "FURB",  # refurb
+  "G",     # flake8-logging-format
+  "I",     # isort
+  "ISC",   # flake8-implicit-str-concat
+  "LOG",   # flake8-logging
+  "N",     # pep8-naming
+  "PERF",  # perflint
+  "PGH",   # pygrep-hooks
+  "PIE",   # flake8-pie
+  "PLE",   # pylint errors
+  "PLW",   # pylint warnings
+  "PT",    # flake8-pytest-style
+  "PTH",   # flake8-use-pathlib
+  "RET",   # flake8-return
+  "RSE",   # flake8-raise
+  "RUF",   # ruff-specific rules
+  "SIM",   # flake8-simplify
+  "T10",   # flake8-debugger
+  "UP",    # pyupgrade
+  "W",     # pycodestyle warnings
 ]
-lint.ignore = [
-  "N818", # error-suffix-on-exception-name - `copyofa: <ExceptionName> [code]: ...` prints the class name, so UsageError, EnvironmentFailure etc. are part of the CLI output contract
-]
-
-[tool.deptry]
-package_module_name_map.pyobjc-core = "objc"
-package_module_name_map.pyobjc-framework-cocoa = [
-  "Cocoa",
-  "CoreFoundation",
-  "Foundation",
-  "AppKit",
-  "PyObjCTools",
-]
-package_module_name_map.pyobjc-framework-diskarbitration = "DiskArbitration"
-
-[tool.vulture]
-paths = [ "src", "tests" ]
-ignore_names = [
-  "appendable",    # MediumStatus field parsed from drutil status, kept with its siblings
-  "command_class", # read by click.Group when CopyOfAGroup creates commands
-  "description",   # Profile field loaded from the profile TOML files
-  "pytestmark",    # read by pytest
-]
-# Click registers the commands and pytest the fixtures; nothing calls them by name.
-ignore_decorators = [ "@main.command", "@pytest.fixture" ]
 
 [tool.pyproject-fmt]
 column_width = 88
-max_supported_python = "3.14"
-
-[tool.mypy]
-files = [ "src", "tests" ]
-python_version = "3.14"
-strict = true
-
-[[tool.mypy.overrides]]
-# PyObjC ships neither stubs nor a py.typed marker.
-module = [ "CoreFoundation", "DiskArbitration", "objc" ]
-ignore_missing_imports = true
+max_supported_python = "3.15"
 
 [tool.pytest]
-ini_options.testpaths = [ "tests" ]
-ini_options.markers = [
-  "macos_integration: attaches a temporary disk image",
-  "pilot: reads the dumps in $COPYOFA_PILOT_DUMPS (default ~/Dumps); skips if absent",
+# Python ignores ResourceWarning by default, so a leaked file or connection
+# would otherwise pass unnoticed.
+filterwarnings = [
+  "error::ResourceWarning",
+  "error::pytest.PytestUnraisableExceptionWarning",
 ]
+testpaths = [ "tests" ]
 
 [tool.coverage]
 run.source = [ "copyofa" ]

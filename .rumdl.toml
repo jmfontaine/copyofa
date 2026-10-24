@@ -1,0 +1,9 @@
+[global]
+line-length = 88
+
+[MD013]
+reflow = true
+
+# A pull request template is a body; GitHub holds the title separately.
+[per-file-ignores]
+".github/pull_request_template.md" = ["MD041"]

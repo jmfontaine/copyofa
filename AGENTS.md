@@ -1,65 +1,127 @@
-# Instructions for coding agents
+# AGENTS.md
+
+Guidance for coding agents working in this repository.
+
+## Project
+
+CopyOfA is a preservation and forensic toolkit for music collectors, rebuilt from a
+clean slate. Read these before proposing or doing work:
+
+- [docs/manifesto.md](docs/manifesto.md) is the authority for purpose, principles and
+  boundaries.
+- [docs/product-map.md](docs/product-map.md) holds the capabilities, collector
+  scenarios, core concepts and the Now / Next / Later roadmap. Use its capitalized
+  concept names (Evidence Set, Audio Identity, Report, …) with the meanings it gives.
+
+The previous implementation is retired; its last code change is commit `0d04a38`.
+Consult its history for lessons learned, not as the architecture to follow.
 
 ## Commands
 
-The task runner is [just](https://github.com/casey/just); every recipe runs
-through `uv run`, so the tools come from the versions pinned in `uv.lock`.
+Task runner is [just](https://github.com/casey/just); every recipe runs its tool
+through [uv](https://docs.astral.sh/uv/).
 
 ```bash
-just setup              # Install all dependency groups and the pre-commit hooks
-just test               # pytest with coverage; extra arguments go to pytest
-just qa                 # dead-code, deps-unused, format-check, lint, type-check
-just format             # ruff format + pyproject-fmt
-just lint-fix           # ruff check --fix
-just type-check         # strict mypy over src and tests
-just dead-code          # vulture over src and tests
+just setup              # Install deps + pre-commit hooks (hooks: main checkout only)
+just test               # Run pytest with coverage
+just test <path>        # Run one test file or directory
+just format             # ruff format + pyproject-fmt + rumdl fmt (Markdown)
+just lint-fix           # ruff check --fix + rumdl check --fix
+just type-check         # ty check
 just deps-unused        # deptry src
-just deps-update        # Upgrade uv.lock and sync
-just pre-commit         # Run every pre-commit hook on all files
+just spell              # cspell against cspell.json
+just qa                 # All checks: every pre-commit hook
+just deps-update        # Update deps to latest versions
 ```
 
-Run a single test with `just test tests/test_cli.py -k discard`. Before finishing
-a change, run `just qa` and `just test`; CI runs the same checks on macOS.
+Run a single test: `just test tests/test_version.py -k matches_installed_metadata`
 
-## Testing
-
-- `pilot` tests read real dumps from `$COPYOFA_PILOT_DUMPS` (default `~/Dumps`) and
-  skip when they are absent.
-- `macos_integration` tests attach a temporary disk image with `hdiutil`;
-  deselect them with `-m "not macos_integration"`.
-- The archive tests need `flac`, `jq`, `par2`, `xz` and `zstd` on `PATH`.
-- Files under `tests/fixtures/` are the tools' own output (redumper logs, drutil
-  status). Never edit them; the pre-commit fixers skip them.
+Before finishing a change, run `just format && just lint-fix && just qa && just test`.
+`just qa` runs pre-commit, which sees only files git tracks: `git add` new files
+first.
 
 ## Language
 
-Write US English in everything: code, comments, docstrings, messages, tests,
-documentation and commit messages (`-ize`, `-or`, `-er`, `canceled`, `catalog`).
-Optical media are "discs"; "disk" stays correct for other storage and in macOS
-names such as `diskutil`.
+Write US English in everything you write for this project: code comments,
+docstrings, error messages, identifiers, tests, documentation, commit messages
+and replies. That means `-ize` and `-yze` (`normalize`, `analyze`), `-or`
+(`behavior`, `honor`), `-er` (`center`), a single `l` before a suffix
+(`labeling`, `canceled`), and `license` as both noun and verb. Leave other
+people's text, such as vendored code, as it is.
 
-The project is "CopyOfA" in prose (documentation, help text, schema titles) and
-`copyofa` everywhere else: the distribution, the Python package, the command, the
-repository, the `~/.config/copyofa/` directory, `COPYOFA_*` environment
-variables, schema URLs, and the tool name recorded in archive metadata and in
-`handled_by`. Class names use `CopyOfA` (`CopyOfAError`).
+Optical media are "discs"; "disk" stays correct for other storage and in macOS names
+such as `diskutil`.
+
+The project is "CopyOfA" in prose and `copyofa` in identifiers: the repository,
+packages, commands, configuration directories, `COPYOFA_*` environment variables, and
+the tool name recorded in data. Type names use `CopyOfA` (`CopyOfAError`).
 
 ## Conventions
 
-- Lint and format with ruff at a line length of 88. Suppress a finding only with
-  `# noqa: CODE - reason`; repository-wide ignores live in `pyproject.toml`, each
-  with its reason.
-- Strict mypy covers `src` and `tests`. Narrow optional values instead of
-  silencing mypy: guard a value that can really be missing with a clear
-  `CopyOfAError`, and `assert` an invariant the code already guarantees.
-  `# type: ignore[code]` only at untyped boundaries (PyObjC), with a reason.
-- Declare every third-party module the code imports as a direct dependency;
-  `deptry` enforces it. Add dependencies with `uv add`, never by editing
-  `pyproject.toml` by hand.
-- Workarounds that are knowingly less than ideal carry a `KLUDGE:` comment that
-  states what is wrong and what removes it. Grep for `KLUDGE` before changing
-  such code, and do not add one without a removal condition.
-- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/):
-  `<type>: <description>` with `feat`, `fix`, `refactor`, `chore`, `docs`,
-  `test` or `ci`.
-- Run `git` commands directly, never with `git -C`.
+- Python 3.11+, developed on the version in `.python-version`; ruff
+  enforces a line length of 88
+- ty is the type checker
+- Dependency groups: `dev` holds the tools and includes `test`, which holds only what
+  the tests import. CI installs `test` on its own, so a test cannot lean on a `dev` tool
+- Workarounds that are knowingly less than ideal carry a `KLUDGE:` comment
+  stating what is wrong and what removes it. Grep for `KLUDGE` before changing
+  one; do not add one without a removal condition
+
+## Architecture
+
+What future work on CopyOfA may assume today. Commands and day-to-day
+conventions are above.
+
+### Shape
+
+A Python CLI application, never published: the `Private :: Do Not Upload` classifier
+makes PyPI reject any upload. The `copyofa` console script calls
+`copyofa.cli:main`.
+
+### Language, runtime, and tooling
+
+- Python 3.11+ (`requires-python`); developed on the version in
+  `.python-version`
+- uv manages dependencies and environments; `uv.lock` is committed, and uv_build
+  builds the package
+- just is the task runner
+- ruff formats and lints; pyproject-fmt formats `pyproject.toml`; rumdl formats and
+  lints Markdown, configured in `.rumdl.toml`
+- ty checks types
+- deptry reports unused and undeclared dependencies
+- cspell checks spelling against `cspell.json`; actionlint checks the workflows
+- pre-commit holds the one list of checks, run on every commit, by `just qa` and by
+  CI. The tools the justfile also runs on their own come from `uv.lock` through
+  `uv run`; the general file checks, actionlint and cspell are pinned in
+  `.pre-commit-config.yaml`
+
+### Structure
+
+- `src/copyofa/`: the package (src layout)
+- `tests/`: the pytest suite
+- `docs/`: durable project documents: the Manifesto and the Product Map
+
+### Testing
+
+pytest with coverage (`just test`). CI runs it on the development Python.
+
+### Distribution
+
+None.
+
+### CI
+
+- `.github/workflows/ci.yml` runs on pushes to `main` and on every pull request:
+  every pre-commit hook, then the tests. Actions are pinned to commit
+  SHAs, and no checkout keeps its token
+- Dependabot opens weekly grouped updates for GitHub Actions and `uv.lock`, with
+  `build:` commit messages and the `dependencies` and `build` labels; it moves the
+  lock only, never the minimum versions in `pyproject.toml`
+
+### Agent support
+
+Coding agents are expected contributors. They follow this file.
+
+## Deviations from the shared workflow
+
+None.

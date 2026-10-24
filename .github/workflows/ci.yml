@@ -8,46 +8,40 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same branch or pull request makes a running check moot.
+# A pull request's runs share its ref, so a newer push cancels the older run.
+# Every other run gets a group of its own commit, so no `main` commit is left
+# without a result: a group holds only one pending run, so even
+# `cancel-in-progress: false` would drop the middle one of three quick pushes.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
-# Every job runs on macOS: copyofa drives macOS tools, and its PyObjC dependencies
-# have no wheels for other platforms.
 jobs:
-  quality:
-    runs-on: macos-26
+  lint:
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
+        with:
+          # Jobs on the same Python otherwise compute the same cache key and
+          # race to reserve it, which logs a warning in whichever loses.
+          cache-suffix: ${{ github.job }}
       - run: uv sync --locked
-      - run: uv run pyproject-fmt --check pyproject.toml
-      - run: uv run ruff check
-      - run: uv run ruff format --check
-      - run: uv run mypy
-      - run: uv run deptry src
-      - run: uv run vulture
+      # The one list of checks, shared with `just qa` and the git hooks. Hooks
+      # that fix files fail here when they change something, and the diff shows
+      # what they changed.
+      - run: uv run pre-commit run --all-files --show-diff-on-failure
 
   test:
-    runs-on: macos-26
-    strategy:
-      fail-fast: false
-      matrix:
-        resolution: [highest]
-        include:
-          # The oldest dependency versions pyproject.toml allows. Deprecations
-          # are fatal there, so an old dependency calling an API Python
-          # deprecates fails here rather than when that API is removed.
-          - resolution: lowest-direct
-            warnings: -W error::DeprecationWarning -W error::PendingDeprecationWarning
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
-      # The archive tests compress, protect and rebuild a real archive set.
-      - run: brew install flac jq par2 xz zstd
-      # pytest comes from the dev group, which uv run installs by default.
-      - run: >-
-          uv run --isolated --python 3.14
-          --resolution ${{ matrix.resolution }}
-          python ${{ matrix.warnings }} -m pytest
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
+        with:
+          cache-suffix: ${{ github.job }}
+      - run: uv sync --locked --no-dev --group test
+      - run: uv run --no-sync pytest --cov
