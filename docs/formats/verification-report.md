@@ -13,6 +13,10 @@ copyofa verify /Volumes/Archive/Album --json > album-verification.json
 A Report states stored integrity only: whether each preserved file still has the
 digest recorded when it was accepted. It says nothing about the audio.
 
+Its JSON Schema is
+[verification-report-1.schema.json](../../src/copyofa/schemas/verification-report-1.schema.json);
+[`copyofa validate`](validation-result.md) checks a Report against it.
+
 ## How verify checks a set
 
 1. **Records first.** Verify checks every tag file that `tagmanifest-sha256.txt` lists,

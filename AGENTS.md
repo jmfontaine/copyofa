@@ -122,16 +122,31 @@ the Import Record; change it with any change to what import writes.
 [docs/formats/verification-report.md](docs/formats/verification-report.md) documents
 the Report verify prints,
 [docs/formats/inspection-report.md](docs/formats/inspection-report.md) the Report
-inspect prints, and
+inspect prints,
 [docs/formats/comparison-report.md](docs/formats/comparison-report.md) the Report
-compare prints; change each with any change to its Report.
+compare prints, and
+[docs/formats/validation-result.md](docs/formats/validation-result.md) the result
+validate prints; change each with any change to what its command prints.
+
+### Report schemas
+
+Each Report kind and format version has a JSON Schema, draft 2020-12, in
+`src/copyofa/schemas/<kind>-report-<version>.schema.json`, as
+[ADR 0004](docs/decisions/0004-publish-each-report-format-as-a-json-schema.md)
+decides. A schema is strict, self-contained, shipped in the package, and linked from
+its format document. `copyofa.validator` maps a `report_kind` and `format_version` to
+its file, and `validate` parses a Report as strict JSON, then checks it with
+[jsonschema](https://github.com/python-jsonschema/jsonschema), CopyOfA's fourth
+runtime dependency. A released schema changes only to fix a disagreement with what
+CopyOfA prints; any other change to a Report's fields is a new format version with its
+own schema file. The test suite validates every Report it produces against its schema.
 
 ### Audio decoding
 
 `inspect` and `compare` decode audio with soundfile, whose wheels bundle libsndfile
 with FLAC and mpg123, and NumPy. `compare` also resamples with soxr (python-soxr,
-bundling libsoxr). These three are the only runtime dependencies. The Audio Digest is
-defined on canonical PCM by
+bundling libsoxr). These three, with jsonschema (see Report schemas), are the only
+runtime dependencies. The Audio Digest is defined on canonical PCM by
 [ADR 0002](docs/decisions/0002-define-audio-digest-from-canonical-pcm.md), so any
 exact decoder reproduces it. `pyproject.toml` sets a higher NumPy minimum for Python
 3.15, its oldest release with wheels for 3.15, so CI's lowest-direct job installs
@@ -154,7 +169,8 @@ Every command follows the conventions `import` and `verify` set in v0.1.0, as
 - Exit 0 on success, 1 when the command refused, failed or found a problem (a result
   is still printed when there is one), 2 for invalid arguments or, for a command that
   reads an Evidence Set, a target that is not one, and 130 when canceled with Ctrl-C.
-  Import exits 1 for a source or destination it refuses
+  Import exits 1 for a source or destination it refuses, and validate for a file it
+  cannot read
 - Stdout stays empty whenever no result is produced
 - No interactive prompts
 

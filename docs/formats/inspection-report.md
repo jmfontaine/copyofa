@@ -14,6 +14,10 @@ A Report describes each preserved file's format and properties and, for lossless
 audio, gives its Audio Digest. It draws no conclusion about where the audio comes from
 or how well it was acquired.
 
+Its JSON Schema is
+[inspection-report-1.schema.json](../../src/copyofa/schemas/inspection-report-1.schema.json);
+[`copyofa validate`](validation-result.md) checks a Report against it.
+
 ## How inspect works
 
 1. **Integrity first.** Inspect checks the Integrity Baseline as `verify` does (see

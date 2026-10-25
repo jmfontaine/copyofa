@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jmfontaine/copyofa/main/src/copyofa/schemas/verification-report-1.schema.json",
+  "title": "CopyOfA verification Report, format version 1",
+  "description": "The Report that `copyofa verify --json` prints: what one check of an Evidence Set against its Integrity Baseline found. See docs/formats/verification-report.md.",
+  "type": "object",
+  "properties": {
+    "report_kind": { "const": "copyofa.verification" },
+    "format_version": { "const": 1 },
+    "copyofa_version": { "type": "string" },
+    "checked_at": { "$ref": "#/$defs/timestamp" },
+    "evidence_set": { "type": "string" },
+    "scope": { "enum": ["full_content"] },
+    "integrity_baseline": { "$ref": "#/$defs/integrity_baseline" },
+    "tag_files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/item" }
+    },
+    "payload": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/item" }
+    },
+    "unexpected_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "unexamined_directories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "reason": { "type": "string" }
+        },
+        "required": ["path", "reason"],
+        "additionalProperties": false
+      }
+    },
+    "counts": {
+      "type": "object",
+      "properties": {
+        "matching": { "$ref": "#/$defs/count" },
+        "changed": { "$ref": "#/$defs/count" },
+        "missing": { "$ref": "#/$defs/count" },
+        "unavailable": { "$ref": "#/$defs/count" },
+        "not_checked": { "$ref": "#/$defs/count" },
+        "unexpected": { "$ref": "#/$defs/count" }
+      },
+      "required": [
+        "matching",
+        "changed",
+        "missing",
+        "unavailable",
+        "not_checked",
+        "unexpected"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "report_kind",
+    "format_version",
+    "copyofa_version",
+    "checked_at",
+    "evidence_set",
+    "scope",
+    "integrity_baseline",
+    "tag_files",
+    "payload",
+    "unexpected_files",
+    "unexamined_directories",
+    "counts"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "count": { "type": "integer", "minimum": 0 },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "minLength": 64,
+      "maxLength": 64
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "minLength": 20,
+      "maxLength": 20
+    },
+    "integrity_baseline": {
+      "type": "object",
+      "properties": {
+        "manifest_sha256": { "$ref": "#/$defs/digest" },
+        "usable": { "type": "boolean" },
+        "problems": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["usable", "problems"],
+      "additionalProperties": false
+    },
+    "item": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "outcome": {
+          "enum": ["matching", "changed", "missing", "unavailable", "not_checked"]
+        },
+        "expected_digest": { "$ref": "#/$defs/digest" },
+        "observed_digest": { "$ref": "#/$defs/digest" },
+        "reason": { "type": "string" }
+      },
+      "required": ["path", "outcome", "expected_digest"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "outcome": { "const": "matching" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": ["observed_digest"],
+            "properties": { "reason": false }
+          }
+        },
+        {
+          "if": {
+            "properties": { "outcome": { "const": "changed" } },
+            "required": ["outcome"]
+          },
+          "then": { "required": ["observed_digest", "reason"] }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": { "enum": ["missing", "unavailable", "not_checked"] }
+            },
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": ["reason"],
+            "properties": { "observed_digest": false }
+          }
+        }
+      ]
+    }
+  }
+}
