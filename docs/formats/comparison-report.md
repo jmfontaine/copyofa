@@ -17,6 +17,10 @@ draws no conclusion from them, such as "same master" or "match", and has no thre
 [ADR 0003](../decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md)
 records the method and why it was chosen.
 
+Its JSON Schema is
+[comparison-report-1.schema.json](../../src/copyofa/schemas/comparison-report-1.schema.json);
+[`copyofa validate`](validation-result.md) checks a Report against it.
+
 ## How compare works
 
 1. **Finding each set.** Each track is the path of a file inside an Evidence Set. Its

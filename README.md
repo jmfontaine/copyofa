@@ -112,6 +112,25 @@ or decoded or is not a supported format, 2 when a track is not inside an Evidenc
 or the arguments are invalid, and 130 when canceled. It writes nothing into either
 set.
 
+Check that a Report, such as one you received, is well formed:
+
+```bash
+copyofa validate comparison.json
+copyofa validate comparison.json --json > comparison-validation.json
+```
+
+Validate parses the file as strict JSON, then checks it against the JSON Schema
+published for its Report kind and format version, and reports `valid`, `invalid` with
+the location of each problem, or `unsupported` for a kind or version it does not know.
+A valid Report is well formed, nothing more: validation does not establish that its
+findings are true, who produced it, or anything about the audio. The schemas ship in
+the package, so other software can check a Report without CopyOfA. `--json` prints a
+validation result, which [Validation result format][validation-result] describes.
+
+Validate exits 0 when the Report is valid, 1 when it is invalid or unsupported or the
+file cannot be read, 2 when the arguments are invalid, and 130 when canceled. It
+writes nothing.
+
 ## Documents
 
 - [Manifesto][manifesto]: vision, target users, principles and non-goals.
@@ -155,4 +174,5 @@ CopyOfA is licensed under the [Apache License 2.0][license].
 [license]: https://github.com/jmfontaine/copyofa/blob/main/LICENSE.txt
 [manifesto]: https://github.com/jmfontaine/copyofa/blob/main/docs/manifesto.md
 [product-map]: https://github.com/jmfontaine/copyofa/blob/main/docs/product-map.md
+[validation-result]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/validation-result.md
 [verification-report]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/verification-report.md

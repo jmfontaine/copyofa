@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import functools
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +11,7 @@ import numpy as np
 import pytest
 import soundfile
 
+from copyofa import comparator, inspector, validator, verifier
 from copyofa.cli import main
 
 if TYPE_CHECKING:
@@ -22,6 +25,32 @@ class Outcome:
     code: int | str | None
     out: str
     err: str
+
+
+@pytest.fixture(autouse=True)
+def _reports_match_their_schemas(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make every Report the suite produces validate against its schema.
+
+    The Report must also be valid JSON as printed, so it holds no NaN or infinity.
+    """
+
+    def checked(produce: Callable[..., dict[str, Any]]) -> Callable[..., Any]:
+        @functools.wraps(produce)
+        def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            report = produce(*args, **kwargs)
+            document = json.loads(json.dumps(report, allow_nan=False))
+            outcome, problems = validator.check(document)
+            assert (outcome, problems) == (validator.VALID, [])
+            return report
+
+        return wrapper
+
+    for module, name in (
+        (verifier, "verify"),
+        (inspector, "inspect"),
+        (comparator, "compare"),
+    ):
+        monkeypatch.setattr(module, name, checked(getattr(module, name)))
 
 
 @pytest.fixture

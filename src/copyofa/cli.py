@@ -10,7 +10,7 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 import copyofa
-from copyofa import comparator, inspector, verifier
+from copyofa import comparator, inspector, validator, verifier
 from copyofa.errors import CopyOfAError
 from copyofa.importer import import_evidence
 
@@ -135,6 +135,22 @@ def _parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="print the comparison Report as JSON"
     )
     comparing.set_defaults(handler=_compare)
+    validating = commands.add_parser(
+        "validate",
+        help="check a Report against its published JSON Schema",
+        description=(
+            "Check that a verification, inspection or comparison Report is strict "
+            "JSON that matches the JSON Schema for its report_kind and "
+            "format_version. Exits 0 when the Report is valid and 1 when it is "
+            "invalid, unsupported or cannot be read. A valid Report is well formed, "
+            "nothing more."
+        ),
+    )
+    validating.add_argument("report")
+    validating.add_argument(
+        "--json", action="store_true", help="print the validation result as JSON"
+    )
+    validating.set_defaults(handler=_validate)
     return parser
 
 
@@ -365,6 +381,36 @@ def _print_comparison(report: dict[str, Any]) -> None:
             print(f"{label}: {value:{sign}.{digits}f}{unit}")
         else:
             print(f"{label}: absent ({downmix['absent'][field]})")
+
+
+def _validate(args: argparse.Namespace) -> int:
+    try:
+        validation = validator.validate(args.report)
+    except validator.UnreadableReportError as error:
+        print(f"copyofa: {_printable(str(error))}", file=sys.stderr)
+        return EXIT_PROBLEM
+    result = validation.result
+    if args.json:
+        _print_json(result)
+    else:
+        _print_validation(result)
+    return EXIT_OK if result["outcome"] == validator.VALID else EXIT_PROBLEM
+
+
+def _print_validation(result: dict[str, Any]) -> None:
+    print(f"Result: {result['outcome']}")
+    print(f"Report: {_printable(result['report'])}")
+    print(f"SHA-256: {result['sha256']}")
+    if "report_kind" in result:
+        print(f"Report kind: {_printable(result['report_kind'])}")
+    if "format_version" in result:
+        print(f"Format version: {result['format_version']}")
+    for problem in result["problems"]:
+        location = problem["location"] or "(document)"
+        print(_printable(f"  {location}: {problem['message']}"))
+    print("Limitations:")
+    for limitation in result["limitations"]:
+        print(f"  {limitation}")
 
 
 def _duration(frames: int, sample_rate: int) -> str:
