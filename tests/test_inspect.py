@@ -7,58 +7,20 @@ import os
 import shutil
 import zipfile
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 import soundfile
-from conftest import requires_permissions, snapshot
+from conftest import RATE, requires_permissions, signal, snapshot, write_audio
 
 import copyofa
 from copyofa import inspector
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from pathlib import Path
 
     from conftest import Outcome, Run
-
-RATE = 44100
-
-
-def signal(frames: int, channels: int, bits: int, seed: int = 1) -> np.ndarray:
-    """Return random integer samples of the given depth, shaped (frames, channels)."""
-    high = 1 << (bits - 1)
-    rng = np.random.default_rng(seed)
-    return rng.integers(-high, high, size=(frames, channels), dtype=np.int32)
-
-
-def write_audio(
-    path: Path,
-    samples: np.ndarray,
-    bits: int,
-    container: str,
-    rate: int = RATE,
-    title: str | None = None,
-    **options: Any,
-) -> None:
-    """Write integer samples as FLAC, WAV or WAVEX at the given depth."""
-    subtype = (
-        f"PCM_{bits}" if bits > 8 else "PCM_S8" if container == "FLAC" else "PCM_U8"
-    )
-    with soundfile.SoundFile(
-        path,
-        "w",
-        rate,
-        samples.shape[1],
-        subtype,
-        format=container,
-        **options,
-    ) as file:
-        if title is not None:
-            file.title = title
-        # libsndfile takes 32-bit integers at full scale.
-        file.write(samples << (32 - bits))
 
 
 def canonical_digest(samples: np.ndarray, bits: int) -> str:
@@ -89,25 +51,6 @@ def patch_streaminfo(
     if md5 is not None:
         data[26:42] = md5
     path.write_bytes(bytes(data))
-
-
-@pytest.fixture
-def make_set(run: Run, tmp_path: Path) -> Callable[[Callable[[Path], None]], Path]:
-    """Import a delivery that a function writes into a fresh source directory."""
-    count = 0
-
-    def _make_set(fill: Callable[[Path], None]) -> Path:
-        nonlocal count
-        count += 1
-        source = tmp_path / f"source-{count}" / "Album"
-        source.mkdir(parents=True)
-        fill(source)
-        destination = tmp_path / f"set-{count}"
-        outcome = run("import", source, "--to", destination)
-        assert outcome.code == 0, outcome.err
-        return destination
-
-    return _make_set
 
 
 def inspect(run: Run, evidence_set: Path) -> tuple[Outcome, dict]:
@@ -393,9 +336,9 @@ def test_inspect_inspects_only_the_accepted_bytes(
     decoded = []
     original = inspector._interpret
 
-    def spy(file, suffix):
+    def spy(file, suffix, sink):
         decoded.append(file.name)
-        return original(file, suffix)
+        return original(file, suffix, sink)
 
     monkeypatch.setattr(inspector, "_interpret", spy)
     try:
@@ -465,8 +408,8 @@ def test_inspect_reports_a_file_that_changes_while_inspected(
     evidence_set = make_set(fill)
     original = inspector._interpret
 
-    def change_during(file, suffix):
-        result = original(file, suffix)
+    def change_during(file, suffix, sink):
+        result = original(file, suffix, sink)
         with (evidence_set / "data/Album/track.flac").open("ab") as writer:
             writer.write(b"appended")
         return result

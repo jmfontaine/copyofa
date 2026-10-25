@@ -9,8 +9,9 @@ and share what that evidence reveals.
 The project is restarting from a clean slate. Its first release, v0.1.0, preserves a
 selected file delivery as an Evidence Set and verifies it later. The second, v0.2.0,
 describes the audio in a set: each track's format and properties, an Audio Digest for
-lossless audio, and a few measurements. The roadmap in the Product Map lists what comes
-next.
+lossless audio, and a few measurements. The third, v0.3.0, measures how two preserved
+tracks relate, across formats and sample rates. The roadmap in the Product Map lists
+what comes next.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
 retired. Its last code change is commit `0d04a38` in the Git history. It does not define
@@ -88,6 +89,29 @@ file could not be inspected or decoded or its audio differs from its FLAC MD5
 signature, 2 when the target is not an Evidence Set or the arguments are invalid, and
 130 when canceled. It writes nothing into the set.
 
+Measure how two preserved tracks relate, such as a FLAC track and the MP3 of the same
+song from another release:
+
+```bash
+copyofa compare "/Volumes/Archive/With Teeth/data/04 The Hand That Feeds.flac" \
+  "/Volumes/Archive/Definitive NIN/data/18 The Hand That Feeds.mp3"
+copyofa compare <track-a> <track-b> --json > comparison.json
+```
+
+Each track is a file under the `data/` directory of an Evidence Set. Compare checks
+both against their Integrity Baselines and decodes them as inspect does. It then
+resamples the one at the higher sample rate to the lower rate, aligns the tracks, and
+reports the offset of track B from track A, their overlap, and how B relates to A:
+correlation, gain and the residual level left after that gain. When both are
+lossless and their Audio Digests are equal, it reports identical audio. It draws no
+conclusion such as "same master". `--json` prints a comparison Report, which
+[Comparison Report format][comparison-report] describes.
+
+Compare exits 0 when both tracks were measured, 1 when a track could not be inspected
+or decoded or is not a supported format, 2 when a track is not inside an Evidence Set
+or the arguments are invalid, and 130 when canceled. It writes nothing into either
+set.
+
 ## Documents
 
 - [Manifesto][manifesto]: vision, target users, principles and non-goals.
@@ -123,6 +147,7 @@ CopyOfA is licensed under the [Apache License 2.0][license].
 [agents]: https://github.com/jmfontaine/copyofa/blob/main/AGENTS.md
 [briefs]: https://github.com/jmfontaine/copyofa/tree/main/docs/briefs
 [contributing]: https://github.com/jmfontaine/copyofa/blob/main/CONTRIBUTING.md
+[comparison-report]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/comparison-report.md
 [decisions]: https://github.com/jmfontaine/copyofa/tree/main/docs/decisions
 [evidence-set]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/evidence-set.md
 [formats]: https://github.com/jmfontaine/copyofa/tree/main/docs/formats

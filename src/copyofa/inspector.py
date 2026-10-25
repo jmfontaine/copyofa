@@ -21,6 +21,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
+    import numpy.typing as npt
+
+    Sink = Callable[[npt.NDArray[np.float32]], None]
+
 REPORT_KIND = "copyofa.inspection"
 REPORT_FORMAT_VERSION = 1
 
@@ -99,7 +103,7 @@ def inspect(
     files = []
     for digest, path in baseline.entries:
         if baseline.usable:
-            entry = _inspect_file(root, path, digest)
+            entry = inspect_file(root, path, digest)
         else:
             entry = _entry(path, digest, NOT_INSPECTED, reason=_UNUSABLE)
         if progress is not None:
@@ -185,8 +189,18 @@ def _entry(
     return entry
 
 
-def _inspect_file(root: Path, path: str, expected: str) -> dict[str, Any]:
-    """Check one listed file against the baseline, then interpret it."""
+def inspect_file(
+    root: Path,
+    path: str,
+    expected: str,
+    sink: Callable[[npt.NDArray[np.float32]], None] | None = None,
+) -> dict[str, Any]:
+    """Check one listed file against the baseline, then interpret it.
+
+    Returns the file's Report entry. When sink is given, it receives the decoded
+    frames block by block, shaped (frames, channels), as float32 where 1.0 is full
+    scale. They are the file's audio only when the entry's outcome is `interpreted`.
+    """
     problem = verifier.find_file(root, path)
     if problem is not None:
         return _entry(path, expected, NOT_INSPECTED, reason=problem[1])
@@ -217,7 +231,7 @@ def _inspect_file(root: Path, path: str, expected: str) -> dict[str, Any]:
                     reason="its digest differs from the manifest's",
                 )
             entry = _entry(path, expected, INTERPRETED, observed=observed)
-            entry.update(_interpret(file, PurePosixPath(path).suffix.lower()))
+            entry.update(_interpret(file, PurePosixPath(path).suffix.lower(), sink))
             after = os.fstat(fd)
     except OSError as error:
         return _entry(
@@ -234,7 +248,7 @@ def _inspect_file(root: Path, path: str, expected: str) -> dict[str, Any]:
     return entry
 
 
-def _interpret(file: BinaryIO, suffix: str) -> dict[str, Any]:
+def _interpret(file: BinaryIO, suffix: str, sink: Sink | None) -> dict[str, Any]:
     """Decode a file; return its outcome, with a reason or its findings."""
     try:
         streaminfo = _read_streaminfo(file)
@@ -271,13 +285,13 @@ def _interpret(file: BinaryIO, suffix: str) -> dict[str, Any]:
                 return _not_interpreted(
                     f"MP3 audio with {sound.subtype} encoding is not supported"
                 )
-            return _decode_mp3(sound)
+            return _decode_mp3(sound, sink)
         bits = _PCM_BITS.get(sound.subtype)
         if bits is None or (kind == "flac" and bits not in _FLAC_BITS):
             return _not_interpreted(
                 f"{sound.format} audio with {sound.subtype} encoding is not supported"
             )
-        return _decode_pcm(sound, kind, bits, streaminfo)
+        return _decode_pcm(sound, kind, bits, streaminfo, sink)
 
 
 def _decode_pcm(
@@ -285,6 +299,7 @@ def _decode_pcm(
     kind: str,
     bits: int,
     streaminfo: _StreamInfo | None,
+    sink: Sink | None,
 ) -> dict[str, Any]:
     """Decode integer PCM exactly, measure it, and compute its Audio Digest."""
     digest = hashlib.sha256()
@@ -300,6 +315,8 @@ def _decode_pcm(
             digest.update(data)
             signature.update(data)
             measures.add(samples)
+            if sink is not None:
+                sink(samples.astype(np.float32) * np.float32(1 / (1 << (bits - 1))))
             frames += len(block)
     except soundfile.LibsndfileError as error:
         return _failed(f"decoding stopped after {frames} frames: {error.error_string}")
@@ -372,13 +389,15 @@ def _canonical_bytes(samples: np.ndarray, bits: int) -> bytes:
     return samples.astype("<i4").tobytes()
 
 
-def _decode_mp3(sound: soundfile.SoundFile) -> dict[str, Any]:
+def _decode_mp3(sound: soundfile.SoundFile, sink: Sink | None) -> dict[str, Any]:
     """Decode MP3 completely and measure it; both depend on the decoder."""
     measures = _Measures(sound.channels, integer=False)
     frames = 0
     try:
         for block in _read_blocks(sound, "float32"):
             measures.add(block)
+            if sink is not None:
+                sink(block)
             frames += len(block)
     except soundfile.LibsndfileError as error:
         return _failed(f"decoding stopped after {frames} frames: {error.error_string}")
