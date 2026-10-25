@@ -17,9 +17,20 @@ draws no conclusion from them, such as "same master" or "match", and has no thre
 [ADR 0003](../decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md)
 records the method and why it was chosen.
 
-Its JSON Schema is
-[comparison-report-1.schema.json](../../src/copyofa/schemas/comparison-report-1.schema.json);
-[`copyofa validate`](validation-result.md) checks a Report against it.
+It has two format versions, each with its JSON Schema:
+[comparison-report-2.schema.json](../../src/copyofa/schemas/comparison-report-2.schema.json)
+for version 2, which this document describes and `compare` prints, and
+[comparison-report-1.schema.json](../../src/copyofa/schemas/comparison-report-1.schema.json)
+for [version 1](#format-version-1). [`copyofa validate`](validation-result.md) checks a
+Report against the schema of its version.
+
+To share a Report without saying where its Evidence Sets are stored, leave the
+locations out when you compare, as
+[described below](#leaving-out-evidence-set-locations):
+
+```bash
+copyofa compare <track-a> <track-b> --json --omit-locations > htf.json
+```
 
 ## How compare works
 
@@ -52,9 +63,10 @@ Compare writes nothing into either set.
 | Field | Content |
 | --- | --- |
 | `report_kind` | Always `copyofa.comparison`. |
-| `format_version` | The version of this format, `1`. A later change to the fields increments it. |
+| `format_version` | The version of this format, `2`. A later change to the fields increments it. |
 | `copyofa_version` | The version of CopyOfA that ran the comparison. |
 | `compared_at` | The comparison time in UTC, such as `2026-10-25T18:30:00Z`. |
+| `omitted` | The JSON Pointers of the values the Report leaves out, each of `/inputs/a/evidence_set` and `/inputs/b/evidence_set` at most once; `[]` when it leaves out nothing. See [Leaving out Evidence Set locations](#leaving-out-evidence-set-locations). |
 | `inputs` | `a` and `b`: each input, described below. |
 | `method` | How the tracks were decoded, resampled and aligned, described below. |
 | `measurements` | The measurements, described below; absent when either input is not `interpreted`. |
@@ -65,7 +77,8 @@ Compare writes nothing into either set.
 Each of `inputs.a` and `inputs.b` holds:
 
 - `evidence_set`: the path of the Evidence Set holding the track, as the
-  verification Report records it.
+  verification Report records it. It is absent when `omitted` lists its pointer, such
+  as `/inputs/a/evidence_set`, and present otherwise.
 - `integrity_baseline`: that set's baseline, `manifest_sha256`, `usable` and
   `problems`, as in the verification Report.
 - The track's entry, with the fields of a `files` entry of the
@@ -134,6 +147,40 @@ A value that the audio leaves undefined is absent, never NaN or infinity:
 | `residual_db`, `residual_windows` | The audio is identical, or the gain is undefined. |
 | `residual_db` of the overlap or of a window | Track A is zero over it, or *a* − *g*·*b* is exactly zero over it. |
 
+## Leaving out Evidence Set locations
+
+An Evidence Set's absolute path names the collector's disks and often their user
+account, which a Report meant for someone else need not say. The option
+`--omit-locations` of `copyofa compare` leaves out where each Evidence Set is stored:
+neither input has `evidence_set`, and `omitted` lists both pointers, so a reader can
+tell "left out" from "never recorded":
+
+```json
+"omitted": ["/inputs/a/evidence_set", "/inputs/b/evidence_set"]
+```
+
+`omitted` comes right after `compared_at`, before `inputs`. The option applies to both
+inputs, and nothing else is left out: each input's `path` in its set, its
+`integrity_baseline` (so `manifest_sha256` still identifies the set's Integrity
+Baseline), and the comparison time stay. Compare leaves the locations out when it
+produces the Report, not in a later step, so the Report is an original and not an
+edited copy. Removing locations from a Report already saved means comparing again.
+
+The human-readable result of `compare --omit-locations` shows each track as its path
+inside its set, such as `data/04 The Hand That Feeds.flac`, instead of
+`<evidence_set>/<path>`. Neither it nor the JSON holds the path of either set. Compare
+may still name a path given on the command line on stderr, such as in an error.
+
+The schema requires an input's `evidence_set` exactly when `omitted` does not list it.
+Without the option, compare prints `"omitted": []`.
+
+## Format version 1
+
+Compare printed format version 1 before CopyOfA 0.4.0. It is version 2 without
+`omitted`: `format_version` is `1`, and each input's `evidence_set` is always present.
+`copyofa validate` and `copyofa view` still accept it, and the version 1 schema is
+unchanged. A Report with `omitted` is not valid at version 1.
+
 ## Example
 
 The Hand That Feeds from *With Teeth* (2019 deluxe, 24-bit, 96 kHz FLAC) against the
@@ -142,9 +189,10 @@ same song from *Definitive NIN* (44.1 kHz MP3):
 ```json
 {
   "report_kind": "copyofa.comparison",
-  "format_version": 1,
-  "copyofa_version": "0.3.0",
+  "format_version": 2,
+  "copyofa_version": "0.4.0",
   "compared_at": "2026-10-25T18:30:00Z",
+  "omitted": [],
   "inputs": {
     "a": {
       "evidence_set": "/Volumes/Archive/With Teeth",
@@ -283,7 +331,7 @@ copyofa view htf.json > htf.html
 
 View first validates the file as [`copyofa validate`](validation-result.md) does, and
 refuses a Report that is invalid, unsupported, or of another kind. It supports
-comparison Reports only, of format version 1 for now.
+comparison Reports only, of format version 1 or 2.
 
 The page shows every field of the Report with its value as the Report records it, and
 adds only labels and units, and for each track a duration computed from its frames
@@ -292,9 +340,11 @@ and sample rate. It gives:
 - the SHA-256 of the exact bytes of the file it was generated from, the Report's kind
   and format version, and the CopyOfA version that generated the page, which is not
   the Report's own `copyofa_version`, also shown;
-- for each input, its Evidence Set location, Integrity Baseline, path, outcome and
-  reason, properties, File Digests, Audio Digest, peak, silence, FLAC MD5 signature
-  and limitations;
+- what the Report leaves out: its `omitted` list, or that it holds none, and for
+  version 1 that the Report has no such field;
+- for each input, its Evidence Set location, or that it is left out, Integrity
+  Baseline, path, outcome and reason, properties, File Digests, Audio Digest, peak,
+  silence, FLAC MD5 signature and limitations;
 - the method;
 - the measurements: identical audio, offset, overlap, and for the downmix and each
   channel the correlation, gain and residual, with one table of residual windows

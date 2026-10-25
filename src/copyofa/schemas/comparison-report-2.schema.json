@@ -1,0 +1,424 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jmfontaine/copyofa/main/src/copyofa/schemas/comparison-report-2.schema.json",
+  "title": "CopyOfA comparison Report, format version 2",
+  "description": "The Report that `copyofa compare --json` prints: measurements of how the audio of two preserved tracks relates. See docs/formats/comparison-report.md.",
+  "type": "object",
+  "properties": {
+    "report_kind": { "const": "copyofa.comparison" },
+    "format_version": { "const": 2 },
+    "copyofa_version": { "type": "string" },
+    "compared_at": { "$ref": "#/$defs/timestamp" },
+    "omitted": {
+      "type": "array",
+      "items": {
+        "enum": ["/inputs/a/evidence_set", "/inputs/b/evidence_set"]
+      },
+      "uniqueItems": true
+    },
+    "inputs": {
+      "type": "object",
+      "properties": {
+        "a": { "$ref": "#/$defs/input" },
+        "b": { "$ref": "#/$defs/input" }
+      },
+      "required": ["a", "b"],
+      "additionalProperties": false
+    },
+    "method": {
+      "type": "object",
+      "properties": {
+        "decoder": { "const": "libsndfile" },
+        "decoder_version": { "type": "string" },
+        "resampler": { "const": "libsoxr" },
+        "resampler_version": { "type": "string" },
+        "resampler_quality": { "const": "VHQ" },
+        "common_sample_rate": { "type": "integer", "minimum": 1 },
+        "alignment": { "const": "downmix_cross_correlation" }
+      },
+      "required": [
+        "decoder",
+        "decoder_version",
+        "resampler",
+        "resampler_version",
+        "resampler_quality",
+        "alignment"
+      ],
+      "additionalProperties": false
+    },
+    "measurements": { "$ref": "#/$defs/measurements" },
+    "limitations": { "$ref": "#/$defs/sentences" }
+  },
+  "required": [
+    "report_kind",
+    "format_version",
+    "copyofa_version",
+    "compared_at",
+    "omitted",
+    "inputs",
+    "method",
+    "limitations"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "omitted": { "contains": { "const": "/inputs/a/evidence_set" } }
+        },
+        "required": ["omitted"]
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "properties": { "a": { "properties": { "evidence_set": false } } }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "inputs": { "properties": { "a": { "required": ["evidence_set"] } } }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "omitted": { "contains": { "const": "/inputs/b/evidence_set" } }
+        },
+        "required": ["omitted"]
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "properties": { "b": { "properties": { "evidence_set": false } } }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "inputs": { "properties": { "b": { "required": ["evidence_set"] } } }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "count": { "type": "integer", "minimum": 0 },
+    "sentences": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "minLength": 64,
+      "maxLength": 64
+    },
+    "audio_digest": {
+      "type": "string",
+      "pattern": "^pcm1:[1-9][0-9]*:[1-9][0-9]*:(8|16|24|32):[0-9a-f]{64}$",
+      "not": { "pattern": "\\n" }
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "minLength": 20,
+      "maxLength": 20
+    },
+    "integrity_baseline": {
+      "type": "object",
+      "properties": {
+        "manifest_sha256": { "$ref": "#/$defs/digest" },
+        "usable": { "type": "boolean" },
+        "problems": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["usable", "problems"],
+      "additionalProperties": false
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "evidence_set": { "type": "string" },
+        "integrity_baseline": { "$ref": "#/$defs/integrity_baseline" },
+        "path": { "type": "string" },
+        "outcome": {
+          "enum": ["interpreted", "not_interpreted", "failed", "not_inspected"]
+        },
+        "expected_digest": { "$ref": "#/$defs/digest" },
+        "observed_digest": { "$ref": "#/$defs/digest" },
+        "reason": { "type": "string" },
+        "format": { "enum": ["flac", "wav", "mp3"] },
+        "encoding": {
+          "enum": [
+            "pcm_s8",
+            "pcm_u8",
+            "pcm_16",
+            "pcm_24",
+            "pcm_32",
+            "mpeg_layer_iii"
+          ]
+        },
+        "sample_rate": { "type": "integer", "minimum": 1 },
+        "channels": { "type": "integer", "minimum": 1 },
+        "bits_per_sample": { "type": "integer", "enum": [8, 16, 24, 32] },
+        "frames": { "$ref": "#/$defs/count" },
+        "audio_digest": { "$ref": "#/$defs/audio_digest" },
+        "peak": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "leading_silence_frames": { "$ref": "#/$defs/count" },
+        "trailing_silence_frames": { "$ref": "#/$defs/count" },
+        "flac_md5_signature": { "enum": ["matching", "differs", "absent"] },
+        "limitations": { "$ref": "#/$defs/sentences" }
+      },
+      "required": ["integrity_baseline", "path", "outcome"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "outcome": { "const": "interpreted" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": [
+              "expected_digest",
+              "observed_digest",
+              "format",
+              "encoding",
+              "sample_rate",
+              "channels",
+              "frames",
+              "peak",
+              "leading_silence_frames",
+              "trailing_silence_frames"
+            ],
+            "properties": { "reason": false }
+          }
+        },
+        {
+          "if": {
+            "properties": { "outcome": { "enum": ["not_interpreted", "failed"] } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": ["expected_digest", "observed_digest", "reason"],
+            "propertyNames": {
+              "enum": [
+                "evidence_set",
+                "integrity_baseline",
+                "path",
+                "outcome",
+                "expected_digest",
+                "observed_digest",
+                "reason"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "outcome": { "const": "not_inspected" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": ["reason"],
+            "propertyNames": {
+              "enum": [
+                "evidence_set",
+                "integrity_baseline",
+                "path",
+                "outcome",
+                "expected_digest",
+                "observed_digest",
+                "reason"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "format": { "enum": ["flac", "wav"] } },
+            "required": ["format"]
+          },
+          "then": { "required": ["bits_per_sample", "audio_digest"] }
+        },
+        {
+          "if": {
+            "properties": { "format": { "const": "mp3" } },
+            "required": ["format"]
+          },
+          "then": {
+            "required": ["limitations"],
+            "properties": {
+              "bits_per_sample": false,
+              "audio_digest": false,
+              "flac_md5_signature": false
+            }
+          }
+        }
+      ]
+    },
+    "measurements": {
+      "type": "object",
+      "properties": {
+        "identical_audio": { "const": true },
+        "offset": {
+          "type": "object",
+          "properties": {
+            "frames": { "type": "integer" },
+            "seconds": { "type": "number" }
+          },
+          "required": ["frames", "seconds"],
+          "additionalProperties": false
+        },
+        "overlap": {
+          "type": "object",
+          "properties": {
+            "a": { "$ref": "#/$defs/extent" },
+            "b": { "$ref": "#/$defs/extent" }
+          },
+          "required": ["a", "b"],
+          "additionalProperties": false
+        },
+        "downmix": { "$ref": "#/$defs/values" },
+        "channels": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/values" }
+        },
+        "absent": {
+          "type": "object",
+          "properties": {
+            "offset": { "type": "string" },
+            "overlap": { "type": "string" },
+            "channels": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["downmix"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "not": {
+              "required": ["absent"],
+              "properties": { "absent": { "required": ["offset"] } }
+            }
+          },
+          "then": { "required": ["offset"] }
+        },
+        {
+          "if": {
+            "not": {
+              "required": ["absent"],
+              "properties": { "absent": { "required": ["overlap"] } }
+            }
+          },
+          "then": { "required": ["overlap"] }
+        },
+        {
+          "if": {
+            "not": {
+              "required": ["absent"],
+              "properties": { "absent": { "required": ["channels"] } }
+            }
+          },
+          "then": { "required": ["channels"] }
+        }
+      ]
+    },
+    "extent": {
+      "type": "object",
+      "properties": {
+        "start_frame": { "$ref": "#/$defs/count" },
+        "frames": { "$ref": "#/$defs/count" },
+        "fraction": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "required": ["start_frame", "frames", "fraction"],
+      "additionalProperties": false
+    },
+    "values": {
+      "type": "object",
+      "properties": {
+        "correlation": { "type": "number", "minimum": -1, "maximum": 1 },
+        "gain_db": { "type": "number" },
+        "residual_db": { "type": "number" },
+        "residual_windows": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/window" }
+        },
+        "absent": {
+          "type": "object",
+          "properties": {
+            "correlation": { "type": "string" },
+            "gain_db": { "type": "string" },
+            "residual_db": { "type": "string" },
+            "residual_windows": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "not": {
+              "required": ["absent"],
+              "properties": { "absent": { "required": ["correlation"] } }
+            }
+          },
+          "then": { "required": ["correlation"] }
+        },
+        {
+          "if": {
+            "not": {
+              "required": ["absent"],
+              "properties": { "absent": { "required": ["gain_db"] } }
+            }
+          },
+          "then": { "required": ["gain_db"] }
+        },
+        {
+          "if": {
+            "not": {
+              "required": ["absent"],
+              "properties": { "absent": { "required": ["residual_db"] } }
+            }
+          },
+          "then": { "required": ["residual_db"] }
+        },
+        {
+          "if": {
+            "not": {
+              "required": ["absent"],
+              "properties": { "absent": { "required": ["residual_windows"] } }
+            }
+          },
+          "then": { "required": ["residual_windows"] }
+        }
+      ]
+    },
+    "window": {
+      "type": "object",
+      "properties": {
+        "start_frame": { "$ref": "#/$defs/count" },
+        "frames": { "$ref": "#/$defs/count" },
+        "residual_db": { "type": "number" },
+        "absent": {
+          "type": "object",
+          "properties": { "residual_db": { "type": "string" } },
+          "required": ["residual_db"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["start_frame", "frames"],
+      "additionalProperties": false,
+      "if": { "not": { "required": ["absent"] } },
+      "then": { "required": ["residual_db"] }
+    }
+  }
+}

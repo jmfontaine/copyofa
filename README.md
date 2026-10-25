@@ -96,6 +96,7 @@ song from another release:
 copyofa compare "/Volumes/Archive/With Teeth/data/04 The Hand That Feeds.flac" \
   "/Volumes/Archive/Definitive NIN/data/18 The Hand That Feeds.mp3"
 copyofa compare <track-a> <track-b> --json > comparison.json
+copyofa compare <track-a> <track-b> --json --omit-locations > shareable.json
 ```
 
 Each track is a file under the `data/` directory of an Evidence Set. Compare checks
@@ -105,7 +106,9 @@ reports the offset of track B from track A, their overlap, and how B relates to 
 correlation, gain and the residual level left after that gain. When both are
 lossless and their Audio Digests are equal, it reports identical audio. It draws no
 conclusion such as "same master". `--json` prints a comparison Report, which
-[Comparison Report format][comparison-report] describes.
+[Comparison Report format][comparison-report] describes. To share a Report, add
+`--omit-locations`: it leaves out where each Evidence Set is stored, which names your
+disks and often your user account, and the Report says that it did.
 
 Compare exits 0 when both tracks were measured, 1 when a track could not be inspected
 or decoded or is not a supported format, 2 when a track is not inside an Evidence Set

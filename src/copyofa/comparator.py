@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
 REPORT_KIND = "copyofa.comparison"
-REPORT_FORMAT_VERSION = 1
+REPORT_FORMAT_VERSION = 2
 
 RESAMPLER_QUALITY = "VHQ"
 """The soxr quality preset: libsoxr's very high quality."""
@@ -74,20 +74,26 @@ def compare(
     track_a: str,
     track_b: str,
     progress: Callable[[dict[str, Any]], None] | None = None,
+    *,
+    omit_locations: bool = False,
 ) -> dict[str, Any]:
     """Compare two tracks preserved in Evidence Sets and return the comparison Report.
 
     Each track is the path of a file under the `data/` directory of an Evidence Set.
-    Calls progress with each input's Report entry once it is inspected. Writes
-    nothing. Raises verifier.NotAnEvidenceSetError when a track is not inside an
-    Evidence Set.
+    Calls progress with each input's Report entry once it is inspected. With
+    omit_locations, neither the Report nor an entry holds where an Evidence Set is
+    stored, and the Report's `omitted` lists what it leaves out. Writes nothing.
+    Raises verifier.NotAnEvidenceSetError when a track is not inside an Evidence Set.
     """
     locations = [_locate(track_a), _locate(track_b)]
     compared_at = datetime.now(UTC)
     inputs: dict[str, dict[str, Any]] = {}
+    omitted: list[str] = []
     decoded: list[_Audio] = []
     for name, (root, path) in zip("ab", locations, strict=True):
-        entry, audio = _inspect(root, path)
+        entry, audio = _inspect(root, path, omit_locations)
+        if omit_locations:
+            omitted.append(f"/inputs/{name}/evidence_set")
         if progress is not None:
             progress(entry)
         inputs[name] = entry
@@ -105,6 +111,7 @@ def compare(
         "format_version": REPORT_FORMAT_VERSION,
         "copyofa_version": copyofa.__version__,
         "compared_at": compared_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "omitted": omitted,
         "inputs": inputs,
         "method": method,
     }
@@ -159,14 +166,16 @@ def _locate(track: str) -> tuple[Path, str]:
     )
 
 
-def _inspect(root: Path, path: str) -> tuple[dict[str, Any], _Audio | None]:
+def _inspect(
+    root: Path, path: str, omit_location: bool
+) -> tuple[dict[str, Any], _Audio | None]:
     """Check one input as inspect checks a file; decode it when it is audio."""
     baseline = verifier.read_baseline(root)
     expected = {listed: digest for digest, listed in baseline.entries}.get(path)
-    entry: dict[str, Any] = {
-        "evidence_set": str(root),
-        "integrity_baseline": baseline.to_json(),
-    }
+    entry: dict[str, Any] = {}
+    if not omit_location:
+        entry["evidence_set"] = str(root)
+    entry["integrity_baseline"] = baseline.to_json()
     if not baseline.usable or expected is None:
         entry.update({"path": path, "outcome": inspector.NOT_INSPECTED})
         if expected is not None:

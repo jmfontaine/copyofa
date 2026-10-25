@@ -240,6 +240,10 @@ def not_inspected(make_set: MakeSet) -> Tracks:
     return album / "a.flac", album / "unlisted.flac"
 
 
+def locations_omitted(make_set: MakeSet) -> Tracks:
+    return measured(make_set)
+
+
 CASES: dict[str, Callable[[MakeSet], Tracks]] = {
     "measured": measured,
     "lossy": lossy,
@@ -250,7 +254,10 @@ CASES: dict[str, Callable[[MakeSet], Tracks]] = {
     "mono": mono,
     "not_interpreted": not_interpreted,
     "not_inspected": not_inspected,
+    "locations_omitted": locations_omitted,
 }
+# The options of `compare` that a case adds to its command.
+OPTIONS = {"locations_omitted": ("--omit-locations",)}
 
 
 @pytest.fixture
@@ -261,7 +268,7 @@ def report_of(
 
     def _report_of(name: str) -> tuple[Path, dict[str, Any]]:
         a, b = CASES[name](make_set)
-        outcome = run("compare", a, b, "--json")
+        outcome = run("compare", a, b, "--json", *OPTIONS.get(name, ()))
         assert outcome.code in (0, 1), outcome.err
         path = tmp_path / f"{name}.json"
         path.write_text(outcome.out, encoding="utf-8")
@@ -511,6 +518,65 @@ def test_view_shows_the_properties_and_digests_of_each_input(
     assert page.row("Method", "Decoder version") == [method["decoder_version"]]
     assert page.row("Method", "Common sample rate (Hz)") == [
         str(method["common_sample_rate"])
+    ]
+
+
+def test_view_shows_each_location_that_the_report_leaves_out_as_left_out(
+    run: Run,
+    report_of: Callable[[str], tuple[Path, dict[str, Any]]],
+    tmp_path: Path,
+) -> None:
+    path, report = report_of("locations_omitted")
+    assert report["omitted"] == ["/inputs/a/evidence_set", "/inputs/b/evidence_set"]
+
+    page = view(run, path)
+
+    assert page.row("Inputs", "Evidence Set location") == ["left out", "left out"]
+    assert page.row("Report", "Left out of the Report (JSON Pointers)") == [
+        "/inputs/a/evidence_set\n/inputs/b/evidence_set"
+    ]
+    assert page.row("Report", "Format version") == ["2"]
+    assert page.row("Inputs", "Path in the Evidence Set") == [
+        entry["path"] for entry in report["inputs"].values()
+    ]
+    assert str(tmp_path) not in page.text
+
+
+def test_view_shows_that_the_report_leaves_nothing_out(
+    run: Run, report_of: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = report_of("measured")
+    assert report["omitted"] == []
+
+    page = view(run, path)
+
+    assert page.row("Report", "Left out of the Report (JSON Pointers)") == ["none"]
+    assert page.row("Inputs", "Evidence Set location") == [
+        entry["evidence_set"] for entry in report["inputs"].values()
+    ]
+
+
+def test_view_shows_a_comparison_report_of_format_version_1(
+    run: Run, report_of: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = report_of("measured")
+
+    def as_version_1(document: dict[str, Any]) -> None:
+        del document["omitted"]
+        document["format_version"] = 1
+
+    older = edit(path, as_version_1)
+    assert validator.validate(str(older)).result["format_version"] == 1
+
+    page = view(run, older)
+
+    assert page.row("Report", "Format version") == ["1"]
+    assert "absent" in page.row("Report", "Left out of the Report (JSON Pointers)")[0]
+    assert page.row("Inputs", "Evidence Set location") == [
+        entry["evidence_set"] for entry in report["inputs"].values()
+    ]
+    assert page.row("Alignment", "Offset (frames)") == [
+        str(report["measurements"]["offset"]["frames"])
     ]
 
 

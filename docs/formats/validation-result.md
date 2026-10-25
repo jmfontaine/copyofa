@@ -129,13 +129,13 @@ validator of that draft checks a Report with no network access. For example, wit
 [check-jsonschema](https://check-jsonschema.readthedocs.io/):
 
 ```bash
-check-jsonschema --schemafile comparison-report-1.schema.json htf.json
+check-jsonschema --schemafile comparison-report-2.schema.json htf.json
 ```
 
 or with [Ajv](https://ajv.js.org/) and its `ajv/dist/2020` class in JavaScript. Choose
 the schema file from the Report's `report_kind` and `format_version`: a Report of kind
-`copyofa.comparison` and format version 1 is checked by
-`comparison-report-1.schema.json`. Each schema's `$id` is its URL on the `main` branch
+`copyofa.comparison` and format version 2 is checked by
+`comparison-report-2.schema.json`. Each schema's `$id` is its URL on the `main` branch
 of the repository.
 
 A generic validator checks only what the schema states. It does not reject a file that
