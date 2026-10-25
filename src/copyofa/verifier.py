@@ -31,7 +31,7 @@ _UNSAFE = "the path is not a normalized relative path inside the Evidence Set"
 
 
 class NotAnEvidenceSetError(CopyOfAError):
-    """The verify target is not an Evidence Set."""
+    """The target of a command is not an Evidence Set."""
 
 
 @dataclass(frozen=True)
@@ -42,10 +42,45 @@ class _Read:
     problem: str | None
 
 
-def verify(target: str) -> dict[str, Any]:
-    """Check the Evidence Set at target and return its verification Report.
+@dataclass(frozen=True)
+class Baseline:
+    """An Evidence Set's Integrity Baseline, as its records were found."""
 
-    Reads every file it checks and writes nothing.
+    tag_files: list[dict[str, str]]
+    """One Report item per entry of the tag manifest, in its order."""
+    entries: list[tuple[str, str]]
+    """The (digest, path) entries of the payload manifest; empty when unparsable."""
+    problems: list[str]
+    """Why the baseline is unusable, one sentence each."""
+    manifest_sha256: str | None
+    """The SHA-256 of the payload manifest; None when it cannot be read."""
+
+    @property
+    def usable(self) -> bool:
+        """Tell whether the payload can be checked against the baseline."""
+        return not self.problems
+
+    def to_json(self) -> dict[str, Any]:
+        """Describe the baseline as a Report's `integrity_baseline` field."""
+        return {
+            # Absent, not null, when manifest-sha256.txt cannot be read.
+            **(
+                {}
+                if self.manifest_sha256 is None
+                else {"manifest_sha256": self.manifest_sha256}
+            ),
+            "usable": self.usable,
+            "problems": self.problems,
+        }
+
+
+def locate(target: str) -> Path:
+    """Return the absolute path of the Evidence Set at target.
+
+    Raises NotAnEvidenceSetError when target does not exist, is not a directory, or
+    has no `bagit.txt`. A target that cannot be reached, such as one behind a
+    directory without search permission, is returned: its records then cannot be
+    read.
     """
     # Absolute but not normalized: removing `..` lexically could name a different
     # directory than the one the operating system resolves through a symbolic link.
@@ -56,7 +91,7 @@ def verify(target: str) -> dict[str, Any]:
         raise NotAnEvidenceSetError(f"{target} does not exist.") from None
     except OSError:
         # Unreachable, such as behind a directory without search permission: it
-        # may be an Evidence Set, so the checks below report what cannot be read.
+        # may be an Evidence Set, so the checks report what cannot be read.
         mode = None
     if mode is not None and not stat.S_ISDIR(mode):
         raise NotAnEvidenceSetError(f"{target} is not a directory.")
@@ -68,9 +103,12 @@ def verify(target: str) -> dict[str, Any]:
         ) from None
     except OSError:
         pass
-    checked_at = datetime.now(UTC)
-    problems: list[str] = []
+    return root
 
+
+def read_baseline(root: Path) -> Baseline:
+    """Check the tag files and read the payload manifest of the Evidence Set."""
+    problems: list[str] = []
     # Read once: the bytes checked against the tag manifest are the bytes parsed.
     manifest = _read_record(root, evidence_set.MANIFEST)
     tag_files = _check_tag_files(root, manifest, problems)
@@ -89,19 +127,29 @@ def verify(target: str) -> dict[str, Any]:
                     f"{evidence_set.MANIFEST} lists {path!r}, which is not a "
                     f"normalized relative path under {evidence_set.PAYLOAD_DIR}/."
                 )
+    return Baseline(tag_files, entries or [], problems, baseline_id)
 
-    usable = not problems
+
+def verify(target: str) -> dict[str, Any]:
+    """Check the Evidence Set at target and return its verification Report.
+
+    Reads every file it checks and writes nothing.
+    """
+    root = locate(target)
+    checked_at = datetime.now(UTC)
+    baseline = read_baseline(root)
+
     payload: list[dict[str, str]] = []
-    for digest, path in entries or []:
-        if usable:
+    for digest, path in baseline.entries:
+        if baseline.usable:
             payload.append(_check_file(root, path, digest))
         else:
             payload.append(_not_checked(path, digest, _UNUSABLE))
 
     unexpected: list[str] = []
     unexamined: list[dict[str, str]] = []
-    if usable:
-        listed = {path for _, path in entries or []}
+    if baseline.usable:
+        listed = {path for _, path in baseline.entries}
         _find_unexpected(root, listed, unexpected, unexamined)
         unexpected.sort()
 
@@ -113,13 +161,8 @@ def verify(target: str) -> dict[str, Any]:
         "checked_at": checked_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "evidence_set": str(root),
         "scope": SCOPE,
-        "integrity_baseline": {
-            # Absent, not null, when manifest-sha256.txt cannot be read.
-            **({} if baseline_id is None else {"manifest_sha256": baseline_id}),
-            "usable": usable,
-            "problems": problems,
-        },
-        "tag_files": tag_files,
+        "integrity_baseline": baseline.to_json(),
+        "tag_files": baseline.tag_files,
         "payload": payload,
         "unexpected_files": unexpected,
         "unexamined_directories": unexamined,
@@ -241,8 +284,12 @@ def _item(
     return result
 
 
-def _examine(root: Path, path: str) -> tuple[str | None, str | None, str | None]:
-    """Return (outcome, observed digest, reason); no outcome when it was read."""
+def find_file(root: Path, path: str) -> tuple[str, str] | None:
+    """Find a listed file, following no symbolic link inside the Evidence Set.
+
+    Returns None when path names a regular file, otherwise (outcome, reason) with
+    outcome `missing` or `unavailable`.
+    """
     current = root
     parts = path.split("/")
     for index, part in enumerate(parts):
@@ -251,21 +298,29 @@ def _examine(root: Path, path: str) -> tuple[str | None, str | None, str | None]
             mode = current.lstat().st_mode
         except (FileNotFoundError, NotADirectoryError):
             if not root.is_dir():
-                return UNAVAILABLE, None, "the Evidence Set is no longer reachable"
-            return MISSING, None, "the file does not exist"
+                return UNAVAILABLE, "the Evidence Set is no longer reachable"
+            return MISSING, "the file does not exist"
         except OSError as error:
-            return UNAVAILABLE, None, f"cannot be examined: {error.strerror}"
+            return UNAVAILABLE, f"cannot be examined: {error.strerror}"
         last = index == len(parts) - 1
         if stat.S_ISLNK(mode):
-            return UNAVAILABLE, None, "a symbolic link, which is not followed"
+            return UNAVAILABLE, "a symbolic link, which is not followed"
         if not last and not stat.S_ISDIR(mode):
-            return MISSING, None, "the file does not exist"
+            return MISSING, "the file does not exist"
     if stat.S_ISDIR(mode):
-        return UNAVAILABLE, None, "a directory, not a regular file"
+        return UNAVAILABLE, "a directory, not a regular file"
     if not stat.S_ISREG(mode):
-        return UNAVAILABLE, None, "a special file, not a regular file"
+        return UNAVAILABLE, "a special file, not a regular file"
+    return None
+
+
+def _examine(root: Path, path: str) -> tuple[str | None, str | None, str | None]:
+    """Return (outcome, observed digest, reason); no outcome when it was read."""
+    problem = find_file(root, path)
+    if problem is not None:
+        return problem[0], None, problem[1]
     try:
-        return None, _digest(current), None
+        return None, _digest(root / path), None
     except OSError as error:
         return UNAVAILABLE, None, f"cannot be read: {error.strerror}"
 

@@ -120,7 +120,18 @@ under `data/` and CopyOfA's records in the `copyofa/` tag directory, as
 [docs/formats/evidence-set.md](docs/formats/evidence-set.md) documents the layout and
 the Import Record; change it with any change to what import writes.
 [docs/formats/verification-report.md](docs/formats/verification-report.md) documents
-the Report verify prints; change it with any change to that Report.
+the Report verify prints, and
+[docs/formats/inspection-report.md](docs/formats/inspection-report.md) the Report
+inspect prints; change each with any change to its Report.
+
+### Audio decoding
+
+`inspect` decodes audio with soundfile, whose wheels bundle libsndfile with FLAC and
+mpg123, and NumPy; these are the only runtime dependencies. The Audio Digest is
+defined on canonical PCM by
+[ADR 0002](docs/decisions/0002-define-audio-digest-from-canonical-pcm.md), so any
+exact decoder reproduces it. `pyproject.toml` sets NumPy's minimum per Python version,
+to the oldest release with wheels for it, because CI's lowest-direct jobs install it.
 
 ### Command conventions
 

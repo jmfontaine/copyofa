@@ -9,7 +9,7 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 import copyofa
-from copyofa import verifier
+from copyofa import inspector, verifier
 from copyofa.errors import CopyOfAError
 from copyofa.importer import import_evidence
 
@@ -99,6 +99,21 @@ def _parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="print the verification Report as JSON"
     )
     verifying.set_defaults(handler=_verify)
+
+    inspecting = commands.add_parser(
+        "inspect",
+        help="describe the audio in an Evidence Set",
+        description=(
+            "Check each file of an Evidence Set against its Integrity Baseline, then "
+            "decode the FLAC, WAV and MP3 audio and describe it. Exits 0 when every "
+            "file was decoded or is not a supported format, and 1 otherwise."
+        ),
+    )
+    inspecting.add_argument("evidence_set", metavar="evidence-set")
+    inspecting.add_argument(
+        "--json", action="store_true", help="print the inspection Report as JSON"
+    )
+    inspecting.set_defaults(handler=_inspect)
     return parser
 
 
@@ -199,6 +214,69 @@ def _print_items(title: str, items: list[dict[str, str]]) -> None:
         if item["outcome"] != verifier.CHANGED:
             line = f"{line} ({item['reason']})"
         print(_printable(line))
+
+
+def _inspect(args: argparse.Namespace) -> int:
+    def progress(entry: dict[str, Any]) -> None:
+        outcome = entry["outcome"].replace("_", " ")
+        print(f"Inspected {_printable(entry['path'])}: {outcome}", file=sys.stderr)
+
+    try:
+        report = inspector.inspect(args.evidence_set, progress=progress)
+    except verifier.NotAnEvidenceSetError as error:
+        print(f"copyofa: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    if args.json:
+        print(_json(report))
+    else:
+        _print_inspection(report)
+    return EXIT_PROBLEM if inspector.found_problems(report) else EXIT_OK
+
+
+def _print_inspection(report: dict[str, Any]) -> None:
+    baseline = report["integrity_baseline"]
+    print(f"Evidence Set {_printable(report['evidence_set'])}")
+    print(f"Integrity Baseline: {'usable' if baseline['usable'] else 'unusable'}")
+    for problem in baseline["problems"]:
+        print(f"  {_printable(problem)}")
+    counts = report["counts"]
+    summary = ", ".join(
+        f"{counts[outcome]} {outcome.replace('_', ' ')}"
+        for outcome in inspector.OUTCOMES
+        if counts[outcome]
+    )
+    print(f"Files: {summary or 'none'}")
+    entries = report["files"]
+    for entry in entries:
+        if entry["outcome"] == inspector.INTERPRETED:
+            print(_printable(f"  {entry['path']}: {_describe_audio(entry)}"))
+    for entry in entries:
+        if entry["outcome"] != inspector.INTERPRETED:
+            outcome = entry["outcome"].replace("_", " ")
+            print(_printable(f"  {outcome}: {entry['path']} ({entry['reason']})"))
+    result = "problems found" if inspector.found_problems(report) else "no problems"
+    print(f"Result: {result}")
+
+
+def _describe_audio(entry: dict[str, Any]) -> str:
+    """Summarize an interpreted file, such as `flac, 44100 Hz, 16-bit, 2 channels`."""
+    parts = [entry["format"], f"{entry['sample_rate']} Hz"]
+    if "bits_per_sample" in entry:
+        parts.append(f"{entry['bits_per_sample']}-bit")
+    parts.append(_count(entry["channels"], "channel"))
+    parts.append(_duration(entry["frames"], entry["sample_rate"]))
+    return ", ".join(parts)
+
+
+def _duration(frames: int, sample_rate: int) -> str:
+    """Format frames as a duration, such as `3:07.250` or `1:02:03.000`."""
+    milliseconds = frames * 1000 // sample_rate
+    seconds, milliseconds = divmod(milliseconds, 1000)
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}:{minutes:02}:{seconds:02}.{milliseconds:03}"
+    return f"{minutes}:{seconds:02}.{milliseconds:03}"
 
 
 def _count(number: int, noun: str) -> str:

@@ -22,7 +22,12 @@ classifiers = [
   "Programming Language :: Python :: 3.15",
   "Typing :: Typed",
 ]
-dependencies = []
+# The oldest NumPy with wheels for each Python: CI's lowest-direct jobs install it.
+dependencies = [
+  "numpy>=2.5.2; python_version>='3.15'",
+  "numpy>=2; python_version<'3.15'",
+  "soundfile>=0.12",
+]
 urls.Homepage = "https://github.com/jmfontaine/copyofa"
 urls.Issues = "https://github.com/jmfontaine/copyofa/issues"
 urls.Repository = "https://github.com/jmfontaine/copyofa"
