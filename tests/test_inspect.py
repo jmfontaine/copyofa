@@ -581,3 +581,107 @@ def test_inspect_skips_an_id3v2_tag_before_flac(run: Run, make_set) -> None:
     assert digests == {
         "interpreted": f"pcm1:{RATE}:2:16:{canonical_digest(samples, 16)}"
     }
+
+
+def bracketed_by_silence(bits: int) -> np.ndarray:
+    """Return stereo samples: 70000 zero frames, 1000 sounding, 70000 zero frames.
+
+    The silences span more than one decoding block, and the peaks are known: the
+    lowest sample value on the left channel, a positive one on the right.
+    """
+    low = -(1 << (bits - 1))
+    middle = np.zeros((1000, 2), dtype=np.int32)
+    middle[0] = [3, 0]
+    middle[400] = [low, 1]
+    middle[999] = [0, 1234]
+    silence = np.zeros((70000, 2), dtype=np.int32)
+    return np.concatenate([silence, middle, silence])
+
+
+@pytest.mark.parametrize(("bits", "container"), [(16, "FLAC"), (24, "WAVEX")])
+def test_inspect_measures_peak_and_digital_silence(
+    run: Run, make_set, bits: int, container: str
+) -> None:
+    def fill(source: Path) -> None:
+        write_audio(source / "track", bracketed_by_silence(bits), bits, container)
+        write_audio(source / "silent", np.zeros((5000, 2), np.int32), bits, container)
+
+    outcome, report = inspect(run, make_set(fill))
+
+    assert outcome.code == 0, outcome.err
+    keys = ("peak", "leading_silence_frames", "trailing_silence_frames")
+    found = {
+        name: tuple(entry[key] for key in keys)
+        for name, entry in entries(report).items()
+    }
+    assert found == {
+        "track": ([1 << (bits - 1), 1234], 70000, 70000),
+        "silent": ([0, 0], 5000, 0),
+    }
+
+
+def test_inspect_measures_mp3_as_decoded(run: Run, make_set) -> None:
+    # One second of silence, one of a 440 Hz tone at half and quarter scale, one of
+    # silence. MP3 encoding blurs the edges and the peaks a little.
+    tone = np.sin(2 * np.pi * 440 * np.arange(RATE) / RATE)
+    samples = np.zeros((3 * RATE, 2), dtype=np.float32)
+    samples[RATE : 2 * RATE] = np.column_stack([0.5 * tone, 0.25 * tone])
+
+    def fill(source: Path) -> None:
+        soundfile.write(
+            source / "track.mp3", samples, RATE, format="MP3", subtype="MPEG_LAYER_III"
+        )
+
+    _, report = inspect(run, make_set(fill))
+
+    entry = entries(report)["track.mp3"]
+    assert entry["peak"] == [
+        pytest.approx(0.5, abs=0.02),
+        pytest.approx(0.25, abs=0.02),
+    ]
+    assert RATE * 0.9 < entry["leading_silence_frames"] <= RATE
+    assert RATE * 0.9 < entry["trailing_silence_frames"] <= RATE
+
+
+def test_inspect_checks_the_flac_md5_signature(run: Run, make_set) -> None:
+    samples = signal(2000, 2, 16)
+
+    def fill(source: Path) -> None:
+        for name in ("intact", "altered", "zeroed"):
+            write_audio(source / f"{name}.flac", samples, 16, "FLAC")
+        patch_streaminfo(source / "altered.flac", md5=b"\x01" * 16)
+        patch_streaminfo(source / "zeroed.flac", md5=bytes(16))
+        write_audio(source / "track.wav", samples, 16, "WAV")
+
+    evidence_set = make_set(fill)
+    outcome, report = inspect(run, evidence_set)
+
+    assert outcome.code == 1
+    found = {
+        name: entry.get("flac_md5_signature") for name, entry in entries(report).items()
+    }
+    assert found == {
+        "intact.flac": "matching",
+        "altered.flac": "differs",
+        "zeroed.flac": "absent",
+        "track.wav": None,
+    }
+    human = run("inspect", evidence_set)
+    assert human.code == 1
+    assert [line for line in human.out.splitlines() if "MD5" in line] == [
+        (
+            "  data/Album/altered.flac: flac, 44100 Hz, 16-bit, 2 channels, "
+            "0:00.045, decoded audio differs from its FLAC MD5 signature"
+        )
+    ]
+
+
+def test_inspect_accepts_an_absent_flac_md5_signature(run: Run, make_set) -> None:
+    def fill(source: Path) -> None:
+        write_audio(source / "zeroed.flac", signal(2000, 2, 16), 16, "FLAC")
+        patch_streaminfo(source / "zeroed.flac", md5=bytes(16))
+
+    outcome, report = inspect(run, make_set(fill))
+
+    assert outcome.code == 0
+    assert report["files"][0]["flac_md5_signature"] == "absent"

@@ -88,6 +88,20 @@ An `interpreted` entry also holds:
   divided by `sample_rate`. For MP3 it depends on the decoder's handling of the encoder
   delay and padding.
 - `audio_digest`: for FLAC and WAV, the Audio Digest (see below).
+- `peak`: the largest absolute sample value of each channel, in channel order. For
+  FLAC and WAV it is an exact integer at the bits per sample, so a 16-bit file at full
+  scale gives 32768 for its lowest value; 8-bit WAV samples count from their signed
+  value. For MP3 it is the decoded floating-point value, where 1.0 is full scale; it
+  depends on the decoder, and decoded MP3 often exceeds 1.0.
+- `leading_silence_frames` and `trailing_silence_frames`: the number of frames at the
+  start and at the end in which every channel is exactly zero. A file that is silent
+  throughout reports all its frames as leading silence and none as trailing. For MP3
+  they depend on the decoder, and lossy encoding rarely leaves exact zeros next to
+  sound.
+- `flac_md5_signature`: for FLAC, whether the decoded audio matches the MD5 signature
+  its encoder stored in STREAMINFO, an MD5 of the same byte stream the Audio Digest
+  hashes: `matching`, `differs`, or `absent` when the encoder stored zeros. `differs`
+  means the file is not the audio its encoder wrote, and makes inspect exit 1.
 - `limitations`: for MP3, why it has no Audio Digest.
 
 ## Audio Digest
@@ -145,7 +159,11 @@ ffmpeg -i 01.flac -f s24le - | shasum -a 256
       "channels": 2,
       "bits_per_sample": 24,
       "frames": 30270376,
-      "audio_digest": "pcm1:96000:2:24:75e1…"
+      "audio_digest": "pcm1:96000:2:24:75e1…",
+      "peak": [8108127, 8107460],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0,
+      "flac_md5_signature": "matching"
     },
     {
       "path": "data/Album/02.mp3",
@@ -157,6 +175,9 @@ ffmpeg -i 01.flac -f s24le - | shasum -a 256
       "sample_rate": 44100,
       "channels": 2,
       "frames": 10782291,
+      "peak": [1.2177222967147827, 1.1910574436187744],
+      "leading_silence_frames": 1,
+      "trailing_silence_frames": 0,
       "limitations": [
         "MP3 is lossy: its decoded samples, and so its frame count, depend on …"
       ]
@@ -188,8 +209,8 @@ the whole of each limitation.
 
 ## Exit codes
 
-`copyofa inspect` exits 0 when the Integrity Baseline is usable and every listed file
-is `interpreted` or `not_interpreted`. It exits 1 otherwise, and still prints its
-result or Report. It exits 2, printing nothing on stdout, when the target is not an
-Evidence Set or the arguments are invalid, and 130 when canceled with Ctrl-C. mpg123
-may write notes about damaged MP3 frames to stderr.
+`copyofa inspect` exits 0 when the Integrity Baseline is usable, every listed file is
+`interpreted` or `not_interpreted`, and no FLAC MD5 signature differs. It exits 1
+otherwise, and still prints its result or Report. It exits 2, printing nothing on
+stdout, when the target is not an Evidence Set or the arguments are invalid, and 130
+when canceled with Ctrl-C. mpg123 may write notes about damaged MP3 frames to stderr.

@@ -21,6 +21,7 @@
     "endfor",
     "esac",
     "filterwarnings",
+    "flatnonzero",
     "flynt",
     "fnmatch",
     "Fontaine",

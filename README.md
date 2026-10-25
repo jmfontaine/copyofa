@@ -77,11 +77,14 @@ interpreted, with the reason. `--json` prints an inspection Report, which
 [Inspection Report format][inspection-report] describes. For FLAC and WAV it gives an
 Audio Digest, which recognizes the same audio after retagging or recompression and
 can be reproduced with `flac` or `ffmpeg`. MP3 has none, because its decoded samples
-depend on the decoder.
+depend on the decoder. The Report also gives each track's peak per channel and its
+digital silence at each end, and for FLAC whether the audio matches the MD5 signature
+its encoder stored.
 
 Inspect exits 0 when every file was decoded or is not a supported format, 1 when a
-file could not be inspected or decoded, 2 when the target is not an Evidence Set or
-the arguments are invalid, and 130 when canceled. It writes nothing into the set.
+file could not be inspected or decoded or its audio differs from its FLAC MD5
+signature, 2 when the target is not an Evidence Set or the arguments are invalid, and
+130 when canceled. It writes nothing into the set.
 
 ## Documents
 
