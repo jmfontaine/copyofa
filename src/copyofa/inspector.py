@@ -199,7 +199,8 @@ def inspect_file(
 
     Returns the file's Report entry. When sink is given, it receives the decoded
     frames block by block, shaped (frames, channels), as float32 where 1.0 is full
-    scale. They are the file's audio only when the entry's outcome is `interpreted`.
+    scale; 32-bit PCM is rounded to float32's 24-bit precision. They are the file's
+    audio only when the entry's outcome is `interpreted`.
     """
     problem = verifier.find_file(root, path)
     if problem is not None:

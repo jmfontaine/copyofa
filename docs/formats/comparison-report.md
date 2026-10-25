@@ -21,7 +21,10 @@ records the method and why it was chosen.
 
 1. **Finding each set.** Each track is the path of a file inside an Evidence Set. Its
    set is the nearest directory above it that holds `bagit.txt`, and the file must lie
-   under that set's `data/`. Otherwise compare exits 2.
+   under that set's `data/`. Otherwise compare exits 2. Under a directory that cannot
+   be searched, such as a set root without search permission, the set is the nearest
+   directory whose `data/` holds the file; its records then cannot be read, and the
+   input is `not_inspected`.
 2. **Integrity first.** Each input is checked as `inspect` checks a file (see
    [Inspection Report format](inspection-report.md#how-inspect-works)): the Integrity
    Baseline must be usable, `manifest-sha256.txt` must list the file, and the file must
@@ -91,7 +94,7 @@ Track B is measured against track A. Frames are counted at `common_sample_rate`.
 
 | Field | Content |
 | --- | --- |
-| `identical_audio` | `true` when both tracks have an Audio Digest and the digests are equal; absent otherwise. The offset is then 0, without a search, and the residual is absent. |
+| `identical_audio` | `true` when both tracks have an Audio Digest and the digests are equal; absent otherwise. The offset is then 0, without a search, unless the tracks have no frames, and the residual is absent. |
 | `offset` | `frames`, an integer, and `seconds`. A positive offset means track B starts that many frames later than track A: frame *n* of A lines up with frame *n* + `frames` of B. |
 | `overlap` | `a` and `b`: where the aligned tracks overlap in each, as its `start_frame`, its length in `frames` (the same for both), and the `fraction` of the track it covers. |
 | `downmix` | The values below, measured on the mono downmixes. |
@@ -121,7 +124,7 @@ A value that the audio leaves undefined is absent, never NaN or infinity:
 
 | Absent value | When |
 | --- | --- |
-| `offset`, `overlap`, and every value of `downmix` and `channels` | A downmix is zero throughout or has no frames, so the cross-correlation has no maximum. |
+| `offset`, `overlap`, and every value of `downmix` and `channels` | A track has no frames, or, for audio that is not identical, a downmix is zero throughout, so the cross-correlation has no maximum. |
 | `correlation` | A track is constant over the overlap. |
 | `gain_db` | Track B is zero over the overlap, or the gain is exactly zero. |
 | `residual_db`, `residual_windows` | The audio is identical, or the gain is undefined. |

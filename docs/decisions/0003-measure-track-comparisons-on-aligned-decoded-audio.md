@@ -55,12 +55,14 @@ where 1.0 is full scale.
      shorter.
 5. **Identical audio.** When both tracks have an Audio Digest and the digests are
    equal, the Report states that the audio is identical. The offset is then 0
-   without a search, and the residual is absent with that reason.
+   without a search, unless the tracks have no frames, and the residual is absent
+   with that reason.
 6. **Undefined values.** A value that the audio leaves undefined is absent, with a
-   sentence saying why, never NaN or infinity: no offset when a downmix is zero
-   throughout or has no frames, no correlation when a track is constant over the
-   overlap, no gain when B is zero over it or *g* is zero, and no residual when A is
-   zero, the gain is undefined, or *a* − *g*·*b* is exactly zero.
+   sentence saying why, never NaN or infinity: no offset when a track has no frames
+   or, for audio that is not identical, when a downmix is zero throughout; no
+   correlation when a track is constant over the overlap; no gain when B is zero over
+   it or *g* is zero; and no residual when A is zero, the gain is undefined, or
+   *a* − *g*·*b* is exactly zero.
 
 ## Rationale and alternatives
 

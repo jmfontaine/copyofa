@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import soundfile
 import soxr
-from conftest import RATE, signal, snapshot, write_audio
+from conftest import RATE, requires_permissions, signal, snapshot, write_audio
 
 import copyofa
 from copyofa import comparator, inspector
@@ -260,6 +260,28 @@ def test_compare_gives_values_undefined_over_the_overlap_as_absent(
     }
 
 
+def test_compare_gives_values_absent_for_identical_tracks_without_frames(
+    run: Run, make_set: MakeSet
+) -> None:
+    track = make_set(
+        lambda source: write_audio(
+            source / "empty.wav", np.zeros((0, 2), np.int32), 16, "WAV"
+        )
+    )
+    empty = track / "data/Album/empty.wav"
+
+    outcome = run("compare", empty, empty, "--json")
+
+    assert outcome.code == 0, outcome.err
+    report = json.loads(outcome.out, parse_constant=_reject_constant)
+    measurements = report["measurements"]
+    assert measurements["identical_audio"] is True
+    reason = "no offset was found: track A has no frames"
+    assert measurements["absent"] == {"offset": reason, "overlap": reason}
+    for values in [measurements["downmix"], *measurements["channels"]]:
+        assert values == {"absent": dict.fromkeys(MEASURED, reason)}
+
+
 def test_compare_downmix_only_for_different_channel_counts(
     run: Run, make_set: MakeSet
 ) -> None:
@@ -353,6 +375,28 @@ def test_compare_reports_inputs_it_cannot_compare(run: Run, make_set: MakeSet) -
         outcome_text = outcome_expected.replace("_", " ")
         assert lines[1].endswith(f"({outcome_text}: {reason})")
         assert lines[2:] == ["Not compared: an input was not interpreted"]
+
+
+@requires_permissions
+def test_compare_finds_a_set_whose_root_cannot_be_searched(
+    run: Run, make_set: MakeSet
+) -> None:
+    def fill(source: Path) -> None:
+        write_audio(source / "a.flac", signal(1000, 2, 16), 16, "FLAC")
+
+    evidence_set = make_set(fill)
+    track = evidence_set / "data/Album/a.flac"
+    evidence_set.chmod(0)
+    try:
+        outcome, report = compare(run, track, track)
+    finally:
+        evidence_set.chmod(0o755)
+
+    # As inspect does: the set's records cannot be read, so it is not inspected.
+    assert outcome.code == 1
+    for entry in report["inputs"].values():
+        assert entry["evidence_set"] == str(evidence_set)
+        assert entry["reason"] == "the Integrity Baseline is unusable"
 
 
 def test_compare_inspects_nothing_with_an_unusable_baseline(

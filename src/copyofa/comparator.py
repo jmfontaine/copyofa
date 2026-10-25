@@ -134,11 +134,19 @@ def _locate(track: str) -> tuple[Path, str]:
     # could name another directory than the one a symbolic link leads to.
     location = Path(track).absolute()
     for root in location.parents:
+        path = PurePosixPath(*location.parts[len(root.parts) :]).as_posix()
         try:
             (root / evidence_set.BAGIT_TXT).lstat()
-        except OSError:
+        except (FileNotFoundError, NotADirectoryError):
             continue
-        path = PurePosixPath(*location.parts[len(root.parts) :]).as_posix()
+        except OSError:
+            # Unreachable, such as behind a set root without search permission: as
+            # in verifier.locate, it may be the set, whose records then cannot be
+            # read. Every directory below such a root is unreachable too, so only
+            # the one whose data/ holds the track is taken.
+            if evidence_set.is_payload_path(path):
+                return root, path
+            continue
         if not evidence_set.is_payload_path(path):
             raise verifier.NotAnEvidenceSetError(
                 f"{track} is not under the {evidence_set.PAYLOAD_DIR}/ directory of "
@@ -189,7 +197,8 @@ def _measure(a: _Audio, b: _Audio, rate: int) -> dict[str, Any]:
     absent: dict[str, str] = {}
     if identical:
         measurements["identical_audio"] = True
-        missing = None
+        # Identical tracks align at 0 without a search, unless there is no frame.
+        missing = _no_frames(downmix_a, "A")
     else:
         missing = _no_alignment(downmix_a, "A") or _no_alignment(downmix_b, "B")
     overlap: _Overlap | str
@@ -239,11 +248,15 @@ def _resample(audio: _Audio, rate: int) -> npt.NDArray[np.float32]:
 
 def _no_alignment(downmix: npt.NDArray[np.float64], name: str) -> str | None:
     """Say why a downmix leaves the cross-correlation without a maximum, if it does."""
-    if not len(downmix):
-        return f"track {name} has no frames"
     if not downmix.any():
-        return f"the downmix of track {name} is zero throughout"
+        return _no_frames(downmix, name) or (
+            f"the downmix of track {name} is zero throughout"
+        )
     return None
+
+
+def _no_frames(downmix: npt.NDArray[np.float64], name: str) -> str | None:
+    return None if len(downmix) else f"track {name} has no frames"
 
 
 def _align(a: npt.NDArray[np.float64], b: npt.NDArray[np.float64]) -> int:
