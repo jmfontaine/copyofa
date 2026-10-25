@@ -41,6 +41,8 @@ class ImportResult:
     import_record: dict[str, Any]
     files: int
     bytes: int
+    # Problems that did not fail the import, reported on stderr.
+    warnings: tuple[str, ...] = ()
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -126,6 +128,7 @@ def import_evidence(
     # What this import created and removes when it fails or is canceled; never
     # a staging directory it did not create.
     created: Path | None = None
+    warnings: list[str] = []
     try:
         with _interrupt_deferred():
             try:
@@ -141,14 +144,22 @@ def import_evidence(
         with _interrupt_deferred():
             staging.rename(target)
             created = target
-        os.fsync(parent_fd)
+        try:
+            os.fsync(parent_fd)
+        except OSError as error:
+            # The set is complete and accepted; only the rename's durability is
+            # in doubt, which deleting the set would not improve.
+            warnings.append(
+                f"could not sync {target.parent} after creating {target}: "
+                f"{error.strerror}. The Evidence Set is complete."
+            )
     except BaseException:
         if created is not None:
             shutil.rmtree(created, ignore_errors=True)
         raise
     finally:
         os.close(parent_fd)
-    return ImportResult(target, record, len(selection.files), total)
+    return ImportResult(target, record, len(selection.files), total, tuple(warnings))
 
 
 @contextmanager
