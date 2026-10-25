@@ -134,6 +134,11 @@ def _parser() -> argparse.ArgumentParser:
     comparing.add_argument(
         "--json", action="store_true", help="print the comparison Report as JSON"
     )
+    comparing.add_argument(
+        "--omit-locations",
+        action="store_true",
+        help="leave out where each Evidence Set is stored",
+    )
     comparing.set_defaults(handler=_compare)
     validating = commands.add_parser(
         "validate",
@@ -340,7 +345,12 @@ def _compare(args: argparse.Namespace) -> int:
         print(f"Inspected {_printable(entry['path'])}: {outcome}", file=sys.stderr)
 
     try:
-        report = comparator.compare(args.track_a, args.track_b, progress=progress)
+        report = comparator.compare(
+            args.track_a,
+            args.track_b,
+            progress=progress,
+            omit_locations=args.omit_locations,
+        )
     except verifier.NotAnEvidenceSetError as error:
         print(f"copyofa: {error}", file=sys.stderr)
         return EXIT_USAGE
@@ -358,7 +368,11 @@ def _print_comparison(report: dict[str, Any]) -> None:
             detail = _describe_audio(entry)
         else:
             detail = f"{entry['outcome'].replace('_', ' ')}: {entry['reason']}"
-        location = f"{entry['evidence_set']}/{entry['path']}"
+        location = (
+            entry["path"]
+            if "evidence_set" not in entry
+            else f"{entry['evidence_set']}/{entry['path']}"
+        )
         print(_printable(f"Track {name.upper()}: {location} ({detail})"))
     measurements = report.get("measurements")
     if measurements is None:

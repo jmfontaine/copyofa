@@ -436,7 +436,8 @@ def test_compare_report_content(run: Run, make_set: MakeSet) -> None:
         "Inspected data/Album/b.flac: interpreted",
     ]
     assert report["report_kind"] == "copyofa.comparison"
-    assert report["format_version"] == 1
+    assert report["format_version"] == 2
+    assert report["omitted"] == []
     assert report["copyofa_version"] == copyofa.__version__
     compared_at = datetime.strptime(
         report["compared_at"], "%Y-%m-%dT%H:%M:%SZ"
@@ -473,6 +474,78 @@ def test_compare_report_content(run: Run, make_set: MakeSet) -> None:
         "alignment": "downmix_cross_correlation",
     }
     assert report["limitations"] == list(comparator.LIMITATIONS)
+
+
+def test_compare_omit_locations_leaves_out_where_each_set_is(
+    run: Run, make_set: MakeSet, tmp_path: Path
+) -> None:
+    samples = signal(RATE, 2, 16)
+    a, b = two_sets(
+        make_set,
+        lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"),
+        lambda source: write_audio(source / "b.flac", samples >> 1, 16, "FLAC"),
+    )
+
+    outcome, report = compare(run, a / "a.flac", b / "b.flac", "--omit-locations")
+
+    assert outcome.code == 0, outcome.err
+    assert report["format_version"] == 2
+    assert report["omitted"] == ["/inputs/a/evidence_set", "/inputs/b/evidence_set"]
+    for name in "ab":
+        entry = report["inputs"][name]
+        assert "evidence_set" not in entry
+        assert entry["path"] == f"data/Album/{name}.flac"
+        assert entry["integrity_baseline"]["usable"] is True
+    # tmp_path holds both sets, so this also covers each set's parent directories.
+    assert str(tmp_path) not in outcome.out
+    assert outcome.err.splitlines() == [
+        "Inspected data/Album/a.flac: interpreted",
+        "Inspected data/Album/b.flac: interpreted",
+    ]
+
+
+def test_compare_omit_locations_shows_each_path_in_its_set(
+    run: Run, make_set: MakeSet, tmp_path: Path
+) -> None:
+    samples = signal(RATE, 2, 16)
+    a, b = two_sets(
+        make_set,
+        lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"),
+        lambda source: write_audio(source / "b.wav", samples >> 1, 16, "WAV"),
+    )
+
+    outcome = run("compare", a / "a.flac", b / "b.wav", "--omit-locations")
+
+    assert outcome.code == 0, outcome.err
+    lines = outcome.out.splitlines()
+    assert lines[0] == (
+        "Track A: data/Album/a.flac (flac, 44100 Hz, 16-bit, 2 channels, 0:01.000)"
+    )
+    assert lines[1] == (
+        "Track B: data/Album/b.wav (wav, 44100 Hz, 16-bit, 2 channels, 0:01.000)"
+    )
+    assert lines[2].startswith("Offset: ")
+    assert str(tmp_path) not in outcome.out
+
+
+def test_compare_omit_locations_with_an_input_that_is_not_inspected(
+    run: Run, make_set: MakeSet, tmp_path: Path
+) -> None:
+    root = make_set(
+        lambda source: write_audio(source / "a.flac", signal(100, 1, 16), 16, "FLAC")
+    )
+    (root / "tagmanifest-sha256.txt").unlink()
+    track = root / "data/Album/a.flac"
+
+    json_outcome, report = compare(run, track, track, "--omit-locations")
+    human_outcome = run("compare", track, track, "--omit-locations")
+
+    assert json_outcome.code == human_outcome.code == 1
+    assert report["omitted"] == ["/inputs/a/evidence_set", "/inputs/b/evidence_set"]
+    assert all("evidence_set" not in entry for entry in report["inputs"].values())
+    assert str(tmp_path) not in json_outcome.out
+    assert str(tmp_path) not in human_outcome.out
+    assert human_outcome.out.splitlines()[0].startswith("Track A: data/Album/a.flac ")
 
 
 def test_compare_human_result(run: Run, make_set: MakeSet) -> None:

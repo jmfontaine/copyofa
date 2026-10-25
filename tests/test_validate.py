@@ -32,6 +32,16 @@ SCHEMA_FILES = sorted(
 )
 
 
+def as_version_1(document: dict[str, Any]) -> dict[str, Any]:
+    """Return a version 2 comparison Report that holds its locations as version 1."""
+    assert document["omitted"] == []
+    return {
+        key: 1 if key == "format_version" else value
+        for key, value in document.items()
+        if key != "omitted"
+    }
+
+
 @pytest.fixture
 def reports(run: Run, make_set: MakeSet, tmp_path: Path) -> dict[str, Path]:
     """Save a verification, an inspection and a comparison Report of real sets."""
@@ -54,6 +64,14 @@ def reports(run: Run, make_set: MakeSet, tmp_path: Path) -> dict[str, Path]:
         assert outcome.code == 0, outcome.err
         saved[kind] = tmp_path / f"{kind}.json"
         saved[kind].write_text(outcome.out)
+    outcome = run(*commands["comparison"], "--json", "--omit-locations")
+    assert outcome.code == 0, outcome.err
+    saved["comparison_omitted"] = tmp_path / "comparison_omitted.json"
+    saved["comparison_omitted"].write_text(outcome.out)
+    saved["comparison_v1"] = tmp_path / "comparison_v1.json"
+    saved["comparison_v1"].write_text(
+        json.dumps(as_version_1(json.loads(saved["comparison"].read_text())))
+    )
     return saved
 
 
@@ -117,7 +135,7 @@ def test_validate_accepts_each_kind_of_report(
         "report": str(path),
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "report_kind": KINDS[kind][0],
-        "format_version": 1,
+        "format_version": KINDS[kind][1],
         "problems": [],
         "copyofa_version": result["copyofa_version"],
         "limitations": result["limitations"],
@@ -136,7 +154,7 @@ def test_validate_prints_a_short_result(run: Run, reports: dict[str, Path]) -> N
     assert lines[0] == "Result: valid"
     assert f"SHA-256: {hashlib.sha256(path.read_bytes()).hexdigest()}" in lines
     assert "Report kind: copyofa.comparison" in lines
-    assert "Format version: 1" in lines
+    assert "Format version: 2" in lines
     assert "Limitations:" in lines
     assert "Traceback" not in outcome.out + outcome.err
 
@@ -295,9 +313,129 @@ def test_validate_finds_each_problem_of_a_schema_at_its_pointer(
     assert outcome.err == ""
     assert result["outcome"] == "invalid"
     assert result["report_kind"] == KINDS[kind][0]
-    assert result["format_version"] == 1
+    assert result["format_version"] == KINDS[kind][1]
     assert location in {problem["location"] for problem in result["problems"]}
     assert all(problem["message"] for problem in result["problems"])
+
+
+def test_validate_accepts_a_comparison_report_of_format_version_1(
+    run: Run, reports: dict[str, Path]
+) -> None:
+    path = reports["comparison_v1"]
+
+    outcome, result = validate(run, path)
+
+    assert outcome.code == 0, outcome.err
+    assert result["outcome"] == "valid"
+    assert result["report_kind"] == "copyofa.comparison"
+    assert result["format_version"] == 1
+    assert result["problems"] == []
+
+
+def test_validate_requires_evidence_set_in_a_comparison_report_of_version_1(
+    run: Run, reports: dict[str, Path], tmp_path: Path
+) -> None:
+    document = edited(
+        reports["comparison_v1"],
+        lambda report: report["inputs"]["a"].pop("evidence_set"),
+    )
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 1
+    assert result["outcome"] == "invalid"
+    assert "/inputs/a" in {problem["location"] for problem in result["problems"]}
+
+
+def test_validate_rejects_omitted_in_a_comparison_report_of_version_1(
+    run: Run, reports: dict[str, Path], tmp_path: Path
+) -> None:
+    document = edited(
+        reports["comparison_v1"], lambda report: report.update(omitted=[])
+    )
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 1
+    assert result["outcome"] == "invalid"
+    assert "" in {problem["location"] for problem in result["problems"]}
+
+
+def test_validate_accepts_a_comparison_report_that_leaves_locations_out(
+    run: Run, reports: dict[str, Path]
+) -> None:
+    document = json.loads(reports["comparison_omitted"].read_text())
+    assert document["omitted"] == ["/inputs/a/evidence_set", "/inputs/b/evidence_set"]
+
+    outcome, result = validate(run, reports["comparison_omitted"])
+
+    assert outcome.code == 0, outcome.err
+    assert result["outcome"] == "valid"
+    assert result["format_version"] == 2
+
+
+# Edits to a version 2 comparison Report that break the rule that each input's
+# `evidence_set` is present exactly when `omitted` does not list it.
+LOCATION_EDITS: dict[str, tuple[str, Callable[[Any], None], str]] = {
+    "an evidence_set that is neither present nor omitted": (
+        "comparison",
+        lambda report: report["inputs"]["a"].pop("evidence_set"),
+        "/inputs/a",
+    ),
+    "an evidence_set that is present and omitted": (
+        "comparison",
+        lambda report: report.update(omitted=["/inputs/b/evidence_set"]),
+        "/inputs/b",
+    ),
+    "an evidence_set that is present when both are omitted": (
+        "comparison_omitted",
+        lambda report: report["inputs"]["a"].update(evidence_set="/Volumes/Archive"),
+        "/inputs/a",
+    ),
+    "an evidence_set that is absent but no longer omitted": (
+        "comparison_omitted",
+        lambda report: report.update(omitted=["/inputs/a/evidence_set"]),
+        "/inputs/b",
+    ),
+    "a Report without omitted": (
+        "comparison",
+        lambda report: report.pop("omitted"),
+        "",
+    ),
+    "an omitted pointer to another value": (
+        "comparison_omitted",
+        lambda report: report.update(omitted=["/inputs/a/path"]),
+        "/omitted/0",
+    ),
+    "an omitted pointer that is repeated": (
+        "comparison_omitted",
+        lambda report: report.update(
+            omitted=["/inputs/a/evidence_set", "/inputs/a/evidence_set"]
+        ),
+        "/omitted",
+    ),
+    "an omitted that is not a list": (
+        "comparison_omitted",
+        lambda report: report.update(omitted="/inputs/a/evidence_set"),
+        "/omitted",
+    ),
+}
+
+
+@pytest.mark.parametrize("name", LOCATION_EDITS)
+def test_validate_finds_an_evidence_set_that_omitted_does_not_account_for_invalid(
+    run: Run, reports: dict[str, Path], tmp_path: Path, name: str
+) -> None:
+    base, change, location = LOCATION_EDITS[name]
+    document = edited(reports[base], change)
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 1
+    assert outcome.err == ""
+    assert result["outcome"] == "invalid"
+    assert result["format_version"] == 2
+    assert location in {problem["location"] for problem in result["problems"]}
 
 
 def test_validate_prints_each_problem_with_its_location(

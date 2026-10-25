@@ -40,7 +40,7 @@ td ul, td ol { margin: 0; padding-left: 1.2rem; }
 
 
 def render(report: dict[str, Any], sha256: str) -> str:
-    """Return the HTML page of a valid comparison Report of format version 1.
+    """Return the HTML page of a valid comparison Report of format version 1 or 2.
 
     sha256 is the SHA-256 of the exact bytes the Report was read from. Every text of
     the Report is escaped, and a character that is not printable, such as a lone
@@ -99,6 +99,7 @@ def _report_section(report: dict[str, Any], sha256: str) -> list[str]:
                     _show(report, "copyofa_version"),
                 ),
                 ("Compared at (UTC)", _show(report, "compared_at")),
+                ("Left out of the Report (JSON Pointers)", _list(report, "omitted")),
             ],
         ),
     ]
