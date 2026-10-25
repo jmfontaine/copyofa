@@ -257,6 +257,9 @@ the collector already owns.
 
 ### Later
 
+- **Locate Matching Portions and Edits Between Tracks** — Compare and Discover
+  Relationships. S3's partial matches and their affected ranges, which one global
+  offset does not locate.
 - **Compare Editions** — Compare and Discover Relationships; Share and Evaluate
   Findings. S4, built on track comparison.
 - **Preserve a Supported CD and Use Its Audio Later** — Acquire Audio and Record Its
