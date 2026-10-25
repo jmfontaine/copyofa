@@ -43,7 +43,7 @@ copyofa import ~/Downloads/Album --to /Volumes/Archive/Album \
 
 The command exits 0 when the set is accepted, 1 when the import is refused or fails,
 2 for invalid arguments, and 130 when canceled with Ctrl-C.
-[Evidence Set format](docs/formats/evidence-set.md) describes the set and how to check
+[Evidence Set format][evidence-set] describes the set and how to check
 it without CopyOfA.
 
 Later, after moving the set or just to check it, verify it against its Integrity
@@ -58,19 +58,19 @@ Verify reads every preserved file and reports each one as matching, changed, mis
 unavailable, or not checked, and lists unexpected files under `data/`. Operating
 system metadata files that Finder adds while browsing the set are ignored. It writes
 nothing into the set. `--json` prints a verification Report, which
-[Verification Report format](docs/formats/verification-report.md) describes.
+[Verification Report format][verification-report] describes.
 
 Verify exits 0 when everything is intact, 1 when it found anything else, 2 when the
 target is not an Evidence Set or the arguments are invalid, and 130 when canceled.
 
 ## Documents
 
-- [Manifesto](docs/manifesto.md): vision, target users, principles and non-goals.
-- [Product Map](docs/product-map.md): capabilities, collector scenarios, core concepts,
-  and the Now / Next / Later roadmap.
-- [Briefs](docs/briefs/): the scope and acceptance criteria of planned work.
-- [Decisions](docs/decisions/): architecture decision records.
-- [Formats](docs/formats/): the files CopyOfA writes.
+- [Manifesto][manifesto]: vision, target users, principles and non-goals.
+- [Product Map][product-map]: capabilities, collector scenarios, core concepts, and the
+  Now / Next / Later roadmap.
+- [Briefs][briefs]: the scope and acceptance criteria of planned work.
+- [Decisions][decisions]: architecture decision records.
+- [Formats][formats]: the files CopyOfA writes.
 
 GitHub release milestones and their issues will hold the committed work.
 
@@ -85,9 +85,23 @@ just qa     # Run all checks
 just test   # Run the tests
 ```
 
-[AGENTS.md](AGENTS.md) holds the commands and conventions for contributors and coding
-agents.
+[CONTRIBUTING.md][contributing] covers the development setup, pull requests and
+releases; [AGENTS.md][agents] holds the commands and conventions for contributors and
+coding agents.
 
 ## License
 
-CopyOfA is licensed under the [Apache License 2.0](LICENSE.txt).
+CopyOfA is licensed under the [Apache License 2.0][license].
+
+<!-- Absolute URLs, so the links also work on PyPI. -->
+
+[agents]: https://github.com/jmfontaine/copyofa/blob/main/AGENTS.md
+[briefs]: https://github.com/jmfontaine/copyofa/tree/main/docs/briefs
+[contributing]: https://github.com/jmfontaine/copyofa/blob/main/CONTRIBUTING.md
+[decisions]: https://github.com/jmfontaine/copyofa/tree/main/docs/decisions
+[evidence-set]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/evidence-set.md
+[formats]: https://github.com/jmfontaine/copyofa/tree/main/docs/formats
+[license]: https://github.com/jmfontaine/copyofa/blob/main/LICENSE.txt
+[manifesto]: https://github.com/jmfontaine/copyofa/blob/main/docs/manifesto.md
+[product-map]: https://github.com/jmfontaine/copyofa/blob/main/docs/product-map.md
+[verification-report]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/verification-report.md

@@ -1,0 +1,15 @@
+# Commits git-cliff leaves out of the release notes, one full SHA per line.
+# These are the retired implementation's commits, before the reboot in 89ab0da:
+# they are not part of any CopyOfA release.
+02a6431fae49312f4ae79a4375b10abd862ab90c
+549c807bea736c23f2914d999b7a5105c6fc91c2
+c5bc6b6f56b901fd50a06038f24691c9723ba4d8
+fd0011be3d528c95dfc1f646d797565029239e4e
+0d04a387d3162c4d7c09532a26a2f54f58a63bfb
+5a26c1456f15b079e610e43b898a5f64a8ebc2bb
+c1b9fad5e7984afa03e87e75ef1a3207888bc787
+0ef5de2874b2f5cd1941728ac165b9a28d0706b0
+aee4bbad78ced4a594cf035b071304b768326910
+54792bddcbb4c6f44ea9d16ffa3a474b397c68b3
+b3319e0cb0b5b633177ff4dbe1089e6f28cc6aff
+7ebaa99d4b5c7704c7504a6ffb8995534511e938
