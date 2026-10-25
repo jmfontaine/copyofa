@@ -7,8 +7,8 @@ and share what that evidence reveals.
 ## Status
 
 The project is restarting from a clean slate. Its first release, v0.1.0, preserves a
-selected file delivery as an Evidence Set and verifies it later. The roadmap in the
-Product Map lists what comes next.
+selected file delivery as an Evidence Set and verifies it later. The next, v0.2.0,
+describes the audio in a set. The roadmap in the Product Map lists what comes next.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
 retired. Its last code change is commit `0d04a38` in the Git history. It does not define

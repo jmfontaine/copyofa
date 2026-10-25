@@ -11,7 +11,7 @@ clean slate. Read these before proposing or doing work:
   boundaries.
 - [docs/product-map.md](docs/product-map.md) holds the capabilities, collector
   scenarios, core concepts and the Now / Next / Later roadmap. Use its capitalized
-  concept names (Evidence Set, Audio Identity, Report, …) with the meanings it gives.
+  concept names (Evidence Set, Audio Digest, Report, …) with the meanings it gives.
 
 The previous implementation is retired; its last code change is commit `0d04a38`.
 Consult its history for lessons learned, not as the architecture to follow.

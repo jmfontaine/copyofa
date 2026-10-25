@@ -47,7 +47,7 @@ delivery) and [S6](../product-map.md#s6-check-an-archive-later) (check it later)
 ## Out of scope
 
 - Reading inside archives. A ZIP is preserved as one opaque file.
-- Decoding audio, Audio Identity, and any audio measurement.
+- Decoding audio, Audio Digest, and any audio measurement.
 - A portable human-readable view of a Report.
 - Export, Derivatives, and recovery information or repair.
 - CD acquisition.
