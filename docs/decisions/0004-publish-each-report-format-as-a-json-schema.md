@@ -34,9 +34,10 @@ anything the document names.
 2. **Strict.** Every object allows only the fields its format document lists
    (`additionalProperties: false`), required fields are required, closed sets of
    values are enumerations, and digests and timestamps have patterns. Numeric ranges
-   are constrained only where the value is exact, such as counts and frames; computed
-   values such as a correlation are not bounded, since rounding can carry them just
-   past a mathematical limit.
+   are constrained only where CopyOfA guarantees them: counts and frames, and the
+   correlation, which compare clamps to −1 to 1 because rounding can carry the
+   computed value just past that limit. Values with no such guarantee, such as a gain
+   or a residual in dB, are not bounded.
 3. **Prose for meaning, schema for structure.** The format document stays the
    authority for what each field means; the schema states which fields exist and
    their types. A disagreement between them is a bug, fixed in both. A released

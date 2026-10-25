@@ -87,9 +87,10 @@ comparison Report of [S3](../product-map.md#s3-compare-two-tracks):
   allows is invalid, with a reason. A JSON string may hold a `\udcXX` escape, as a
   Report records a path that is not valid UTF-8.
 - **Then the schema.** The document's `report_kind` and `format_version` select the
-  schema. A document that is not an object, or lacks either field, is invalid. An
-  unknown kind, or a format version this CopyOfA has no schema for, is unsupported: a
-  newer CopyOfA may know it.
+  schema. A document that is not an object, lacks either field, or whose
+  `report_kind` is not a string or `format_version` not a positive integer, is
+  invalid. An unknown kind, or a format version this CopyOfA has no schema for, is
+  unsupported: a newer CopyOfA may know it.
 - **Outcomes.** `valid`, `invalid` or `unsupported`. Each problem of an invalid Report
   has its location, as a JSON Pointer, and a message.
 - **Limitations.** The result states that a valid Report is well formed and nothing
@@ -100,11 +101,15 @@ comparison Report of [S3](../product-map.md#s3-compare-two-tracks):
 
 - **Comparison Reports only.** `copyofa view <report>` validates the file first. It
   refuses a Report that is not valid, and a valid Report of another kind.
-- **The whole Report.** The page shows each input (its Evidence Set location or that
-  it was left out, path, outcome and reason, properties, File Digest and Audio Digest,
-  inspect's findings), the method, each measurement for the downmix and each channel,
-  each residual window, each absent value with its reason, and each limitation, word
-  for word. It adds labels and units, never an interpretation.
+- **The whole Report.** The page shows every field of the Report. That includes the
+  Report's `copyofa_version` and `compared_at`; each input's Evidence Set location or
+  that it was left out, its Integrity Baseline (`manifest_sha256`, usability and
+  problems), path, outcome and reason, properties, expected and observed File Digest,
+  Audio Digest and inspect's findings; the method; each measurement for the downmix
+  and each channel; each residual window; each absent value with its reason; and each
+  limitation, word for word. With the locations left out, `manifest_sha256` still
+  identifies each Evidence Set. The page adds labels and units, never an
+  interpretation.
 - **Tied to its Report.** The page gives the SHA-256 of the exact bytes it was
   generated from, the Report's kind and format version, and the CopyOfA version that
   generated the page.
@@ -128,16 +133,17 @@ comparison Report of [S3](../product-map.md#s3-compare-two-tracks):
 
 Validate and view follow the command conventions in AGENTS.md:
 
-- Validate prints a short result: the outcome, the kind and format version when known,
-  and each problem. `--json` prints the validation result instead, documented in
-  `docs/formats/validation-result.md`. Its fields: the outcome, the Report's path as
-  given made absolute, its SHA-256, kind and format version when known, the problems,
-  the CopyOfA version, and the limitations.
+- Validate prints a short result: the outcome, the file's SHA-256, the kind and format
+  version when known, each problem, and the limitations. `--json` prints the
+  validation result instead, documented in `docs/formats/validation-result.md`. Its
+  fields: the outcome, the Report's path as given made absolute, its SHA-256, kind and
+  format version when known, the problems, the CopyOfA version, and the limitations.
 - View prints the page on stdout and nothing else there.
 - Exit 0 when the Report is valid (validate) or the page was printed (view); 1 when the
-  Report is invalid or unsupported, cannot be read, or view refuses it, with nothing
-  on stdout for view; 2 for invalid arguments; 130 when canceled. Problems and errors
-  go to stderr for view.
+  Report is invalid or unsupported or view refuses it; 2 for invalid arguments; 130
+  when canceled. A file that cannot be read, such as a missing file or a directory, is
+  neither valid nor invalid: both commands exit 1 with the reason on stderr and nothing
+  on stdout. View writes problems and errors to stderr.
 - Neither command writes a file.
 
 ## Design decisions
@@ -167,19 +173,21 @@ None.
 Each criterion is verified by an automated test unless stated otherwise.
 
 - **AC1 — Schemas published.** The four schema files are valid JSON Schema draft
-  2020-12, ship in the wheel and the sdist, and are linked from their format
-  documents. Every verification, inspection and comparison Report the test suite
-  produces validates against its schema, including Reports with not inspected, not
-  interpreted and failed files, an unusable baseline, and absent measurements.
+  2020-12 and are linked from their format documents; CI's distribution check
+  (`scripts/check_distributions.py`) confirms they ship in the wheel and the sdist.
+  Every verification, inspection and comparison Report the test suite produces
+  validates against its schema, including Reports with not inspected, not interpreted
+  and failed files, an unusable baseline, and absent measurements.
 - **AC2 — Valid Reports.** `copyofa validate` reports `valid` and exits 0 for a
   verification, an inspection, and a comparison Report printed by CopyOfA, and for a
   comparison Report of format version 1; the result names the kind and format version.
 - **AC3 — Invalid Reports.** Each of these is reported `invalid` with a reason, exits 1
   and prints no traceback: a missing required field, a value of the wrong type, an
   unknown field, a value outside an enumeration, a malformed digest, a document that
-  is not an object, one without `report_kind`, an empty file, text that is not JSON,
-  bytes that are not UTF-8, `NaN`, a repeated member name, and arrays nested 100,000
-  deep. A problem found by the schema gives its JSON Pointer.
+  is not an object, one without `report_kind`, a `format_version` of `"2"` or `0`, an
+  empty file, text that is not JSON, bytes that are not UTF-8, `NaN`, a repeated
+  member name, and arrays nested 100,000 deep. A problem found by the schema gives its
+  JSON Pointer.
 - **AC4 — Unsupported Reports.** An unknown `report_kind` and a `format_version` of 99
   are reported `unsupported` and exit 1.
 - **AC5 — Without CopyOfA (by hand, once).** A comparison Report and an inspection
@@ -201,12 +209,14 @@ Each criterion is verified by an automated test unless stated otherwise.
   and a file that cannot be read each make view exit 1 with nothing on stdout and the
   reason on stderr.
 - **AC9 — Command conventions.** Validate prints its result, or its validation result
-  with `--json`; both commands exit 2 for invalid arguments and 130 when canceled with
-  nothing on stdout, and neither changes the file it reads.
+  with `--json`. A missing file and a directory make validate exit 1 with nothing on
+  stdout and the reason on stderr. Both commands exit 2 for invalid arguments and 130
+  when canceled with nothing on stdout, and neither changes the file it reads.
 - **AC10 — Documented.** `docs/formats/validation-result.md` documents the validation
-  result. `docs/formats/comparison-report.md` documents format version 2, the option,
-  and the view. The README shows the three commands. The Architecture section of
-  AGENTS.md records the schemas, the new dependency, and the new format document.
+  result. `docs/formats/comparison-report.md` documents format version 2, how version
+  1 differs, the option, and the view. The README shows the three commands. The
+  Architecture section of AGENTS.md records the schemas, the new dependency, and the
+  new format document.
 - **AC11 — Real comparison (by hand, once).** The view of a comparison of two of the
   maintainer's tracks, made with `--omit-locations`, opens in Safari and in Firefox
   with no request in the network panel, and reads correctly.
@@ -229,7 +239,9 @@ Each criterion is verified by an automated test unless stated otherwise.
 Appetite: a few hours.
 
 If the work outgrows it, cut in this order, keeping a validated comparison Report and
-its view:
+its view. Taking the first cut also narrows the v0.4.0 entry in the Product Map and the
+milestone description, which promise a schema for every Report kind; update them at
+the release review.
 
 1. Schemas and validation for verification and inspection Reports.
 2. The residual windows in the view; they stay in the Report.

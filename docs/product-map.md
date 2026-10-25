@@ -254,8 +254,8 @@ the collector already owns.
 
 - **Locate Matching Portions and Edits Between Tracks** — Compare and Discover
   Relationships. S3's partial matches and their affected ranges, which one global
-  offset does not locate. Edition comparison needs it, since editions' tracks may be
-  edited differently.
+  offset does not locate. Edition comparison may need it: the tracks of two editions
+  can be edited differently.
 
 ### Later
 
