@@ -504,17 +504,29 @@ def test_verify_reports_a_set_it_cannot_reach(run: Run, bag: Path, locked: str) 
     assert report["payload"] == []
 
 
-def test_verify_names_the_set_by_its_normalized_path(
+def test_verify_follows_dot_dot_as_the_system_resolves_it(
     run: Run, tmp_path: Path, bag: Path
 ) -> None:
-    link = tmp_path / "Link"
-    link.symlink_to(bag.parent)
+    # Other/Link/.. is the damaged set's root for the operating system, but
+    # lexically Other, beside an intact set that must never be checked instead.
+    other = tmp_path / "Other"
+    other.mkdir()
+    source = tmp_path / "Intact"
+    source.mkdir()
+    (source / "track.flac").write_bytes(b"intact")
+    assert run("import", source, "--to", other / "Intact").code == 0
+    (other / "Link").symlink_to(bag / "data")
+    (bag / "data" / "Album" / "01.flac").write_bytes(b"damaged")
+    through_link = other / "Link" / ".."
 
-    _, dotted = verify(run, bag / ".." / ".." / "Archive" / "." / "Album")
-    _, linked = verify(run, link / "Album")
+    outcome, report = verify(run, through_link)
+    elsewhere = run("verify", through_link / "Intact", "--json")
 
-    assert dotted["evidence_set"] == str(bag)
-    assert linked["evidence_set"] == str(link / "Album")
+    assert outcome.code == 1
+    assert report["evidence_set"] == str(through_link)
+    assert outcomes(report)["data/Album/01.flac"] == "changed"
+    assert elsewhere.code == 2
+    assert elsewhere.out == ""
 
 
 def test_verify_json_escapes_non_ascii_characters(run: Run, tmp_path: Path) -> None:

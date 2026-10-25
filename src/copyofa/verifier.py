@@ -47,8 +47,9 @@ def verify(target: str) -> dict[str, Any]:
 
     Reads every file it checks and writes nothing.
     """
-    # Absolute and without `.` or `..` segments, symbolic links kept as given.
-    root = Path(os.path.abspath(target))  # noqa: PTH100
+    # Absolute but not normalized: removing `..` lexically could name a different
+    # directory than the one the operating system resolves through a symbolic link.
+    root = Path(target).absolute()
     try:
         mode: int | None = root.stat().st_mode
     except (FileNotFoundError, NotADirectoryError):

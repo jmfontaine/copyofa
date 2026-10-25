@@ -56,7 +56,7 @@ Each listed file, payload or tag file, gets exactly one outcome:
 | `format_version` | The version of this format, `1`. A later change to the fields increments it. |
 | `copyofa_version` | The version of CopyOfA that ran the check. |
 | `checked_at` | The check time in UTC, such as `2026-10-24T18:30:00Z`. |
-| `evidence_set` | The Evidence Set's path as given, made absolute with `.` and `..` segments removed and symbolic links kept; it changes when the set moves. |
+| `evidence_set` | The Evidence Set's path as given, made absolute but not normalized: `.` segments and repeated slashes are dropped, which changes nothing the operating system resolves, but `..` segments and symbolic links are kept, so the path names the set that was checked as the operating system resolves it. It changes when the set moves. |
 | `scope` | What was checked: `full_content`, every byte of every listed file. |
 | `integrity_baseline` | The baseline used (see below). |
 | `tag_files` | One item per entry of `tagmanifest-sha256.txt`, in its order; empty when that manifest is missing or cannot be parsed. |
