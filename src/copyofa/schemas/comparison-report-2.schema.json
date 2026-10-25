@@ -77,7 +77,11 @@
       },
       "else": {
         "properties": {
-          "inputs": { "properties": { "a": { "required": ["evidence_set"] } } }
+          "inputs": {
+            "properties": {
+              "a": { "type": "object", "required": ["evidence_set"] }
+            }
+          }
         }
       }
     },
@@ -97,7 +101,11 @@
       },
       "else": {
         "properties": {
-          "inputs": { "properties": { "b": { "required": ["evidence_set"] } } }
+          "inputs": {
+            "properties": {
+              "b": { "type": "object", "required": ["evidence_set"] }
+            }
+          }
         }
       }
     }
