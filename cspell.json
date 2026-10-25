@@ -9,6 +9,7 @@
     "Bandcamp",
     "capsys",
     "capsysbinary",
+    "cffi",
     "cliffignore",
     "closefd",
     "cmdline",

@@ -252,7 +252,8 @@ the collector already owns.
 - **Compare Selected Tracks and Share the Finding** — Compare and Discover
   Relationships; Share and Evaluate Findings. S3 and S5. Builds on Audio Digest and
   brings the portable human-readable view and Report validation with the first
-  Comparison Report.
+  Comparison Report. Audio Digest settles identical lossless audio only; lossy audio
+  such as MP3 has none, so comparing it needs measurements of the decoded audio.
 
 ### Later
 
