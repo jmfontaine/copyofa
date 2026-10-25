@@ -272,6 +272,51 @@ The example is shortened: a Report holds all 64 hexadecimal digits of each diges
 every residual window, not just the first, and the whole of each limitation. Here
 the MP3 starts 782 frames, about 18 ms, earlier than the FLAC.
 
+## Viewing a Report
+
+`copyofa view <report>` prints a comparison Report as one HTML page, which a reader
+opens in any browser, without CopyOfA and offline. Save it with a shell redirect:
+
+```bash
+copyofa view htf.json > htf.html
+```
+
+View first validates the file as [`copyofa validate`](validation-result.md) does, and
+refuses a Report that is invalid, unsupported, or of another kind. It supports
+comparison Reports only, of format version 1 for now.
+
+The page shows every field of the Report with its value as the Report records it, and
+adds only labels and units, and for each track a duration computed from its frames
+and sample rate. It gives:
+
+- the SHA-256 of the exact bytes of the file it was generated from, the Report's kind
+  and format version, and the CopyOfA version that generated the page, which is not
+  the Report's own `copyofa_version`, also shown;
+- for each input, its Evidence Set location, Integrity Baseline, path, outcome and
+  reason, properties, File Digests, Audio Digest, peak, silence, FLAC MD5 signature
+  and limitations;
+- the method;
+- the measurements: identical audio, offset, overlap, and for the downmix and each
+  channel the correlation, gain and residual, with one table of residual windows
+  for each of them;
+- each absent value, marked absent with its reason; when the Report holds no
+  measurements, the page says that the tracks were not measured;
+- the Report's limitations, word for word.
+
+The page draws no conclusion from the measurements: it has no verdict and no
+threshold, and does not color a value as good or bad.
+
+The page is self-contained and inert. It is one HTML5 document in UTF-8 with its
+styles inline. It has no script, no link and no external resource, and a Content
+Security Policy that forbids both. Every text of the Report is escaped; a character
+that is not printable, such as a lone surrogate for a path byte that is not valid
+UTF-8, appears as its escape, such as `\udc80`.
+
+View exits 0 when it printed the page, and 1 when the file cannot be read or the
+Report is invalid, unsupported or not a comparison Report, with the reason on stderr
+and nothing on stdout. It exits 2 for invalid arguments and 130 when canceled with
+Ctrl-C. It has no `--json` option and writes no file.
+
 ## Exit codes
 
 `copyofa compare` exits 0 when both inputs are `interpreted` and were measured, even

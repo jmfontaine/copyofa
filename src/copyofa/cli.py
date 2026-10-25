@@ -10,7 +10,7 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 import copyofa
-from copyofa import comparator, inspector, validator, verifier
+from copyofa import comparator, inspector, validator, verifier, viewer
 from copyofa.errors import CopyOfAError
 from copyofa.importer import import_evidence
 
@@ -151,6 +151,20 @@ def _parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="print the validation result as JSON"
     )
     validating.set_defaults(handler=_validate)
+
+    viewing = commands.add_parser(
+        "view",
+        help="print a comparison Report as a self-contained HTML page",
+        description=(
+            "Validate a comparison Report, then print an HTML page that shows every "
+            "value of the Report, with the SHA-256 of the file, on stdout. The page "
+            "holds no script and loads nothing. Exits 0 when the page was printed "
+            "and 1 when the Report is invalid, unsupported, of another kind, or "
+            "cannot be read."
+        ),
+    )
+    viewing.add_argument("report")
+    viewing.set_defaults(handler=_view)
     return parser
 
 
@@ -314,7 +328,7 @@ def _describe_audio(entry: dict[str, Any]) -> str:
     if "bits_per_sample" in entry:
         parts.append(f"{entry['bits_per_sample']}-bit")
     parts.append(_count(entry["channels"], "channel"))
-    parts.append(_duration(entry["frames"], entry["sample_rate"]))
+    parts.append(viewer.format_duration(entry["frames"], entry["sample_rate"]))
     if entry.get("flac_md5_signature") == inspector.MD5_DIFFERS:
         parts.append("decoded audio differs from its FLAC MD5 signature")
     return ", ".join(parts)
@@ -413,15 +427,33 @@ def _print_validation(result: dict[str, Any]) -> None:
         print(f"  {limitation}")
 
 
-def _duration(frames: int, sample_rate: int) -> str:
-    """Format frames as a duration, such as `3:07.250` or `1:02:03.000`."""
-    milliseconds = frames * 1000 // sample_rate
-    seconds, milliseconds = divmod(milliseconds, 1000)
-    minutes, seconds = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours:
-        return f"{hours}:{minutes:02}:{seconds:02}.{milliseconds:03}"
-    return f"{minutes}:{seconds:02}.{milliseconds:03}"
+def _view(args: argparse.Namespace) -> int:
+    try:
+        validation = validator.validate(args.report)
+    except validator.UnreadableReportError as error:
+        print(f"copyofa: {_printable(str(error))}", file=sys.stderr)
+        return EXIT_PROBLEM
+    result = validation.result
+    report = _printable(args.report)
+    if result["outcome"] != validator.VALID:
+        kind = "valid" if result["outcome"] == validator.INVALID else "supported"
+        print(f"copyofa: {report} is not a {kind} Report", file=sys.stderr)
+        for problem in result["problems"]:
+            location = problem["location"] or "(document)"
+            print(_printable(f"  {location}: {problem['message']}"), file=sys.stderr)
+        return EXIT_PROBLEM
+    if result["report_kind"] not in viewer.SUPPORTED_KINDS:
+        print(
+            f"copyofa: {report} is not a comparison Report; view supports "
+            "comparison Reports only",
+            file=sys.stderr,
+        )
+        return EXIT_PROBLEM
+    page = viewer.render(validation.document, result["sha256"])
+    sys.stdout.flush()
+    sys.stdout.buffer.write(page.encode())
+    sys.stdout.buffer.flush()
+    return EXIT_OK
 
 
 def _count(number: int, noun: str) -> str:

@@ -131,6 +131,23 @@ Validate exits 0 when the Report is valid, 1 when it is invalid or unsupported o
 file cannot be read, 2 when the arguments are invalid, and 130 when canceled. It
 writes nothing.
 
+Read a comparison Report as a web page, without CopyOfA:
+
+```bash
+copyofa view comparison.json > comparison.html
+```
+
+View validates the file first, then prints one HTML page that shows every value of
+the Report with labels and units, each absent value with its reason, and each
+limitation. It gives the SHA-256 of the Report file it was generated from, so a
+recipient can check the page against the Report. The page runs no script and loads
+nothing, so it opens in any browser, offline. It draws no conclusion from the
+measurements. [Comparison Report format][comparison-report] describes it.
+
+View exits 0 when it printed the page, 1 when the Report is invalid, unsupported, not a
+comparison Report, or cannot be read, 2 when the arguments are invalid, and 130 when
+canceled. It prints nothing on stdout otherwise, and writes no file.
+
 ## Documents
 
 - [Manifesto][manifesto]: vision, target users, principles and non-goals.

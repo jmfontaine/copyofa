@@ -124,7 +124,7 @@ the Report verify prints,
 [docs/formats/inspection-report.md](docs/formats/inspection-report.md) the Report
 inspect prints,
 [docs/formats/comparison-report.md](docs/formats/comparison-report.md) the Report
-compare prints, and
+compare prints and the page view makes of it, and
 [docs/formats/validation-result.md](docs/formats/validation-result.md) the result
 validate prints; change each with any change to what its command prints.
 
@@ -140,6 +140,13 @@ its file, and `validate` parses a Report as strict JSON, then checks it with
 runtime dependency. A released schema changes only to fix a disagreement with what
 CopyOfA prints; any other change to a Report's fields is a new format version with its
 own schema file. The test suite validates every Report it produces against its schema.
+
+`copyofa view` validates a file the same way, then `copyofa.viewer` renders a valid
+comparison Report as one self-contained HTML page, with the standard library only.
+The page shows every value as the Report records it and the SHA-256 of the file; it
+holds no script, no link and no external resource, a Content Security Policy forbids
+both, and every text of the Report is escaped, a lone surrogate as `\udcXX`. Each
+Report kind and format version `view` supports needs its own rendering.
 
 ### Audio decoding
 
@@ -169,8 +176,9 @@ Every command follows the conventions `import` and `verify` set in v0.1.0, as
 - Exit 0 on success, 1 when the command refused, failed or found a problem (a result
   is still printed when there is one), 2 for invalid arguments or, for a command that
   reads an Evidence Set, a target that is not one, and 130 when canceled with Ctrl-C.
-  Import exits 1 for a source or destination it refuses, and validate for a file it
-  cannot read
+  Import exits 1 for a source or destination it refuses, validate and view for a file
+  they cannot read, and view for a Report it refuses. View prints an HTML page, not
+  JSON, and has no `--json`
 - Stdout stays empty whenever no result is produced
 - No interactive prompts
 
