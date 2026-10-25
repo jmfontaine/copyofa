@@ -87,10 +87,20 @@ An `--exclude` pattern is a shell-style pattern, as Python's `fnmatch` reads it,
 case-sensitively against the item's name and against its path under `data/`, such as
 `Album/scans/back.png`. `*` also matches `/` in a path.
 
+## Import result
+
+`copyofa import --json` prints, instead of its short human-readable result, a JSON
+object with `evidence_set`, the absolute path of the new set; `import_record`, the
+Import Record as written; and `counts`, with the numbers of preserved `files`,
+payload `bytes`, and `exclusions`. It is not a Report. Like every `--json` output of
+CopyOfA, it is ASCII: other characters are escaped, such as `é` as `\u00e9`. The
+Import Record file itself is UTF-8 and holds such characters as they are.
+
 ## Operating system metadata files
 
 Operating systems create and rewrite some files while a collector browses folders, so
-they are not evidence. Import never preserves them:
+they are not evidence. Import never preserves them, and `copyofa verify` ignores them
+under `data/`, so browsing a set in Finder does not make it fail verification:
 
 - `.DS_Store`
 - AppleDouble files, whose names start with `._`
@@ -156,3 +166,6 @@ Each prints `OK` per file and exits 0 when every listed file matches. On Linux,
   does not decode `%25`
   ([bagit-python#157](https://github.com/LibraryOfCongress/bagit-python/issues/157)),
   so it also reports a set with `%` in a file name invalid.
+  CopyOfA's own check, `copyofa verify`, ignores operating system metadata files and
+  decodes every path; [Verification Report format](verification-report.md) describes
+  it.
