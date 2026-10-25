@@ -549,9 +549,11 @@ def test_import_prints_json_result(run: Run, album: Path, archive: Path) -> None
     (album / ".DS_Store").write_bytes(b"metadata")
     destination = archive / "Album"
 
-    outcome = run("import", album, "--to", destination, "--json", "--note", "n")
+    outcome = run("import", album, "--to", destination, "--json", "--note", "café")
 
     assert outcome.code == 0
+    assert outcome.out.isascii()
+    assert '"note": "caf\\u00e9"' in outcome.out
     result = json.loads(outcome.out)
     manifest = read_manifest(destination / "manifest-sha256.txt")
     assert result == {

@@ -87,6 +87,15 @@ An `--exclude` pattern is a shell-style pattern, as Python's `fnmatch` reads it,
 case-sensitively against the item's name and against its path under `data/`, such as
 `Album/scans/back.png`. `*` also matches `/` in a path.
 
+## Import result
+
+`copyofa import --json` prints, instead of its short human-readable result, a JSON
+object with `evidence_set`, the absolute path of the new set; `import_record`, the
+Import Record as written; and `counts`, with the numbers of preserved `files`,
+payload `bytes`, and `exclusions`. It is not a Report. Like every `--json` output of
+CopyOfA, it is ASCII: other characters are escaped, such as `é` as `\u00e9`. The
+Import Record file itself is UTF-8 and holds such characters as they are.
+
 ## Operating system metadata files
 
 Operating systems create and rewrite some files while a collector browses folders, so

@@ -47,7 +47,8 @@ def verify(target: str) -> dict[str, Any]:
 
     Reads every file it checks and writes nothing.
     """
-    root = Path(target).absolute()
+    # Absolute and without `.` or `..` segments, symbolic links kept as given.
+    root = Path(os.path.abspath(target))  # noqa: PTH100
     try:
         mode: int | None = root.stat().st_mode
     except (FileNotFoundError, NotADirectoryError):
@@ -112,7 +113,8 @@ def verify(target: str) -> dict[str, Any]:
         "evidence_set": str(root),
         "scope": SCOPE,
         "integrity_baseline": {
-            "manifest_sha256": baseline_id,
+            # Absent, not null, when manifest-sha256.txt cannot be read.
+            **({} if baseline_id is None else {"manifest_sha256": baseline_id}),
             "usable": usable,
             "problems": problems,
         },
@@ -168,7 +170,8 @@ def _check_tag_files(
         problems.append(
             f"{evidence_set.TAG_MANIFEST} does not list {evidence_set.MANIFEST}."
         )
-    elif checked["outcome"] != MATCHING:
+    elif checked["outcome"] != MATCHING and manifest.data is not None:
+        # When it could not be read, verify reports that cause once.
         problems.append(
             f"{evidence_set.MANIFEST} fails its check: {checked['outcome']}."
         )

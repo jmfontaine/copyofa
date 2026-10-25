@@ -270,7 +270,10 @@ def test_verify_reports_damaged_records_without_trusting_them(
     manifest = bag / "manifest-sha256.txt"
     if case == "manifest deleted":
         assert report["payload"] == []
-        assert baseline["manifest_sha256"] is None
+        assert "manifest_sha256" not in baseline
+        assert [p for p in baseline["problems"] if "manifest-sha256.txt" in p] == [
+            "manifest-sha256.txt is missing."
+        ]
     else:
         assert baseline["manifest_sha256"] == sha256(manifest.read_bytes())
     if case in {"manifest deleted", "manifest unparsable"}:
@@ -493,9 +496,35 @@ def test_verify_reports_a_set_it_cannot_reach(run: Run, bag: Path, locked: str) 
     assert outcome.code == 1
     baseline = report["integrity_baseline"]
     assert baseline["usable"] is False
-    assert baseline["manifest_sha256"] is None
+    assert "manifest_sha256" not in baseline
     assert (
         "tagmanifest-sha256.txt cannot be read: Permission denied."
         in baseline["problems"]
     )
     assert report["payload"] == []
+
+
+def test_verify_names_the_set_by_its_normalized_path(
+    run: Run, tmp_path: Path, bag: Path
+) -> None:
+    link = tmp_path / "Link"
+    link.symlink_to(bag.parent)
+
+    _, dotted = verify(run, bag / ".." / ".." / "Archive" / "." / "Album")
+    _, linked = verify(run, link / "Album")
+
+    assert dotted["evidence_set"] == str(bag)
+    assert linked["evidence_set"] == str(link / "Album")
+
+
+def test_verify_json_escapes_non_ascii_characters(run: Run, tmp_path: Path) -> None:
+    source = tmp_path / "Café"
+    source.mkdir()
+    (source / "Été.flac").write_bytes(b"summer")
+    assert run("import", source, "--to", tmp_path / "Set").code == 0
+
+    outcome, report = verify(run, tmp_path / "Set")
+
+    assert outcome.code == 0
+    assert outcome.out.isascii()
+    assert outcomes(report) == {"data/Café/Été.flac": "matching"}

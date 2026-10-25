@@ -1,8 +1,10 @@
 # Verification Report format
 
-`copyofa verify <evidence-set> --json` prints a verification Report: a UTF-8 JSON
-document recording what one check of an [Evidence Set](evidence-set.md) against its
-Integrity Baseline found. Save it with a shell redirect:
+`copyofa verify <evidence-set> --json` prints a verification Report: a JSON document
+recording what one check of an [Evidence Set](evidence-set.md) against its Integrity
+Baseline found. Like every `--json` output of CopyOfA, it is ASCII: other characters,
+such as the `é` of a file name, are escaped as `\u00e9`. Save it with a shell
+redirect:
 
 ```bash
 copyofa verify /Volumes/Archive/Album --json > album-verification.json
@@ -54,7 +56,7 @@ Each listed file, payload or tag file, gets exactly one outcome:
 | `format_version` | The version of this format, `1`. A later change to the fields increments it. |
 | `copyofa_version` | The version of CopyOfA that ran the check. |
 | `checked_at` | The check time in UTC, such as `2026-10-24T18:30:00Z`. |
-| `evidence_set` | The absolute path of the Evidence Set as given, which changes when the set moves. |
+| `evidence_set` | The Evidence Set's path as given, made absolute with `.` and `..` segments removed and symbolic links kept; it changes when the set moves. |
 | `scope` | What was checked: `full_content`, every byte of every listed file. |
 | `integrity_baseline` | The baseline used (see below). |
 | `tag_files` | One item per entry of `tagmanifest-sha256.txt`, in its order; empty when that manifest is missing or cannot be parsed. |
@@ -66,7 +68,7 @@ Each listed file, payload or tag file, gets exactly one outcome:
 `integrity_baseline` holds:
 
 - `manifest_sha256`: the SHA-256 of `manifest-sha256.txt` as read, which identifies the
-  baseline; `null` when that file cannot be read.
+  baseline; absent when that file cannot be read.
 - `usable`: `true` when the payload could be checked against the baseline.
 - `problems`: why the baseline is unusable, one sentence each; empty when it is usable.
 

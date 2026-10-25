@@ -130,10 +130,15 @@ def _import(args: argparse.Namespace) -> int:
     for warning in result.warnings:
         print(f"copyofa: warning: {warning}", file=sys.stderr)
     if args.json:
-        print(json.dumps(result.to_json(), indent=2, ensure_ascii=False))
+        print(_json(result.to_json()))
     else:
         _print_import(result)
     return EXIT_OK
+
+
+def _json(document: dict[str, Any]) -> str:
+    """Format a `--json` document; non-ASCII characters are escaped as `\\uXXXX`."""
+    return json.dumps(document, indent=2, ensure_ascii=True)
 
 
 def _print_import(result: ImportResult) -> None:
@@ -155,7 +160,7 @@ def _verify(args: argparse.Namespace) -> int:
         print(f"copyofa: {error}", file=sys.stderr)
         return EXIT_USAGE
     if args.json:
-        print(json.dumps(report, indent=2))
+        print(_json(report))
     else:
         _print_verification(report)
     return EXIT_OK if verifier.is_intact(report) else EXIT_PROBLEM
