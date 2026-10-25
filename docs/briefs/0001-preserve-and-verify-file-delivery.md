@@ -272,3 +272,42 @@ verification Report:
 1. Progress output on stderr.
 2. `--json` on import.
 3. External references (`--ref`); the note remains.
+
+## Delivery notes
+
+Recorded at the v0.1.0 release review.
+
+- **Delivered within the appetite**, with no scope cut: `copyofa import` in
+  [#53](https://github.com/jmfontaine/copyofa/pull/53) and `copyofa verify` in
+  [#54](https://github.com/jmfontaine/copyofa/pull/54). AC1 and AC12 were also
+  checked by hand: `bagit.py --validate` reported the bag valid, and
+  `shasum -a 256 -c` passed on both manifests.
+- **AC1 narrowed during delivery:** the by-hand `bagit.py` check now applies only to
+  file names without `%`, because bagit-python does not decode the `%25` that RFC 8493
+  requires
+  ([bagit-python#157](https://github.com/LibraryOfCongress/bagit-python/issues/157)). #53
+  amended AC1 and ADR 0001 accordingly.
+- **Known limit of AC5:** import re-reads each stored copy after an `fsync`, but the
+  operating system may serve that read from its cache rather than the drive.
+- **Scope added:** v0.1.0 is also published to PyPI
+  ([#56](https://github.com/jmfontaine/copyofa/issues/56)). Publishing changed no
+  requirement above.
+- **Choices this brief left open** were settled conservatively:
+  - Recorded in [Evidence Set format](../formats/evidence-set.md): `--ref` values are
+    kept verbatim and in order; a source that is a symbolic link is refused; sources
+    whose base names differ only by case are refused, because the set must stay valid
+    on a case-insensitive macOS volume; `--exclude` patterns are case-sensitive.
+  - Recorded in [Verification Report format](../formats/verification-report.md):
+    fields that do not apply are omitted rather than `null`; the Report adds
+    `evidence_set` and `unexamined_directories`, the directories that could not be
+    searched for unexpected files, which make verify exit 1.
+  - Recorded in both: `--json` output is ASCII, with `\uXXXX` escapes.
+  - Recorded only here: `--note` given twice is an argument error (exit 2). Verify
+    parses manifests strictly: a line must be a SHA-256 digest, two spaces and a path;
+    a `%` must start `%25`, `%0D` or `%0A`; a path listed twice makes the manifest
+    unparsable.
+- **Learning:** most review findings were file system edge cases the brief did not
+  name: a symbolic link in place of `data/`, a named pipe in place of a manifest,
+  directories without search permission, and a manifest replaced during the check.
+  Briefs for commands that read evidence should list the file types and permission
+  failures their acceptance criteria cover.

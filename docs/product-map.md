@@ -244,16 +244,16 @@ the collector already owns.
 - **[v0.1.0](https://github.com/jmfontaine/copyofa/milestone/1): Preserve and Verify a
   Selected File Delivery** — Acquire Audio and Record Its Origins; Preserve Evidence
   Throughout Its Lifetime. S2 and S6. Specified in the
-  [brief](briefs/0001-preserve-and-verify-file-delivery.md).
+  [brief](briefs/0001-preserve-and-verify-file-delivery.md); published to PyPI.
 
 ### Next
 
-Not selected. Choose the next outcome after the v0.1.0 release review.
+- **Inspect Audio and Share Its Analysis** — Understand Audio; Share and Evaluate
+  Findings. S2 and S5. It builds on files already preserved in an Evidence Set and
+  brings the audio decoding and Audio Identity that comparison and discovery need.
 
 ### Later
 
-- **Inspect Audio and Share Its Analysis** — Understand Audio; Share and Evaluate
-  Findings. S2 and S5.
 - **Compare Selected Tracks or Editions** — Compare and Discover Relationships; Share
   and Evaluate Findings. S3–S5.
 - **Preserve a Supported CD and Use Its Audio Later** — Acquire Audio and Record Its
