@@ -122,8 +122,9 @@ Every command follows the conventions `import` and `verify` set in v0.1.0, as
   instead, ASCII with other characters escaped as `\uXXXX`. Progress, warnings and
   errors go to stderr
 - Exit 0 on success, 1 when the command refused, failed or found a problem (a result
-  is still printed when there is one), 2 for invalid arguments or a target of the
-  wrong kind, and 130 when canceled with Ctrl-C
+  is still printed when there is one), 2 for invalid arguments or, for a command that
+  reads an Evidence Set, a target that is not one, and 130 when canceled with Ctrl-C.
+  Import exits 1 for a source or destination it refuses
 - Stdout stays empty whenever no result is produced
 - No interactive prompts
 
