@@ -265,6 +265,8 @@ def _describe_audio(entry: dict[str, Any]) -> str:
         parts.append(f"{entry['bits_per_sample']}-bit")
     parts.append(_count(entry["channels"], "channel"))
     parts.append(_duration(entry["frames"], entry["sample_rate"]))
+    if entry.get("flac_md5_signature") == inspector.MD5_DIFFERS:
+        parts.append("decoded audio differs from its FLAC MD5 signature")
     return ", ".join(parts)
 
 

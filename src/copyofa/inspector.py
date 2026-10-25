@@ -30,6 +30,10 @@ FAILED = "failed"
 NOT_INSPECTED = "not_inspected"
 OUTCOMES = (INTERPRETED, NOT_INTERPRETED, FAILED, NOT_INSPECTED)
 
+MD5_MATCHING = "matching"
+MD5_DIFFERS = "differs"
+MD5_ABSENT = "absent"
+
 DIGEST_SCHEME = "pcm1"
 """The Audio Digest definition of ADR 0002."""
 
@@ -122,7 +126,9 @@ def inspect(
 def found_problems(report: dict[str, Any]) -> bool:
     """Tell whether an inspection Report found anything that makes inspect exit 1."""
     return not report["integrity_baseline"]["usable"] or any(
-        entry["outcome"] in {FAILED, NOT_INSPECTED} for entry in report["files"]
+        entry["outcome"] in {FAILED, NOT_INSPECTED}
+        or entry.get("flac_md5_signature") == MD5_DIFFERS
+        for entry in report["files"]
     )
 
 
@@ -271,30 +277,87 @@ def _interpret(file: BinaryIO, suffix: str) -> dict[str, Any]:
             return _not_interpreted(
                 f"{sound.format} audio with {sound.subtype} encoding is not supported"
             )
-        return _decode_pcm(sound, kind, bits)
+        return _decode_pcm(sound, kind, bits, streaminfo)
 
 
-def _decode_pcm(sound: soundfile.SoundFile, kind: str, bits: int) -> dict[str, Any]:
-    """Decode integer PCM exactly and compute its Audio Digest (ADR 0002)."""
+def _decode_pcm(
+    sound: soundfile.SoundFile,
+    kind: str,
+    bits: int,
+    streaminfo: _StreamInfo | None,
+) -> dict[str, Any]:
+    """Decode integer PCM exactly, measure it, and compute its Audio Digest."""
     digest = hashlib.sha256()
+    signature = hashlib.md5(usedforsecurity=False)
+    measures = _Measures(sound.channels, integer=True)
     frames = 0
     shift = 32 - bits
     try:
         for block in _read_blocks(sound, "int32"):
             # libsndfile scales integer samples to the full 32-bit range.
-            digest.update(_canonical_bytes(np.right_shift(block, shift), bits))
+            samples = np.right_shift(block, shift)
+            data = _canonical_bytes(samples, bits)
+            digest.update(data)
+            signature.update(data)
+            measures.add(samples)
             frames += len(block)
     except soundfile.LibsndfileError as error:
         return _failed(f"decoding stopped after {frames} frames: {error.error_string}")
     if frames != sound.frames:
         return _failed(f"decoding stopped after {frames} of {sound.frames} frames")
-    return {
+    findings = {
         **_properties(sound, kind, frames, bits),
         "audio_digest": (
             f"{DIGEST_SCHEME}:{sound.samplerate}:{sound.channels}:{bits}:"
             f"{digest.hexdigest()}"
         ),
+        **measures.to_json(),
     }
+    if streaminfo is not None:
+        if streaminfo.md5 == bytes(16):
+            findings["flac_md5_signature"] = MD5_ABSENT
+        elif streaminfo.md5 == signature.digest():
+            findings["flac_md5_signature"] = MD5_MATCHING
+        else:
+            findings["flac_md5_signature"] = MD5_DIFFERS
+    return findings
+
+
+class _Measures:
+    """Per-channel peak and digital silence, accumulated block by block."""
+
+    def __init__(self, channels: int, *, integer: bool) -> None:
+        self._integer = integer
+        self._peak = np.zeros(channels, dtype=np.int64 if integer else np.float64)
+        self._leading = 0
+        self._trailing = 0
+        self._sound_seen = False
+
+    def add(self, block: np.ndarray) -> None:
+        """Measure the next block of frames, shaped (frames, channels)."""
+        if not len(block):
+            return
+        magnitude = np.abs(block.astype(self._peak.dtype))
+        self._peak = np.maximum(self._peak, magnitude.max(axis=0))
+        sounding = np.flatnonzero(np.any(block != 0, axis=1))
+        if not sounding.size:
+            if self._sound_seen:
+                self._trailing += len(block)
+            else:
+                self._leading += len(block)
+            return
+        if not self._sound_seen:
+            self._leading += int(sounding[0])
+            self._sound_seen = True
+        self._trailing = len(block) - 1 - int(sounding[-1])
+
+    def to_json(self) -> dict[str, Any]:
+        convert = int if self._integer else float
+        return {
+            "peak": [convert(value) for value in self._peak],
+            "leading_silence_frames": self._leading,
+            "trailing_silence_frames": self._trailing,
+        }
 
 
 def _canonical_bytes(samples: np.ndarray, bits: int) -> bytes:
@@ -310,14 +373,20 @@ def _canonical_bytes(samples: np.ndarray, bits: int) -> bytes:
 
 
 def _decode_mp3(sound: soundfile.SoundFile) -> dict[str, Any]:
-    """Decode MP3 completely; its frame count is the decoder's."""
+    """Decode MP3 completely and measure it; both depend on the decoder."""
+    measures = _Measures(sound.channels, integer=False)
     frames = 0
     try:
         for block in _read_blocks(sound, "float32"):
+            measures.add(block)
             frames += len(block)
     except soundfile.LibsndfileError as error:
         return _failed(f"decoding stopped after {frames} frames: {error.error_string}")
-    return {**_properties(sound, "mp3", frames), "limitations": [MP3_LIMITATION]}
+    return {
+        **_properties(sound, "mp3", frames),
+        **measures.to_json(),
+        "limitations": [MP3_LIMITATION],
+    }
 
 
 _CTYPES = {"int32": "int", "float32": "float"}
