@@ -91,6 +91,10 @@ def import_evidence(
     import is refused or fails.
     """
     imported_at = datetime.now(UTC)
+    if note is not None:
+        _require_utf8(note, "the --note text", "the Import Record requires")
+    for reference in references or ():
+        _require_utf8(reference, "a --ref value", "the Import Record requires")
     resolved_sources = [_resolve_source(given) for given in sources]
     _refuse_overlapping_sources(resolved_sources)
     target, staging = _check_destination(destination, resolved_sources)
@@ -332,12 +336,14 @@ def _select(sources: Sequence[_Source], excludes: Sequence[str]) -> _Selection:
     return selection
 
 
-def _require_utf8(text: str, what: str) -> None:
+def _require_utf8(
+    text: str, what: str, requirement: str = "BagIt manifests require"
+) -> None:
     try:
         text.encode()
     except UnicodeEncodeError:
         raise EvidenceImportError(
-            f"Refused: {what} is not valid UTF-8, which BagIt manifests require."
+            f"Refused: {what} is not valid UTF-8, which {requirement}."
         ) from None
 
 

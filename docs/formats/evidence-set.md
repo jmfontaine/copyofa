@@ -130,6 +130,8 @@ Before copying anything, import refuses, exiting 1 and creating nothing, when:
 - the path of a source or of the destination, or a name in a directory import lists
   (not one inside an excluded directory), is not valid UTF-8, which BagIt manifests
   require;
+- the `--note` text or a `--ref` value is not valid UTF-8, which the Import Record
+  requires;
 - the selection leaves no file to preserve.
 
 It also fails before copying anything when a selected directory cannot be listed or a
