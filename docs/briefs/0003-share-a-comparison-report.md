@@ -252,30 +252,30 @@ the release review.
 Recorded at the v0.4.0 release review.
 
 - **Delivered within the appetite**, with no scope cut, as a stack of pull requests:
-  `copyofa validate` and the four schemas in
+  `copyofa validate` and the three format version 1 schemas in
   [#84](https://github.com/jmfontaine/copyofa/pull/84), `copyofa view` in
   [#85](https://github.com/jmfontaine/copyofa/pull/85), and `--omit-locations` with
-  comparison Report format version 2 in
-  [#86](https://github.com/jmfontaine/copyofa/pull/86). AC1–AC4 and AC6–AC10 have
+  comparison Report format version 2 and its schema in
+  [#86](https://github.com/jmfontaine/copyofa/pull/86). AC1–AC4 and AC6–AC9 have
   tests, and an autouse fixture validates every Report the suite produces against its
-  schema. AC5: Ajv validates comparison and inspection Reports that CopyOfA printed and
-  rejects one edited to hold an unknown field; all four schemas compile in Ajv's
-  strict mode without warnings. AC11: *With Teeth* (24-bit, 96 kHz FLAC) against
-  *Definitive NIN: The Singles* (MP3), compared with `--omit-locations`, validates as
-  format version 2. The SHA-256 on its page matches the file, and neither file holds a
-  path of either set. The page opened in Safari and Firefox with no request beyond
-  itself, and read correctly.
+  schema; the stack's agent review checked AC10. AC5: Ajv validates comparison and
+  inspection Reports that CopyOfA printed and rejects one edited to hold an unknown
+  field; all four schemas compile in Ajv's strict mode without warnings. AC11: *With
+  Teeth* (24-bit, 96 kHz FLAC) against *Definitive NIN: The Singles* (MP3), compared
+  with `--omit-locations`, validates as format version 2. The SHA-256 on its page
+  matches the file, and neither file holds a path of either set. The page opened in
+  Safari and Firefox with no request beyond itself, and read correctly.
 - **Clarified during delivery:** `omitted` follows `compared_at`. A location that is
   present although `omitted` lists it is reported at its input, such as `/inputs/b`,
-  because jsonschema names no property when the schema of one is `false`. The view
-  shows spaces such as U+00A0 as they are, and escapes control, format (including
-  bidirectional overrides), surrogate, private-use, unassigned and separator
-  characters. Validation cuts a problem's message at 300 characters, since a message
-  can quote the document, and treats a UTF-8 byte order mark as invalid.
+  because jsonschema names no property when the schema of one is `false`. The view shows
+  spaces such as U+00A0 as they are, and escapes control, format (including
+  bidirectional overrides), surrogate, private-use and unassigned characters, and line
+  and paragraph separators. Validation cuts a problem's message at 300 characters, since
+  a message can quote the document, and treats a UTF-8 byte order mark as invalid.
   `viewer.format_duration` replaced the CLI's own duration helper.
 - **Found in review:** the 100,000-deep nesting test assumed that Python's parser
-  refuses that depth. Python 3.14 and later on Linux parses it and then finds no
-  `report_kind`. The document is invalid either way, and the test now accepts both.
+  refuses that depth. Python 3.14 and later on Linux parses it and then finds that it
+  is not a Report. The document is invalid either way, and the test now accepts both.
 - **Learning:** acceptance criteria that name a library limit, such as a parser's
   nesting depth, should state the observable outcome rather than how it arises, since
   the limit varies by platform and Python version. Checking the schemas with a second,
