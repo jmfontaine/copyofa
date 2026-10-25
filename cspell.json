@@ -36,6 +36,7 @@
     "mkfifo",
     "moxieforge",
     "musicbrainz",
+    "NONBLOCK",
     "Oxum",
     "pathlib",
     "perflint",

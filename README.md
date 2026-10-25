@@ -8,7 +8,7 @@ and share what that evidence reveals.
 
 The project is restarting from a clean slate. The first release, v0.1.0, is in
 progress: see the roadmap in the Product Map. CopyOfA can preserve a selected file
-delivery as an Evidence Set.
+delivery as an Evidence Set and verify it later.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
 retired. Its last code change is commit `0d04a38` in the Git history. It does not define
@@ -37,6 +37,23 @@ The command exits 0 when the set is accepted, 1 when the import is refused or fa
 2 for invalid arguments, and 130 when canceled with Ctrl-C.
 [Evidence Set format](docs/formats/evidence-set.md) describes the set and how to check
 it without CopyOfA.
+
+Later, after moving the set or just to check it, verify it against its Integrity
+Baseline:
+
+```bash
+copyofa verify /Volumes/Archive/Album
+copyofa verify /Volumes/Archive/Album --json > album-verification.json
+```
+
+Verify reads every preserved file and reports each one as matching, changed, missing,
+unavailable, or not checked, and lists unexpected files under `data/`. Operating
+system metadata files that Finder adds while browsing the set are ignored. It writes
+nothing into the set. `--json` prints a verification Report, which
+[Verification Report format](docs/formats/verification-report.md) describes.
+
+Verify exits 0 when everything is intact, 1 when it found anything else, 2 when the
+target is not an Evidence Set or the arguments are invalid, and 130 when canceled.
 
 ## Documents
 

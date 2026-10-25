@@ -110,6 +110,8 @@ under `data/` and CopyOfA's records in the `copyofa/` tag directory, as
 [ADR 0001](docs/decisions/0001-store-evidence-sets-as-bagit-bags.md) decides.
 [docs/formats/evidence-set.md](docs/formats/evidence-set.md) documents the layout and
 the Import Record; change it with any change to what import writes.
+[docs/formats/verification-report.md](docs/formats/verification-report.md) documents
+the Report verify prints; change it with any change to that Report.
 
 ### Testing
 

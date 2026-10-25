@@ -90,7 +90,8 @@ case-sensitively against the item's name and against its path under `data/`, suc
 ## Operating system metadata files
 
 Operating systems create and rewrite some files while a collector browses folders, so
-they are not evidence. Import never preserves them:
+they are not evidence. Import never preserves them, and `copyofa verify` ignores them
+under `data/`, so browsing a set in Finder does not make it fail verification:
 
 - `.DS_Store`
 - AppleDouble files, whose names start with `._`
@@ -130,3 +131,6 @@ Each prints `OK` per file and exits 0 when every listed file matches. On Linux,
   `uvx --from bagit bagit.py`), also checks that no file under `data/` is unlisted. It
   reports a set invalid once Finder has added a `.DS_Store` to it, and bagit.py 1.9.0
   does not decode `%25`, so it also reports a set with `%` in a file name invalid.
+  CopyOfA's own check, `copyofa verify`, ignores operating system metadata files and
+  decodes every path; [Verification Report format](verification-report.md) describes
+  it.
