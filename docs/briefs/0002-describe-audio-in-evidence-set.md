@@ -268,20 +268,22 @@ Recorded at the v0.2.0 release review.
   - `--json` output is UTF-8 rather than ASCII for every command
     ([#67](https://github.com/jmfontaine/copyofa/issues/67), in
     [#68](https://github.com/jmfontaine/copyofa/pull/68)), decided by the maintainer
-    during delivery. File name bytes that are not valid UTF-8 stay escaped.
-  - Import refuses a `--note` or `--ref` that is not valid UTF-8
-    ([#69](https://github.com/jmfontaine/copyofa/issues/69)), a crash found in review
-    and present since v0.1.0.
+    during delivery. Bytes that are not valid UTF-8, possible in a path given on the
+    command line, stay escaped.
+  - Import refuses a `--note`, `--ref` or `--exclude` value that is not valid UTF-8
+    ([#69](https://github.com/jmfontaine/copyofa/issues/69), in
+    [#70](https://github.com/jmfontaine/copyofa/pull/70)), a crash found in review and
+    present since v0.1.0.
 - **Clarified during delivery:** the human result prints the counts first, as `verify`
   does. A FLAC file's frames are capped at the length STREAMINFO declares, and an MP3
   that was cut short cannot be told apart from a shorter recording. Both are in
   [Inspection Report format](../formats/inspection-report.md).
 - **Learning:** soundfile's convenient interfaces do not decode audio faithfully enough
   for evidence. Through a Python file object, libsndfile reads via cffi callbacks that
-  swallow Ctrl-C and I/O errors. `read()` and `blocks()` stop at the header's frame
-  count, and `blocks()` repeats stale data after a short read. Both seek after every
-  block, which changes mpg123's MP3 samples. Inspect therefore hands libsndfile a
-  duplicate descriptor and calls its sequential read functions through soundfile's
-  private API, marked `KLUDGE:` in `src/copyofa/inspector.py`. libsndfile 1.2.0 also
-  closes a descriptor it was told to leave open. Briefs for decoding work should name
-  truncated and header-inconsistent files among the cases their criteria cover.
+  swallow Ctrl-C and I/O errors. `blocks()` repeats stale data after a short read, and
+  `read()` and `blocks()` seek after every block, which changes mpg123's MP3 samples.
+  Inspect hands libsndfile a duplicate descriptor and calls its sequential read
+  functions through soundfile's private API, marked `KLUDGE:` in
+  `src/copyofa/inspector.py`. libsndfile 1.2.0 also closes a descriptor it was told to
+  leave open. Briefs for decoding work should name truncated and header-inconsistent
+  files among the cases their criteria cover.

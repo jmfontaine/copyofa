@@ -245,15 +245,15 @@ the collector already owns.
   an Evidence Set** — Understand Audio. S2. Decodes FLAC, WAV and MP3 in a preserved
   set and reports their properties, an Audio Digest for lossless audio, and
   measurements in an inspection Report. Specified in the
-  [brief](briefs/0002-describe-audio-in-evidence-set.md); published to PyPI.
+  [brief](briefs/0002-describe-audio-in-evidence-set.md).
 
 ### Next
 
 - **Compare Selected Tracks and Share the Finding** — Compare and Discover
   Relationships; Share and Evaluate Findings. S3 and S5. Builds on Audio Digest and
   brings the portable human-readable view and Report validation with the first
-  Comparison Report. Audio Digest settles identical lossless audio only; MP3, most of
-  a typical collection, has none, so comparison has to measure decoded audio.
+  Comparison Report. Audio Digest settles identical lossless audio only; lossy audio
+  such as MP3 has none, so comparing it needs measurements of the decoded audio.
 
 ### Later
 
