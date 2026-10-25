@@ -120,21 +120,27 @@ under `data/` and CopyOfA's records in the `copyofa/` tag directory, as
 [docs/formats/evidence-set.md](docs/formats/evidence-set.md) documents the layout and
 the Import Record; change it with any change to what import writes.
 [docs/formats/verification-report.md](docs/formats/verification-report.md) documents
-the Report verify prints, and
+the Report verify prints,
 [docs/formats/inspection-report.md](docs/formats/inspection-report.md) the Report
-inspect prints; change each with any change to its Report.
+inspect prints, and
+[docs/formats/comparison-report.md](docs/formats/comparison-report.md) the Report
+compare prints; change each with any change to its Report.
 
 ### Audio decoding
 
-`inspect` decodes audio with soundfile, whose wheels bundle libsndfile with FLAC and
-mpg123, and NumPy; these are the only runtime dependencies. The Audio Digest is
+`inspect` and `compare` decode audio with soundfile, whose wheels bundle libsndfile
+with FLAC and mpg123, and NumPy. `compare` also resamples with soxr (python-soxr,
+bundling libsoxr). These three are the only runtime dependencies. The Audio Digest is
 defined on canonical PCM by
 [ADR 0002](docs/decisions/0002-define-audio-digest-from-canonical-pcm.md), so any
 exact decoder reproduces it. `pyproject.toml` sets a higher NumPy minimum for Python
 3.15, its oldest release with wheels for 3.15, so CI's lowest-direct job installs
-NumPy instead of building it. Inspect reads through libsndfile's sequential read
+NumPy instead of building it; soxr's minimum, 0.5, is its oldest release with wheels
+for 3.15 (stable ABI). Inspect reads through libsndfile's sequential read
 functions rather than soundfile's `read()` (see the `KLUDGE` in
-`src/copyofa/inspector.py`).
+`src/copyofa/inspector.py`), and compare decodes through inspect's code. The
+comparison method (resampling, alignment, measurements) is decided in
+[ADR 0003](docs/decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md).
 
 ### Command conventions
 

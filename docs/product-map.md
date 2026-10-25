@@ -241,19 +241,19 @@ the collector already owns.
 
 ### Now
 
-- **[v0.2.0](https://github.com/jmfontaine/copyofa/milestone/2): Describe the Audio in
-  an Evidence Set** — Understand Audio. S2. Decodes FLAC, WAV and MP3 in a preserved
-  set and reports their properties, an Audio Digest for lossless audio, and
-  measurements in an inspection Report. Specified in the
-  [brief](briefs/0002-describe-audio-in-evidence-set.md).
+- **[v0.3.0](https://github.com/jmfontaine/copyofa/milestone/3): Compare Selected
+  Tracks** — Compare and Discover Relationships. S3. Measures how two preserved tracks
+  relate, across formats and sample rates: offset, overlap, correlation, gain and
+  residual in the first Comparison Report, with identical audio settled by Audio
+  Digest. Draws no conclusion such as "same master". Specified in
+  [issue #74](https://github.com/jmfontaine/copyofa/issues/74), with the method in
+  [ADR 0003](decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md).
 
 ### Next
 
-- **Compare Selected Tracks and Share the Finding** — Compare and Discover
-  Relationships; Share and Evaluate Findings. S3 and S5. Builds on Audio Digest and
-  brings the portable human-readable view and Report validation with the first
-  Comparison Report. Audio Digest settles identical lossless audio only; lossy audio
-  such as MP3 has none, so comparing it needs measurements of the decoded audio.
+- **Share and Evaluate Findings** — Share and Evaluate Findings. S5. The portable
+  human-readable view of a Report and Report validation, starting with the
+  Comparison Report.
 
 ### Later
 

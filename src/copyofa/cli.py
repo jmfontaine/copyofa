@@ -10,7 +10,7 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 import copyofa
-from copyofa import inspector, verifier
+from copyofa import comparator, inspector, verifier
 from copyofa.errors import CopyOfAError
 from copyofa.importer import import_evidence
 
@@ -115,6 +115,26 @@ def _parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="print the inspection Report as JSON"
     )
     inspecting.set_defaults(handler=_inspect)
+
+    comparing = commands.add_parser(
+        "compare",
+        help="measure how the audio of two preserved tracks relates",
+        description=(
+            "Check two tracks preserved in Evidence Sets against their Integrity "
+            "Baselines, decode them, align them, and measure how track B relates to "
+            "track A. Exits 0 when both were compared and 1 otherwise."
+        ),
+    )
+    for name in ("track-a", "track-b"):
+        comparing.add_argument(
+            name.replace("-", "_"),
+            metavar=name,
+            help="a FLAC, WAV or MP3 file under the data/ directory of an Evidence Set",
+        )
+    comparing.add_argument(
+        "--json", action="store_true", help="print the comparison Report as JSON"
+    )
+    comparing.set_defaults(handler=_compare)
     return parser
 
 
@@ -282,6 +302,69 @@ def _describe_audio(entry: dict[str, Any]) -> str:
     if entry.get("flac_md5_signature") == inspector.MD5_DIFFERS:
         parts.append("decoded audio differs from its FLAC MD5 signature")
     return ", ".join(parts)
+
+
+def _compare(args: argparse.Namespace) -> int:
+    def progress(entry: dict[str, Any]) -> None:
+        outcome = entry["outcome"].replace("_", " ")
+        print(f"Inspected {_printable(entry['path'])}: {outcome}", file=sys.stderr)
+
+    try:
+        report = comparator.compare(args.track_a, args.track_b, progress=progress)
+    except verifier.NotAnEvidenceSetError as error:
+        print(f"copyofa: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    if args.json:
+        _print_json(report)
+    else:
+        _print_comparison(report)
+    return EXIT_PROBLEM if comparator.found_problems(report) else EXIT_OK
+
+
+def _print_comparison(report: dict[str, Any]) -> None:
+    for name in ("a", "b"):
+        entry = report["inputs"][name]
+        if entry["outcome"] == inspector.INTERPRETED:
+            detail = _describe_audio(entry)
+        else:
+            detail = f"{entry['outcome'].replace('_', ' ')}: {entry['reason']}"
+        location = f"{entry['evidence_set']}/{entry['path']}"
+        print(_printable(f"Track {name.upper()}: {location} ({detail})"))
+    measurements = report.get("measurements")
+    if measurements is None:
+        print("Not compared: an input was not interpreted")
+        return
+    if measurements.get("identical_audio"):
+        print("Identical audio: the Audio Digests are equal")
+    absent = measurements.get("absent", {})
+    if "offset" in measurements:
+        offset = measurements["offset"]
+        rate = report["method"]["common_sample_rate"]
+        print(
+            f"Offset: {offset['frames']:+} frames ({offset['seconds']:+.3f} s) "
+            f"at {rate} Hz"
+        )
+        overlap = measurements["overlap"]
+        print(
+            f"Overlap: {overlap['a']['fraction']:.1%} of track A, "
+            f"{overlap['b']['fraction']:.1%} of track B"
+        )
+    else:
+        print(f"Offset: absent ({absent['offset']})")
+        print(f"Overlap: absent ({absent['overlap']})")
+    downmix = measurements["downmix"]
+    for label, field, digits, unit in (
+        ("Correlation", "correlation", 3, ""),
+        ("Gain", "gain_db", 2, " dB"),
+        ("Residual", "residual_db", 1, " dB"),
+    ):
+        if field in downmix:
+            # Adding 0.0 turns a value that rounds to -0.0 into 0.0.
+            value = round(downmix[field], digits) + 0.0
+            sign = "+" if field == "gain_db" else ""
+            print(f"{label}: {value:{sign}.{digits}f}{unit}")
+        else:
+            print(f"{label}: absent ({downmix['absent'][field]})")
 
 
 def _duration(frames: int, sample_rate: int) -> str:
