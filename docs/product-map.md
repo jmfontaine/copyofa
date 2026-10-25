@@ -261,6 +261,10 @@ the collector already owns.
 
 - **Compare Editions** — Compare and Discover Relationships; Share and Evaluate
   Findings. S4, built on track comparison.
+- **Check a Received Report Against Your Own Copy** — Share and Evaluate Findings. The
+  rest of S5: compare a received Report with the recipient's own copy, or reproduce its
+  measurements, as checks distinct from validation. Views of inspection and
+  verification Reports may come with it.
 - **Preserve a Supported CD and Use Its Audio Later** — Acquire Audio and Record Its
   Origins; Preserve Evidence Throughout Its Lifetime. S1, connected to S2–S6. Lossless
   export is also useful for preserved file inputs and can be delivered earlier.
