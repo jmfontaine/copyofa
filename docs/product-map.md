@@ -258,10 +258,8 @@ the collector already owns.
 ### Later
 
 - **Locate Matching Portions and Edits Between Tracks** — Compare and Discover
-  Relationships. S3's partial matches and affected ranges: several aligned segments,
-  inserted or removed sections, drift and speed changes, which the single global offset
-  of [ADR 0003](decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md)
-  leaves unlocated.
+  Relationships. S3's partial matches and their affected ranges, which one global
+  offset does not locate.
 - **Compare Editions** — Compare and Discover Relationships; Share and Evaluate
   Findings. S4, built on track comparison.
 - **Preserve a Supported CD and Use Its Audio Later** — Acquire Audio and Record Its
