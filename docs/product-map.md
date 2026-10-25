@@ -241,25 +241,24 @@ the collector already owns.
 
 ### Now
 
-- **[v0.3.0](https://github.com/jmfontaine/copyofa/milestone/3): Compare Selected
-  Tracks** — Compare and Discover Relationships. S3. Measures how two preserved tracks
-  relate, across formats and sample rates: offset, overlap, correlation, gain and
-  residual in the first Comparison Report, with identical audio settled by Audio
-  Digest. Draws no conclusion such as "same master". Specified in
-  [issue #74](https://github.com/jmfontaine/copyofa/issues/74), with the method in
-  [ADR 0003](decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md).
+- **[v0.4.0](https://github.com/jmfontaine/copyofa/milestone/4): Share a Comparison
+  Report** — Share and Evaluate Findings. S5, starting with S3's Comparison Report. A
+  collector shares a Comparison Report, leaving out where their Evidence Sets are
+  stored if they choose, with a self-contained HTML view that opens in any browser. A
+  recipient validates the Report against its published JSON Schema, with CopyOfA or
+  any JSON Schema validator. Every Report kind gets a schema. Specified in
+  [brief 0003](briefs/0003-share-a-comparison-report.md), with the schemas decided in
+  [ADR 0004](decisions/0004-publish-each-report-format-as-a-json-schema.md).
 
 ### Next
 
-- **Share and Evaluate Findings** — Share and Evaluate Findings. S5. The portable
-  human-readable view of a Report and Report validation, starting with the
-  Comparison Report.
+- **Locate Matching Portions and Edits Between Tracks** — Compare and Discover
+  Relationships. S3's partial matches and their affected ranges, which one global
+  offset does not locate. Edition comparison needs it, since editions' tracks may be
+  edited differently.
 
 ### Later
 
-- **Locate Matching Portions and Edits Between Tracks** — Compare and Discover
-  Relationships. S3's partial matches and their affected ranges, which one global
-  offset does not locate.
 - **Compare Editions** — Compare and Discover Relationships; Share and Evaluate
   Findings. S4, built on track comparison.
 - **Preserve a Supported CD and Use Its Audio Later** — Acquire Audio and Record Its
