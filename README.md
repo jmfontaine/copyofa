@@ -6,9 +6,9 @@ and share what that evidence reveals.
 
 ## Status
 
-The project is restarting from a clean slate. The first release, v0.1.0, is in
-progress: see the roadmap in the Product Map. CopyOfA can preserve a selected file
-delivery as an Evidence Set and verify it later.
+The project is restarting from a clean slate. Its first release, v0.1.0, preserves a
+selected file delivery as an Evidence Set and verifies it later. The roadmap in the
+Product Map lists what comes next.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
 retired. Its last code change is commit `0d04a38` in the Git history. It does not define

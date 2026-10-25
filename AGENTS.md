@@ -113,6 +113,20 @@ the Import Record; change it with any change to what import writes.
 [docs/formats/verification-report.md](docs/formats/verification-report.md) documents
 the Report verify prints; change it with any change to that Report.
 
+### Command conventions
+
+Every command follows the conventions `import` and `verify` set in v0.1.0, as
+`src/copyofa/cli.py` implements them:
+
+- A short human-readable result goes to stdout; `--json` prints one JSON document
+  instead, ASCII with other characters escaped as `\uXXXX`. Progress, warnings and
+  errors go to stderr
+- Exit 0 on success, 1 when the command refused, failed or found a problem (a result
+  is still printed when there is one), 2 for invalid arguments or a target of the
+  wrong kind, and 130 when canceled with Ctrl-C
+- Stdout stays empty whenever no result is produced
+- No interactive prompts
+
 ### Testing
 
 pytest with coverage (`just test`). CI runs it on the development Python.
