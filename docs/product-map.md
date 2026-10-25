@@ -243,7 +243,7 @@ the collector already owns.
 
 - **[v0.2.0](https://github.com/jmfontaine/copyofa/milestone/2): Describe the Audio in
   an Evidence Set** — Understand Audio. S2. Decodes FLAC, WAV and MP3 in a preserved
-  set and reports their properties, an Audio Digest for lossless audio, and exact
+  set and reports their properties, an Audio Digest for lossless audio, and
   measurements in an inspection Report. Specified in the
   [brief](briefs/0002-describe-audio-in-evidence-set.md).
 

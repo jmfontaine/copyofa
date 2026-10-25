@@ -27,6 +27,7 @@
     "fspath",
     "fstat",
     "furb",
+    "gapless",
     "geteuid",
     "ignoreexternal",
     "isort",
@@ -75,6 +76,7 @@
     "venv",
     "verifytypes",
     "Vorbis",
+    "WAVEX",
     "worktrees",
     "WRONLY"
   ]

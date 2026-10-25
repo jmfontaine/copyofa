@@ -41,24 +41,33 @@ is the SHA-256 of the canonical PCM byte stream:
 - every sample frame of the sequence, in order, with the channels of each frame
   interleaved in the order the source stores them;
 - each sample a signed two's-complement integer at the sequence's bits per sample,
-  little-endian, in the fewest whole bytes that hold it (2 bytes for 16 bits, 3 for 24);
+  little-endian, in the fewest whole bytes that hold it (1 byte for 8 bits, 2 for 16,
+  3 for 24, 4 for 32); 8-bit WAV samples, stored unsigned, are converted by
+  subtracting 128;
 - nothing else: no header, no metadata, no padding.
+
+Bits per sample is the stored sample size: the bits per sample of FLAC's STREAMINFO
+block, and the container sample size of a WAV file (`wBitsPerSample`), not a smaller
+valid-bits value a WAVE_FORMAT_EXTENSIBLE header may declare.
 
 The sample rate, channel count, and bits per sample are the interpretation; they are
 part of the digest, so the same bytes declared at another rate give another digest.
 `pcm1` names this definition. A later definition gets a new prefix, and values with
 different prefixes are never compared as equal or different.
 
-CopyOfA gives an Audio Digest only to audio it decodes exactly: FLAC and integer PCM
-WAV in v0.2.0. Lossy audio, such as MP3, gets none, and the Report says so.
+CopyOfA gives an Audio Digest only to audio it decodes exactly: in v0.2.0, FLAC at 8,
+16 or 24 bits and integer PCM WAV at 8 to 32 bits. Lossy audio, such as MP3, gets
+none, and the Report says so.
 
 ## Rationale and alternatives
 
 - **Reproducible without CopyOfA.** The canonical byte stream is what
   `flac -d --force-raw-format --endian=little --sign=signed -c <file>` and
-  `ffmpeg -i <file> -f s16le -` (or `s24le`) write, so piping either into
-  `shasum -a 256` reproduces the hash. A probe confirmed it for 8-, 16- and 24-bit FLAC
-  with flac and ffmpeg.
+  `ffmpeg -i <file> -f <format> -` write, with `<format>` matching the bits per sample
+  (`s8`, `s16le`, `s24le` or `s32le`), so piping either into `shasum -a 256`
+  reproduces the hash. ffmpeg converts silently to whatever format it is given, so a
+  mismatched `-f` gives another hash. Probes confirmed this for 8-, 16- and 24-bit
+  FLAC and 8- to 32-bit WAV with flac and ffmpeg.
 - **Same layout as the FLAC MD5 signature.** FLAC stores an MD5 of exactly this byte
   stream in its STREAMINFO block, so one read yields both the digest and a check of the
   encoder's own signature.
@@ -92,7 +101,9 @@ Alternatives considered:
 ## Consequences
 
 - Retagging, re-embedding art, or recompressing a FLAC file keeps its Audio Digest;
-  converting it to WAV keeps it too. Changing the sample rate or bit depth changes it.
+  converting it to a WAV file with the same sample size keeps it too. Changing the
+  sample rate or bit depth changes it: a 24-bit WAV holding 20-bit audio and its
+  20-bit FLAC encoding get different digests.
 - Two editions with the same samples share an Audio Digest. That establishes neither
   common source nor acquisition accuracy; Reports say what a digest does not establish.
 - A digest covers the whole Audio Sequence a file decodes to. Digests of ranges or
@@ -101,5 +112,7 @@ Alternatives considered:
   by Audio Digest. Comparing them needs the measurement-based comparison of a later
   release.
 - 32-bit float PCM gets no digest under `pcm1`; adding it needs a new definition.
+  FLAC at other depths, such as 20 or 32 bits, fits `pcm1` but waits for a decoder
+  that reads it.
 - Revisit this decision if a supported lossless format cannot produce this byte stream,
   or if a consumer needs digests of ranges or of lossy streams.
