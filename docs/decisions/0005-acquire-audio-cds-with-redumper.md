@@ -15,7 +15,7 @@
 
 CopyOfA so far preserves files a collector already owns. Preserving a CD means reading
 it: the audio, where each track starts, the disc's own identifiers, and how well each
-sample was read. The collector must be able to analyze the audio again later, with
+frame was read. The collector must be able to analyze the audio again later, with
 better methods, without the disc, so the Evidence Set must hold everything meaningful
 the reading produced, and nothing large that can be derived from the rest.
 
@@ -35,8 +35,8 @@ corrected. redumper wrote:
 
 | File | Size (MB) | Content |
 | --- | --- | --- |
-| `.scram` | 395 | The disc image: every sample from the lead-in to the lead-out, as read, about 98 MB of it zeros for the area the drive never reached |
-| `.state` | 99 | One byte per sample of the image: whether it was read, and how |
+| `.scram` | 395 | The disc image: every stereo frame from the lead-in to the lead-out, as read, about 98 MB of it zeros for the area the drive never reached |
+| `.state` | 99 | One byte per frame of the image: whether it was read, and how |
 | `.subcode` | 16 | The subchannel: track and index positions, ISRCs, the catalog number, CD-Text |
 | Track `.bin` files | 288 | Each track's audio, cut from the image at the table of contents, with the disc's write offset applied |
 | `.toc`, `.fulltoc`, `.cdtext`, `.cue`, `.log` | under 0.01 | The drive's tables of contents, CD-Text, the cue sheet, and the run's log |
@@ -48,8 +48,8 @@ kHz, so it compresses as audio: libsndfile wrote it as a 147.5 MB FLAC file in 4
 seconds, decoded it back to the same SHA-256 in 1.5 seconds, and read track 3 from it
 by seeking to its first frame, again with the SHA-256 of redumper's track file. zstd at
 its highest level made 269 MB of the image. xz reduced the state to 15 KB and the
-subchannel to 0.55 MB. The set would hold about 149 MB, where redumper's files take
-672 MB and the track files alone 288 MB.
+subchannel to 0.55 MB. The set would hold about 148 MB, where redumper's files take
+about 800 MB and the track files alone 288 MB.
 
 ## Decision
 
@@ -66,7 +66,8 @@ subchannel to 0.55 MB. The set would hold about 149 MB, where redumper's files t
    byte. The image is stored as FLAC, the state and the subchannel as xz, and every
    other file as written:
    - `data/disc.scram.flac`: the image as 16-bit stereo FLAC at 44.1 kHz, written by
-     libsndfile at its highest compression level;
+     libsndfile at its highest compression level. soundfile's minimum rises to 0.13,
+     its first release that sets a FLAC compression level;
    - `data/disc.state.xz` and `data/disc.subcode.xz`: written with Python's `lzma`;
    - `data/disc.toc`, `data/disc.fulltoc`, `data/disc.cdtext`, `data/disc.cue` and
      `data/disc.log`, each when redumper writes it.
@@ -79,18 +80,20 @@ subchannel to 0.55 MB. The set would hold about 149 MB, where redumper's files t
    image, checks that the range holds exactly the bytes of redumper's track file, and
    records its first frame and length. CopyOfA reads a track by decoding that range of
    the FLAC file. It needs neither redumper nor redumper's layout of the image to
-   analyze a preserved disc. A track's Audio Digest is the SHA-256 of redumper's track
-   file, which is the canonical PCM of ADR 0002.
+   analyze a preserved disc. The SHA-256 of redumper's track file, which is the
+   canonical PCM of ADR 0002, is the hash in the track's Audio Digest.
 5. **An Acquisition Record.** `copyofa/acquisition-record.json` records the
    acquisition: when it ran, the drive, the redumper build and command, the offsets,
    the read errors, what the disc says about itself (catalog number, ISRCs, CD-Text),
-   each track's range, Audio Digest and unread samples, and each stored file. Its
-   format is documented in `docs/formats/evidence-set.md`.
+   each track's range, Audio Digest and frames not read successfully, and each stored
+   file. Its format is documented in `docs/formats/evidence-set.md`. The tag manifest
+   lists it, and CopyOfA uses it only when the tag manifest lists it and its SHA-256
+   matches, since it defines where the tracks are.
 
 ## Rationale and alternatives
 
 - **redumper** reads what other rippers do not: the lead-in and lead-out, the
-  subchannel, C2 error pointers per sample, and the disc's write offset, and it knows
+  subchannel, C2 error pointers, and the disc's write offset, and it knows
   the read offset of most drives. It is maintained, runs on macOS without special
   privileges, and produces the dumps the Redump project accepts.
 - **One `redumper disc` run** keeps acquire a single command that succeeds or fails.
@@ -115,15 +118,15 @@ subchannel to 0.55 MB. The set would hold about 149 MB, where redumper's files t
 
 Alternatives considered:
 
-- **Keeping redumper's files uncompressed.** Rejected: 672 MB for a 288 MB disc, most
-  of it zeros and per-sample flags.
+- **Keeping redumper's files uncompressed.** Rejected: about 800 MB for a 288 MB disc,
+  most of it zeros, per-frame flags and the track files' second copy of the audio.
 - **Keeping only the track files.** Rejected: it loses the pregap, the lead-in, the
-  lead-out and the per-sample read status, and a better split later would need the
+  lead-out and the per-frame read status, and a better split later would need the
   disc.
 - **Keeping both the track files and the image.** Rejected: the track files duplicate
   the image.
 - **Another ripper, such as cd-paranoia or cdrdao.** Rejected: they capture less of
-  the disc, without the lead-in or per-sample C2 status, and neither finds the disc's
+  the disc, without the lead-in or C2 status, and neither finds the disc's
   write offset.
 - **Refusing drives or bridges known to misbehave.** Rejected: the bug that motivated
   it is fixed, and a list of refusals is what kept the retired implementation from
@@ -140,8 +143,9 @@ Alternatives considered:
   reason; the minimum build is the one tested.
 - A preserved disc holds no playable track file. `copyofa export` writes them, and
   inspect and compare read tracks from the image.
-- Every set stores the image whole, about 150 MB for a 27-minute disc. The zeros of
+- Every set stores the image whole, about 148 MB for a 27-minute disc. The zeros of
   the unread area cost almost nothing once compressed.
+- soundfile's minimum rises from 0.12 to 0.13.
 - Revisit this decision to support other discs (CD-Extra, mixed mode, audio before the
   first track), damaged discs that need retries or refining, or when redumper changes
   the files it writes.

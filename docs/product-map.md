@@ -245,7 +245,7 @@ the collector already owns.
   CD** — Acquire Audio and Record Its Origins; Preserve Evidence Throughout Its
   Lifetime. S1, for plain audio CDs. A collector preserves a CD with redumper as an
   Evidence Set that holds everything meaningful the reading produced, compressed, and
-  nothing the rest reproduces, then verifies, inspects, compares and exports its
+  nothing large the rest reproduces, then verifies, inspects, compares and exports its
   tracks without the disc. Specified in
   [brief 0004](briefs/0004-preserve-an-audio-cd.md), with acquisition and storage
   decided in [ADR 0005](decisions/0005-acquire-audio-cds-with-redumper.md).
