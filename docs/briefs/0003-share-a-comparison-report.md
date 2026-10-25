@@ -108,8 +108,8 @@ comparison Report of [S3](../product-map.md#s3-compare-two-tracks):
   Audio Digest and inspect's findings; the method; each measurement for the downmix
   and each channel; each residual window; each absent value with its reason; and each
   limitation, word for word. With the locations left out, `manifest_sha256` still
-  identifies each Evidence Set. The page adds labels and units, never an
-  interpretation.
+  identifies each Evidence Set's Integrity Baseline. The page adds labels and units,
+  never an interpretation.
 - **Tied to its Report.** The page gives the SHA-256 of the exact bytes it was
   generated from, the Report's kind and format version, and the CopyOfA version that
   generated the page.
