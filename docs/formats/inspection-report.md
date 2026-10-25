@@ -85,8 +85,11 @@ An `interpreted` entry also holds:
 - `bits_per_sample`: for FLAC and WAV, the stored sample size: STREAMINFO's for FLAC,
   and the container's for WAV, not a smaller valid-bits value.
 - `frames`: the sample frames per channel that were decoded. Duration is `frames`
-  divided by `sample_rate`. For MP3 it depends on the decoder's handling of the encoder
-  delay and padding.
+  divided by `sample_rate`. For FLAC it is the length STREAMINFO declares: inspect
+  reports a FLAC file that ends early as `failed`, but does not decode frames beyond
+  that length. For MP3 it is whatever the decoder produced, which depends on its
+  handling of the encoder delay and padding; an MP3 that was cut short cannot be told
+  apart from a shorter recording.
 - `audio_digest`: for FLAC and WAV, the Audio Digest (see below).
 - `peak`: the largest absolute sample value of each channel, in channel order. For
   FLAC and WAV it is an exact integer at the bits per sample, so a 16-bit file at full

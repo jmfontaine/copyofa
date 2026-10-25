@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import stat
@@ -18,7 +19,7 @@ import copyofa
 from copyofa import verifier
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
 REPORT_KIND = "copyofa.inspection"
@@ -249,10 +250,18 @@ def _interpret(file: BinaryIO, suffix: str) -> dict[str, Any]:
             return _not_interpreted(
                 "FLAC whose STREAMINFO gives no length is not supported by the decoder"
             )
-    file.seek(0)
+    # A descriptor, not the file object: libsndfile then reads in C, where a
+    # Ctrl-C or an I/O error is not lost inside a cffi callback. Rewind the
+    # descriptor itself; the file object's buffer may have kept it elsewhere.
+    os.lseek(file.fileno(), 0, os.SEEK_SET)
+    # A duplicate, which libsndfile owns: libsndfile 1.2.0 closes the descriptor it
+    # was given when it cannot open the file, even when told not to.
+    duplicate = os.dup(file.fileno())
     try:
-        sound = soundfile.SoundFile(file)
+        sound = soundfile.SoundFile(duplicate, closefd=True)
     except soundfile.LibsndfileError as error:
+        with contextlib.suppress(OSError):
+            os.close(duplicate)
         if streaminfo is not None or suffix in _EXPECTED_SUFFIXES:
             return _failed(f"libsndfile cannot open it: {error.error_string}")
         return _not_interpreted("no supported audio format was recognized")
@@ -287,7 +296,7 @@ def _decode_pcm(
     frames = 0
     shift = 32 - bits
     try:
-        for block in sound.blocks(_BLOCK_FRAMES, dtype="int32", always_2d=True):
+        for block in _read_blocks(sound, "int32"):
             # libsndfile scales integer samples to the full 32-bit range.
             samples = np.right_shift(block, shift)
             data = _canonical_bytes(samples, bits)
@@ -371,7 +380,7 @@ def _decode_mp3(sound: soundfile.SoundFile) -> dict[str, Any]:
     measures = _Measures(sound.channels, integer=False)
     frames = 0
     try:
-        for block in sound.blocks(_BLOCK_FRAMES, dtype="float32", always_2d=True):
+        for block in _read_blocks(sound, "float32"):
             measures.add(block)
             frames += len(block)
     except soundfile.LibsndfileError as error:
@@ -381,6 +390,36 @@ def _decode_mp3(sound: soundfile.SoundFile) -> dict[str, Any]:
         **measures.to_json(),
         "limitations": [MP3_LIMITATION],
     }
+
+
+_CTYPES = {"int32": "int", "float32": "float"}
+
+
+def _read_blocks(sound: soundfile.SoundFile, dtype: str) -> Iterator[np.ndarray]:
+    """Yield the decoded frames in order, until libsndfile has no more.
+
+    Each block is shaped (frames, channels). Raises soundfile.LibsndfileError when
+    libsndfile reports an error.
+    """
+    # KLUDGE: soundfile's read() and blocks() cap reading at the header's frame
+    # count, which an MP3 may overstate or understate, blocks() yields stale data
+    # after a short read, and both seek after every read, which makes mpg123 decode
+    # slightly different samples. This calls libsndfile's sequential sf_readf_*
+    # through soundfile's private _snd, _ffi and SoundFile._file. Remove it when
+    # soundfile offers a sequential read that reports the frames it decoded.
+    ctype = _CTYPES[dtype]
+    read = getattr(soundfile._snd, f"sf_readf_{ctype}")
+    handle = sound._file
+    while True:
+        block = np.empty((_BLOCK_FRAMES, sound.channels), dtype=dtype)
+        pointer = soundfile._ffi.cast(f"{ctype} *", soundfile._ffi.from_buffer(block))
+        count = read(handle, pointer, _BLOCK_FRAMES)
+        code = soundfile._snd.sf_error(handle)
+        if code:
+            raise soundfile.LibsndfileError(code)
+        if not count:
+            return
+        yield block[:count]
 
 
 def _properties(

@@ -130,8 +130,11 @@ inspect prints; change each with any change to its Report.
 mpg123, and NumPy; these are the only runtime dependencies. The Audio Digest is
 defined on canonical PCM by
 [ADR 0002](docs/decisions/0002-define-audio-digest-from-canonical-pcm.md), so any
-exact decoder reproduces it. `pyproject.toml` sets NumPy's minimum per Python version,
-to the oldest release with wheels for it, because CI's lowest-direct jobs install it.
+exact decoder reproduces it. `pyproject.toml` sets a higher NumPy minimum for Python
+3.15, its oldest release with wheels for 3.15, so CI's lowest-direct job installs
+NumPy instead of building it. Inspect reads through libsndfile's sequential read
+functions rather than soundfile's `read()` (see the `KLUDGE` in
+`src/copyofa/inspector.py`).
 
 ### Command conventions
 

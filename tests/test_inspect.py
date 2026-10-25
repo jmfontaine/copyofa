@@ -4,7 +4,6 @@ import hashlib
 import inspect as pyinspect
 import json
 import os
-import re
 import shutil
 import zipfile
 from datetime import UTC, datetime, timedelta
@@ -335,6 +334,26 @@ def test_inspect_reports_audio_it_cannot_decode_as_failed(run: Run, make_set) ->
     assert str(found["fake.MP3"][1]).startswith("libsndfile cannot open it: ")
 
 
+def test_inspect_counts_the_frames_a_truncated_mp3_decodes_to(
+    run: Run, make_set
+) -> None:
+    def fill(source: Path) -> None:
+        samples = signal(5 * RATE, 2, 16).astype(np.int16) // 4
+        soundfile.write(
+            source / "whole.mp3", samples, RATE, format="MP3", subtype="MPEG_LAYER_III"
+        )
+        data = (source / "whole.mp3").read_bytes()
+        (source / "half.mp3").write_bytes(data[: len(data) // 2])
+
+    outcome, report = inspect(run, make_set(fill))
+
+    assert outcome.code == 0, outcome.err
+    found = entries(report)
+    assert found["whole.mp3"]["frames"] == 5 * RATE
+    # The header still announces five seconds; the decoder finds about half.
+    assert 2 * RATE < found["half.mp3"]["frames"] < 3 * RATE
+
+
 @requires_permissions
 def test_inspect_inspects_only_the_accepted_bytes(
     run: Run, make_set, monkeypatch: pytest.MonkeyPatch
@@ -421,7 +440,8 @@ def test_inspect_decodes_nothing_with_an_unusable_baseline(
 
     evidence_set = make_set(fill)
     manifest = evidence_set / "manifest-sha256.txt"
-    manifest.write_text(re.sub("^[0-9a-f]", "0", manifest.read_text()))
+    text = manifest.read_text()
+    manifest.write_text(("1" if text[0] == "0" else "0") + text[1:])
 
     def fail(*_: object) -> None:
         pytest.fail("decoded a file despite an unusable baseline")
