@@ -129,12 +129,21 @@ song from another release:
 ```bash
 copyofa compare "/Volumes/Archive/With Teeth/data/04 The Hand That Feeds.flac" \
   "/Volumes/Archive/Definitive NIN/data/18 The Hand That Feeds.mp3"
-copyofa compare <track-a> <track-b> --json > comparison.json
-copyofa compare <track-a> <track-b> --json --omit-locations > shareable.json
+copyofa compare <input-a> <input-b> --json > comparison.json
+copyofa compare <input-a> <input-b> --json --omit-locations > shareable.json
 ```
 
-Each track is a file under the `data/` directory of an Evidence Set. Compare checks
-both against their Integrity Baselines and decodes them as inspect does. It then
+Each input is a file under the `data/` directory of an Evidence Set. To compare a
+track of a disc you acquired, give the acquired set and the track number with
+`--track-a` or `--track-b`:
+
+```bash
+copyofa compare "/Volumes/Archive/Add Violence CD" \
+  "/Volumes/Archive/Add Violence/data/01-01 Less Than.flac" --track-a 1
+```
+
+Compare checks both against their Integrity Baselines and decodes them as inspect
+does. It then
 resamples the one at the higher sample rate to the lower rate, aligns the tracks, and
 reports the offset of track B from track A, their overlap, and how B relates to A:
 correlation, gain and the residual level left after that gain. When both are
@@ -145,7 +154,7 @@ conclusion such as "same master". `--json` prints a comparison Report, which
 disks and often your user account, and the Report says that it did.
 
 Compare exits 0 when both tracks were measured, 1 when a track could not be inspected
-or decoded or is not a supported format, 2 when a track is not inside an Evidence Set
+or decoded or is not a supported format, 2 when an input is not inside an Evidence Set
 or the arguments are invalid, and 130 when canceled. It writes nothing into either
 set.
 

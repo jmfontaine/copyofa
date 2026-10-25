@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 import soundfile
-from conftest import RATE, signal, snapshot, write_audio
+from conftest import RATE, signal, snapshot, synthetic_disc, write_audio
 
 import copyofa
 from copyofa import comparator, validator, viewer
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
-    from conftest import Run
+    from conftest import Run, StandIn
 
     MakeSet = Callable[[Callable[[Path], None]], Path]
     Tracks = tuple[Path, Path]
@@ -256,18 +256,47 @@ CASES: dict[str, Callable[[MakeSet], Tracks]] = {
     "not_inspected": not_inspected,
     "locations_omitted": locations_omitted,
 }
+
+
+def acquired_track(
+    make_set: MakeSet, make_acquired_set: Callable[..., Path], redumper: StandIn
+) -> Tracks:
+    """Track 2 of an acquired set, and a FLAC file of the same audio."""
+    acquired = make_acquired_set()
+    data = synthetic_disc(redumper.config).tracks[1]
+    samples = np.frombuffer(data, dtype="<i2").reshape(-1, 2).astype(np.int32)
+    album = make_set(
+        lambda source: write_audio(source / "02.flac", samples, 16, "FLAC", 44100)
+    )
+    return acquired, album / "data/Album/02.flac"
+
+
+# Cases whose input A is a track of an acquired set.
+TRACK_CASES: dict[str, Callable[[MakeSet, Callable[..., Path], StandIn], Tracks]] = {
+    "acquired_track": acquired_track
+}
 # The options of `compare` that a case adds to its command.
-OPTIONS = {"locations_omitted": ("--omit-locations",)}
+OPTIONS = {
+    "locations_omitted": ("--omit-locations",),
+    "acquired_track": ("--track-a", "2"),
+}
 
 
 @pytest.fixture
 def report_of(
-    run: Run, make_set: MakeSet, tmp_path: Path
+    run: Run, make_set: MakeSet, tmp_path: Path, request: pytest.FixtureRequest
 ) -> Callable[[str], tuple[Path, dict[str, Any]]]:
     """Save the comparison Report of a case, and return its path and document."""
 
     def _report_of(name: str) -> tuple[Path, dict[str, Any]]:
-        a, b = CASES[name](make_set)
+        if name in TRACK_CASES:
+            a, b = TRACK_CASES[name](
+                make_set,
+                request.getfixturevalue("make_acquired_set"),
+                request.getfixturevalue("redumper"),
+            )
+        else:
+            a, b = CASES[name](make_set)
         outcome = run("compare", a, b, "--json", *OPTIONS.get(name, ()))
         assert outcome.code in (0, 1), outcome.err
         path = tmp_path / f"{name}.json"
@@ -277,7 +306,7 @@ def report_of(
     return _report_of
 
 
-@pytest.fixture(params=CASES)
+@pytest.fixture(params=[*CASES, *TRACK_CASES])
 def case(
     request: pytest.FixtureRequest,
     report_of: Callable[[str], tuple[Path, dict[str, Any]]],
@@ -422,6 +451,8 @@ def test_view_names_both_tracks_in_the_title(
 
     for entry in report["inputs"].values():
         assert entry["path"] in page.title
+        if "track" in entry:
+            assert f"track {entry['track']['number']} of {entry['path']}" in page.title
 
 
 def test_view_shows_the_measurements(
@@ -535,7 +566,7 @@ def test_view_shows_each_location_that_the_report_leaves_out_as_left_out(
     assert page.row("Report", "Left out of the Report (JSON Pointers)") == [
         "/inputs/a/evidence_set\n/inputs/b/evidence_set"
     ]
-    assert page.row("Report", "Format version") == ["2"]
+    assert page.row("Report", "Format version") == ["3"]
     assert page.row("Inputs", "Path in the Evidence Set") == [
         entry["path"] for entry in report["inputs"].values()
     ]
@@ -896,3 +927,41 @@ def test_view_changes_nothing(
 
     assert outcome.code == (0 if valid else 1)
     assert snapshot(tmp_path) == before
+
+
+def test_view_shows_the_track_of_each_input(
+    run: Run, report_of: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = report_of("acquired_track")
+    track = report["inputs"]["a"]["track"]
+
+    page = view(run, path)
+
+    assert page.row("Inputs", "Track of the acquired disc") == [
+        str(track["number"]),
+        "absent",
+    ]
+    assert page.row("Inputs", "First frame of the track in the image") == [
+        str(track["first_frame"]),
+        "absent",
+    ]
+    assert page.row("Inputs", "Frames of the track in the image") == [
+        str(track["frame_count"]),
+        "absent",
+    ]
+    assert page.row("Inputs", "Path in the Evidence Set")[0] == "data/disc.scram.flac"
+
+
+def test_view_shows_a_comparison_report_of_format_version_2(
+    run: Run, report_of: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = report_of("measured")
+    older = edit(path, lambda document: document.update(format_version=2))
+    assert validator.validate(str(older)).result["outcome"] == "valid"
+
+    page = view(run, older)
+
+    assert page.row("Report", "Format version") == ["2"]
+    assert page.row("Inputs", "Path in the Evidence Set") == [
+        entry["path"] for entry in report["inputs"].values()
+    ]
