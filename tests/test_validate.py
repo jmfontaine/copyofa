@@ -333,8 +333,6 @@ MALFORMED: dict[str, bytes] = {
     "a number with too many digits": b'{"x": ' + b"9" * 6000 + b"}",
     "a repeated member name": b'{"report_kind": "a", "report_kind": "a"}',
     "a repeated member name in a nested object": b'{"x": [{"a": 1, "a": 1}]}',
-    "arrays nested 100,000 deep": b"[" * 100_000 + b"]" * 100_000,
-    "objects nested 100,000 deep": b'{"x":' * 100_000 + b"1" + b"}" * 100_000,
     "an empty file": b"",
 }
 
@@ -356,6 +354,32 @@ def test_validate_finds_a_file_that_is_not_strict_json_invalid(
     [problem] = result["problems"]
     assert problem["location"] == ""
     assert problem["message"].endswith(".")
+
+
+# How deep the parser nests depends on the platform: Python 3.14 on Linux parses
+# these, then finds no report_kind; elsewhere the parser gives up. Invalid either way.
+NESTED: dict[str, bytes] = {
+    "arrays": b"[" * 100_000 + b"]" * 100_000,
+    "objects": b'{"x":' * 100_000 + b"1" + b"}" * 100_000,
+}
+
+
+@pytest.mark.parametrize("name", NESTED)
+def test_validate_finds_a_document_nested_100_000_deep_invalid(
+    run: Run, tmp_path: Path, name: str
+) -> None:
+    path = tmp_path / "nested.json"
+    path.write_bytes(NESTED[name])
+
+    outcome, result = validate(run, path)
+
+    assert outcome.code == 1
+    assert outcome.err == ""
+    assert result["outcome"] == "invalid"
+    assert result["problems"]
+    for problem in result["problems"]:
+        assert problem["location"] == ""
+        assert problem["message"].endswith(".")
 
 
 def test_validate_describes_a_file_that_is_not_strict_json_in_words(

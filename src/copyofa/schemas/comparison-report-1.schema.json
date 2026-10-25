@@ -256,7 +256,7 @@
           "if": {
             "not": {
               "required": ["absent"],
-              "properties": { "absent": { "required": ["offset"] } }
+              "properties": { "absent": { "type": "object", "required": ["offset"] } }
             }
           },
           "then": { "required": ["offset"] }
@@ -265,7 +265,7 @@
           "if": {
             "not": {
               "required": ["absent"],
-              "properties": { "absent": { "required": ["overlap"] } }
+              "properties": { "absent": { "type": "object", "required": ["overlap"] } }
             }
           },
           "then": { "required": ["overlap"] }
@@ -274,7 +274,7 @@
           "if": {
             "not": {
               "required": ["absent"],
-              "properties": { "absent": { "required": ["channels"] } }
+              "properties": { "absent": { "type": "object", "required": ["channels"] } }
             }
           },
           "then": { "required": ["channels"] }
@@ -318,7 +318,9 @@
           "if": {
             "not": {
               "required": ["absent"],
-              "properties": { "absent": { "required": ["correlation"] } }
+              "properties": {
+                "absent": { "type": "object", "required": ["correlation"] }
+              }
             }
           },
           "then": { "required": ["correlation"] }
@@ -327,7 +329,9 @@
           "if": {
             "not": {
               "required": ["absent"],
-              "properties": { "absent": { "required": ["gain_db"] } }
+              "properties": {
+                "absent": { "type": "object", "required": ["gain_db"] }
+              }
             }
           },
           "then": { "required": ["gain_db"] }
@@ -336,7 +340,9 @@
           "if": {
             "not": {
               "required": ["absent"],
-              "properties": { "absent": { "required": ["residual_db"] } }
+              "properties": {
+                "absent": { "type": "object", "required": ["residual_db"] }
+              }
             }
           },
           "then": { "required": ["residual_db"] }
@@ -345,7 +351,9 @@
           "if": {
             "not": {
               "required": ["absent"],
-              "properties": { "absent": { "required": ["residual_windows"] } }
+              "properties": {
+                "absent": { "type": "object", "required": ["residual_windows"] }
+              }
             }
           },
           "then": { "required": ["residual_windows"] }
