@@ -1,0 +1,50 @@
+# Release notes from Conventional Commits, for `just changelog-preview` and the
+# GitHub release the publish workflow creates. Pull requests are squash-merged, so
+# each commit on main is a pull request title: `<type>: <description> (#123)`.
+
+[changelog]
+header = ""
+body = """
+{% set breaking = commits | filter(attribute="breaking", value=true) %}\
+{% if breaking %}\
+    ## Breaking Changes
+    {% for commit in breaking %}
+        - {% if commit.footers | filter(attribute="breaking", value=true) | length > 0 %}\
+            {{ commit.breaking_description | trim | replace(from="\n", to=" ") | upper_first }}\
+            {% else %}{{ commit.message | upper_first }}{% endif %} - \
+            ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/jmfontaine/copyofa/commit/{{ commit.id }}))
+    {%- endfor %}
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+
+    ## {{ group | striptags | trim | upper_first }}
+    {% for commit in commits %}
+        - {% if commit.breaking %}**breaking:** {% endif %}\
+            {{ commit.message | upper_first }} - \
+            ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/jmfontaine/copyofa/commit/{{ commit.id }}))
+    {%- endfor %}
+{% endfor %}
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+# The HTML comments only order the groups; `striptags` removes them from the headings.
+commit_parsers = [
+  # The pull requests `just release-prepare` and `just release-next` open aren't news.
+  # The scoped and "bump version to" forms match release commits made before this
+  # template, so regenerated notes for older tags stay clean too.
+  { message = "^chore(\\(release\\))?: (release v[0-9]|bump version to |start [0-9][^ ]* development)|^chore\\(release\\): v[0-9]", skip = true },
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Bug Fixes" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^refactor", group = "<!-- 3 -->Refactoring" },
+  { message = "^docs", group = "<!-- 4 -->Documentation" },
+  { message = "^test", group = "<!-- 5 -->Testing" },
+  { message = "^build", group = "<!-- 6 -->Build" },
+  { message = "^(chore|ci)", group = "<!-- 7 -->Miscellaneous Tasks" },
+]
+filter_commits = false
+tag_pattern = "v[0-9].*"

@@ -4,7 +4,7 @@ requires = [ "uv-build>=0.13,<0.14" ]
 
 [project]
 name = "copyofa"
-version = "0.1.0"
+version = "0.1.0.dev0"
 description = "Preservation and forensic toolkit for music collectors"
 readme = "README.md"
 license = "Apache-2.0"
@@ -12,28 +12,36 @@ license-files = [ "LICENSE.txt" ]
 authors = [ { name = "Jean-Marc Fontaine", email = "jm@jmfontaine.net" } ]
 requires-python = ">=3.11"
 classifiers = [
-  # PyPI rejects any upload carrying this classifier.
-  "Private :: Do Not Upload",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: 3.15",
+  "Typing :: Typed",
 ]
 dependencies = []
+urls.Homepage = "https://github.com/jmfontaine/copyofa"
+urls.Issues = "https://github.com/jmfontaine/copyofa/issues"
+urls.Repository = "https://github.com/jmfontaine/copyofa"
 scripts.copyofa = "copyofa.cli:main"
 
 [dependency-groups]
 dev = [
   "deptry>=0.25",
+  "git-cliff>=2.14",
   "pre-commit>=4.6",
   "pyproject-fmt>=2.30",
+  "pyright>=1.1.414",
   "ruff>=0.17",
   "rumdl>=0.3",
   "ty>=0.0.86",
   { include-group = "test" },
 ]
+# CI installs this group on its own next to the built wheel, to run the suite
+# against the installed package; keep it to what the tests import.
 test = [
   "pytest>=9.1",
   "pytest-cov>=7.1",

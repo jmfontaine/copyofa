@@ -14,10 +14,18 @@ The previous implementation, which archived optical discs bit-exactly with redum
 retired. Its last code change is commit `0d04a38` in the Git history. It does not define
 the new architecture or release sequence.
 
+## Installation
+
+CopyOfA runs on macOS and Linux with Python 3.11 or later. Install it from PyPI with
+[uv](https://docs.astral.sh/uv/):
+
+```bash
+uv tool install copyofa
+```
+
 ## Usage
 
-CopyOfA is not published; from a checkout, run it as `uv run copyofa`. Preserve files
-you already own, such as a download purchase, as a new Evidence Set:
+Preserve files you already own, such as a download purchase, as a new Evidence Set:
 
 ```bash
 copyofa import ~/Downloads/Album --to /Volumes/Archive/Album \

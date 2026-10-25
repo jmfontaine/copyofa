@@ -1,0 +1,96 @@
+name: Publish
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  # Releases come from main. `just release` tags the merged release commit, but
+  # a tag pushed by hand could point anywhere.
+  tag-on-main:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the tagged commit is on main
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$TAG points to $GITHUB_SHA, which is not on main"
+            exit 1
+          fi
+
+  # Every CI check, on the tagged commit. Its build job uploads the
+  # distributions that its wheel and sdist jobs install and test.
+  ci:
+    needs: [tag-on-main]
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  publish:
+    needs: [ci]
+    runs-on: ubuntu-26.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/copyofa/
+    permissions:
+      # PyPI trusted publishing: no API token is stored anywhere.
+      id-token: write
+    steps:
+      # The artifacts CI tested, never rebuilt, so PyPI gets exactly those.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      # A PyPI upload cannot be taken back, so a mismatch stops here.
+      - name: Check the tag matches the package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [ ! -f "dist/copyofa-${TAG#v}-py3-none-any.whl" ]; then
+            echo "::error::tag $TAG does not match the version built: $(ls dist)"
+            exit 1
+          fi
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
+        with:
+          # Files already uploaded are skipped, so a full rerun after a later
+          # failure gets past this job instead of failing on them.
+          skip-existing: true
+
+  github-release:
+    needs: [publish]
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      # git-cliff reads the history fetched here, and `gh release create`
+      # authenticates through GH_TOKEN, so no step needs git credentials.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
+      # The git-cliff pinned in uv.lock, the one `just changelog-preview` runs.
+      # --current takes the tag on HEAD, so rerunning an older release's run after
+      # a newer tag exists still gives that release its own notes.
+      - name: Generate release notes
+        run: uv run --locked --only-group dev git-cliff --current --output "$RUNNER_TEMP/notes.md"
+      # A rerun finds the release a previous attempt created, and leaves it.
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
