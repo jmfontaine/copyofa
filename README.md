@@ -10,8 +10,10 @@ The project is restarting from a clean slate. Its first release, v0.1.0, preserv
 selected file delivery as an Evidence Set and verifies it later. The second, v0.2.0,
 describes the audio in a set: each track's format and properties, an Audio Digest for
 lossless audio, and a few measurements. The third, v0.3.0, measures how two preserved
-tracks relate, across formats and sample rates. The roadmap in the Product Map lists
-what comes next.
+tracks relate, across formats and sample rates. The fourth, v0.4.0, shares a
+comparison: a Report can leave out where the Evidence Sets are stored, `view` turns it
+into a self-contained HTML page, and `validate` checks any Report against its
+published JSON Schema. The roadmap in the Product Map lists what comes next.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
 retired. Its last code change is commit `0d04a38` in the Git history. It does not define
