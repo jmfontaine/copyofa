@@ -82,12 +82,17 @@ the supported audio in a delivery they preserved with v0.1.0.
 
 ### Interpretation
 
-- **Supported audio.** A file whose content libsndfile identifies as FLAC at 8, 16 or
-  24 bits with a known length, WAV with integer PCM samples (libsndfile `WAV` or
-  `WAVEX`), or MP3 Layer III is decoded completely. A supported file that stops
-  decoding early, such as a truncated FLAC file, is reported failed.
+- **FLAC first.** For a file whose content starts as FLAC (after any ID3v2 prefix),
+  CopyOfA reads STREAMINFO before decoding. A depth other than 8, 16 or 24 bits, or no
+  length, makes the file not interpreted without libsndfile opening it; a STREAMINFO
+  block that cannot be read makes it failed.
+- **Supported audio.** A FLAC file that passes that check, and a file whose content
+  libsndfile identifies as WAV with integer PCM samples (libsndfile `WAV` or `WAVEX`)
+  or as MP3 Layer III, is decoded completely. A supported file that stops decoding
+  early, such as a truncated FLAC file, is reported failed.
 - **Expected but unrecognized.** A file named `*.flac`, `*.wav` or `*.mp3`
-  (case-insensitive) whose content libsndfile cannot open is reported failed.
+  (case-insensitive) whose content neither the FLAC check nor libsndfile recognizes is
+  reported failed.
 - **Everything else** is reported not interpreted, whatever its name: content in a
   format, encoding or depth outside the supported list, such as AIFF, float WAV, MP3
   Layer II or 20-bit FLAC, with a reason that names what was recognized, and content
