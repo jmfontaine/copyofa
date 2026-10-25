@@ -127,10 +127,10 @@ the supported audio in a delivery they preserved with v0.1.0.
 
 Inspect follows the command conventions in AGENTS.md:
 
-- The human result gives one line per interpreted file (path, format, sample rate,
-  bits per sample, channels, duration), then one line per other file with its path,
-  outcome and reason, as `verify` names each item that is not matching, then a count
-  per outcome. `--json` prints the inspection Report instead.
+- The human result gives a count per outcome, as `verify` does, then one line per
+  interpreted file (path, format, sample rate, bits per sample, channels, duration),
+  then one line per other file with its path, outcome and reason, as `verify` names
+  each item that is not matching. `--json` prints the inspection Report instead.
 - Progress, one line per file, goes to stderr.
 - Exit 0 when the baseline is usable, every listed file was decoded or not interpreted,
   and no FLAC MD5 signature differs. Exit 1 otherwise, still printing the result.
