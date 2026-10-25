@@ -159,7 +159,7 @@ ffmpeg -i 01.flac -f s24le - | shasum -a 256
       "encoding": "mpeg_layer_iii",
       "sample_rate": 44100,
       "channels": 2,
-      "frames": 10782291,
+      "frames": 10696320,
       "limitations": [
         "MP3 is lossy: its decoded samples, and so its frame count, depend on …"
       ]
