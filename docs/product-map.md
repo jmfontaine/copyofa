@@ -54,7 +54,7 @@ for identified tracks, ranges, or ordered Audio Sequences. Help collectors inves
 silence, unexpected content, and possible anomalies while stating what was examined and
 what remains unknown.
 
-Keep File Identity separate from Audio Identity. Relate each measurement to its inputs,
+Keep File Digest separate from Audio Digest. Relate each measurement to its inputs,
 interpretation, method, and scope so it can be understood and, where practical,
 reproduced. Measurements provide evidence for interpretations; they do not establish
 source attribution or mastering history by themselves.
@@ -155,7 +155,7 @@ outside CopyOfA.
 
 [NIN Deviations](https://nindeviations.com/about) is a concrete example: CopyOfA
 supplies the audio evidence for recording tracking and comparison; an external layer
-maps that evidence into the catalog and website. An Audio Identity is not the identifier
+maps that evidence into the catalog and website. An Audio Digest is not the identifier
 of a NIN Deviations Recording. Matching audio does not merge distinct source
 occurrences, and differing audio does not automatically establish different catalog
 Recordings.
@@ -190,7 +190,7 @@ service architecture. Use capitalized concept names when referring to these mean
 | Preserved Evidence | Original imported files or declared acquisition output, with supporting records, retained separately from later transformations and findings. |
 | Evidence Set | An explicitly selected unit of Preserved Evidence and provenance, with an Integrity Inventory and Integrity Baseline, that is accepted, verified, and moved independently. |
 | Audio Sequence | Ordered decoded sample frames with declared sample rate, channel interpretation, and extent, including selected ranges and assembly. |
-| File Identity and Audio Identity | Respectively identify exact stored bytes and an explicitly interpreted Audio Sequence. Neither establishes source attribution or acquisition accuracy. |
+| File Digest and Audio Digest | Respectively recognize exact stored bytes and an explicitly interpreted Audio Sequence: equal digests mean identical content. Neither says what the audio is, and neither establishes source attribution or acquisition accuracy. |
 | Report | The authoritative structured result, including input references, method, findings, and limitations, from which human-readable views are generated. |
 | Comparison Report | A Report identifying the compared inputs and their corresponding Evidence Sets when preserved, and recording the scope, method, relationships or differences, and limitations. It follows the shared Report rules. |
 | Integrity Inventory and Integrity Baseline | Respectively record what belongs to an Evidence Set and retain the expected values and supporting records used for later integrity checks. |
@@ -215,7 +215,7 @@ data.
 
 macOS is the primary support target. Other platforms should remain feasible where
 contributors can develop and test them. AI may assist operation and interpretation, but
-acquisition, integrity, identity, analysis, comparison, and Report handling work
+acquisition, integrity, digests, analysis, comparison, and Report handling work
 independently of AI. AI interpretations remain attributed and grounded in recorded
 evidence.
 
@@ -223,7 +223,7 @@ evidence.
 
 Collection ownership, cataloging, playback, tagging, audio editing, mastering, and
 analog digitization remain external. Optional catalog references describe sources
-without defining Audio Identity or requiring a particular service. Selected companion
+without affecting Audio Digests or requiring a particular service. Selected companion
 files can be preserved without turning CopyOfA into a packaging catalog.
 
 CopyOfA manages its evidence, integrity records, and supported recovery information.
@@ -243,14 +243,14 @@ the collector already owns.
 
 - **[v0.2.0](https://github.com/jmfontaine/copyofa/milestone/2): Describe the Audio in
   an Evidence Set** — Understand Audio. S2. Decodes FLAC, WAV and MP3 in a preserved
-  set and reports their properties, an Audio Identity for lossless audio, and exact
+  set and reports their properties, an Audio Digest for lossless audio, and exact
   measurements in an inspection Report. Specified in the
   [brief](briefs/0002-describe-audio-in-evidence-set.md).
 
 ### Next
 
 - **Compare Selected Tracks and Share the Finding** — Compare and Discover
-  Relationships; Share and Evaluate Findings. S3 and S5. Builds on Audio Identity and
+  Relationships; Share and Evaluate Findings. S3 and S5. Builds on Audio Digest and
   brings the portable human-readable view and Report validation with the first
   Comparison Report.
 
