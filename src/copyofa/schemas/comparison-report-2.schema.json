@@ -64,20 +64,27 @@
     {
       "if": {
         "properties": {
-          "omitted": { "contains": { "const": "/inputs/a/evidence_set" } }
+          "omitted": {
+            "type": "array",
+            "contains": { "const": "/inputs/a/evidence_set" }
+          }
         },
         "required": ["omitted"]
       },
       "then": {
         "properties": {
           "inputs": {
-            "properties": { "a": { "properties": { "evidence_set": false } } }
+            "type": "object",
+            "properties": {
+              "a": { "type": "object", "properties": { "evidence_set": false } }
+            }
           }
         }
       },
       "else": {
         "properties": {
           "inputs": {
+            "type": "object",
             "properties": {
               "a": { "type": "object", "required": ["evidence_set"] }
             }
@@ -88,20 +95,27 @@
     {
       "if": {
         "properties": {
-          "omitted": { "contains": { "const": "/inputs/b/evidence_set" } }
+          "omitted": {
+            "type": "array",
+            "contains": { "const": "/inputs/b/evidence_set" }
+          }
         },
         "required": ["omitted"]
       },
       "then": {
         "properties": {
           "inputs": {
-            "properties": { "b": { "properties": { "evidence_set": false } } }
+            "type": "object",
+            "properties": {
+              "b": { "type": "object", "properties": { "evidence_set": false } }
+            }
           }
         }
       },
       "else": {
         "properties": {
           "inputs": {
+            "type": "object",
             "properties": {
               "b": { "type": "object", "required": ["evidence_set"] }
             }
