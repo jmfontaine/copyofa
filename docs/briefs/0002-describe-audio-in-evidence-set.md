@@ -249,3 +249,39 @@ Digest, and the inspection Report:
 2. The FLAC MD5 signature check.
 3. Digital silence.
 4. Progress output on stderr.
+
+## Delivery notes
+
+Recorded at the v0.2.0 release review.
+
+- **Delivered within the appetite**, with no scope cut: `copyofa inspect` in
+  [#64](https://github.com/jmfontaine/copyofa/pull/64), and the measurements and FLAC
+  MD5 signature check in [#65](https://github.com/jmfontaine/copyofa/pull/65). AC1 and
+  AC10 were also checked by hand on the maintainer's albums: 14 FLAC tracks at 24-bit,
+  96 kHz, with every MD5 signature matching, and 24 MP3 tracks, all interpreted with
+  exit 0. The Audio Digest of a real track equals the hash of both `flac -d` and
+  `ffmpeg` output.
+- **AC1 partly skipped on the oldest dependencies:** soundfile 0.12 cannot choose a
+  FLAC compression level, so CI's lowest-direct jobs skip the re-encoded-FLAC case; the
+  other jobs run it.
+- **Scope added:**
+  - `--json` output is UTF-8 rather than ASCII for every command
+    ([#67](https://github.com/jmfontaine/copyofa/issues/67), in
+    [#68](https://github.com/jmfontaine/copyofa/pull/68)), decided by the maintainer
+    during delivery. File name bytes that are not valid UTF-8 stay escaped.
+  - Import refuses a `--note` or `--ref` that is not valid UTF-8
+    ([#69](https://github.com/jmfontaine/copyofa/issues/69)), a crash found in review
+    and present since v0.1.0.
+- **Clarified during delivery:** the human result prints the counts first, as `verify`
+  does. A FLAC file's frames are capped at the length STREAMINFO declares, and an MP3
+  that was cut short cannot be told apart from a shorter recording. Both are in
+  [Inspection Report format](../formats/inspection-report.md).
+- **Learning:** soundfile's convenient interfaces do not decode audio faithfully enough
+  for evidence. Through a Python file object, libsndfile reads via cffi callbacks that
+  swallow Ctrl-C and I/O errors. `read()` and `blocks()` stop at the header's frame
+  count, and `blocks()` repeats stale data after a short read. Both seek after every
+  block, which changes mpg123's MP3 samples. Inspect therefore hands libsndfile a
+  duplicate descriptor and calls its sequential read functions through soundfile's
+  private API, marked `KLUDGE:` in `src/copyofa/inspector.py`. libsndfile 1.2.0 also
+  closes a descriptor it was told to leave open. Briefs for decoding work should name
+  truncated and header-inconsistent files among the cases their criteria cover.
