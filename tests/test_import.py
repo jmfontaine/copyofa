@@ -571,6 +571,7 @@ def test_import_prints_json_result(run: Run, album: Path, archive: Path) -> None
     [
         ("--note", "the --note text"),
         ("--ref", "a --ref value"),
+        ("--exclude", "an --exclude pattern"),
     ],
 )
 def test_import_refuses_provenance_that_is_not_valid_utf8(

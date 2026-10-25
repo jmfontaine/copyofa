@@ -95,6 +95,8 @@ def import_evidence(
         _require_utf8(note, "the --note text", "the Import Record requires")
     for reference in references or ():
         _require_utf8(reference, "a --ref value", "the Import Record requires")
+    for pattern in excludes:
+        _require_utf8(pattern, "an --exclude pattern", "the Import Record requires")
     resolved_sources = [_resolve_source(given) for given in sources]
     _refuse_overlapping_sources(resolved_sources)
     target, staging = _check_destination(destination, resolved_sources)
