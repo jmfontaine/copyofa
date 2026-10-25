@@ -529,7 +529,9 @@ def test_verify_follows_dot_dot_as_the_system_resolves_it(
     assert elsewhere.out == ""
 
 
-def test_verify_json_escapes_non_ascii_characters(run: Run, tmp_path: Path) -> None:
+def test_verify_json_prints_non_ascii_characters_as_utf8(
+    run: Run, tmp_path: Path
+) -> None:
     source = tmp_path / "Café"
     source.mkdir()
     (source / "Été.flac").write_bytes(b"summer")
@@ -538,5 +540,5 @@ def test_verify_json_escapes_non_ascii_characters(run: Run, tmp_path: Path) -> N
     outcome, report = verify(run, tmp_path / "Set")
 
     assert outcome.code == 0
-    assert outcome.out.isascii()
+    assert '"path": "data/Café/Été.flac"' in outcome.out
     assert outcomes(report) == {"data/Café/Été.flac": "matching"}

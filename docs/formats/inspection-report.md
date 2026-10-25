@@ -2,8 +2,9 @@
 
 `copyofa inspect <evidence-set> --json` prints an inspection Report: a JSON document
 describing the audio in an [Evidence Set](evidence-set.md). Like every `--json` output
-of CopyOfA, it is ASCII: other characters, such as the `é` of a file name, are escaped
-as `\u00e9`. Save it with a shell redirect:
+of CopyOfA, it is UTF-8, whatever the locale; a path that is not valid UTF-8 keeps
+each invalid byte as a `\udcXX` escape (see
+[Import result](evidence-set.md#import-result)). Save it with a shell redirect:
 
 ```bash
 copyofa inspect /Volumes/Archive/Album --json > album-inspection.json
