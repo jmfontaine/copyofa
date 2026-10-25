@@ -142,7 +142,7 @@ Every command follows the conventions `import` and `verify` set in v0.1.0, as
 `src/copyofa/cli.py` implements them:
 
 - A short human-readable result goes to stdout; `--json` prints one JSON document
-  instead, as UTF-8 whatever the locale, with lone surrogates (file name bytes that
+  instead, as UTF-8 whatever the locale, with lone surrogates (path bytes that
   are not valid UTF-8) escaped as `\uXXXX` so the output stays valid UTF-8. Progress,
   warnings and errors go to stderr
 - Exit 0 on success, 1 when the command refused, failed or found a problem (a result

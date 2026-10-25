@@ -3,9 +3,8 @@
 `copyofa verify <evidence-set> --json` prints a verification Report: a JSON document
 recording what one check of an [Evidence Set](evidence-set.md) against its Integrity
 Baseline found. Like every `--json` output of CopyOfA, it is UTF-8, whatever the
-locale; a file name that is not valid UTF-8 keeps each invalid byte as a `\udcXX`
-escape (see [Import result](evidence-set.md#import-result)). Save it with a shell
-redirect:
+locale; a path that is not valid UTF-8 keeps each invalid byte as a `\udcXX` escape
+(see [Import result](evidence-set.md#import-result)). Save it with a shell redirect:
 
 ```bash
 copyofa verify /Volumes/Archive/Album --json > album-verification.json

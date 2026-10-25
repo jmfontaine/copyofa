@@ -93,9 +93,11 @@ case-sensitively against the item's name and against its path under `data/`, suc
 object with `evidence_set`, the absolute path of the new set; `import_record`, the
 Import Record as written; and `counts`, with the numbers of preserved `files`,
 payload `bytes`, and `exclusions`. It is not a Report. Like every `--json` output of
-CopyOfA, it is UTF-8, whatever the locale. A file name that is not valid UTF-8, which
-a Linux file system can hold, keeps each invalid byte as a `\udcXX` escape, so the
-output stays valid UTF-8 and Python's `json` turns it back into the original name.
+CopyOfA, it is UTF-8, whatever the locale. Import refuses file names that are not
+valid UTF-8, but a path given on the command line, such as the Evidence Set's own path
+in a Report, may not be: each byte that is not valid UTF-8 then appears as a `\udcXX`
+escape, so the output stays valid UTF-8 and Python's `json` turns it back into the
+original path.
 
 ## Operating system metadata files
 
