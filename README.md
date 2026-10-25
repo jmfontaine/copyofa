@@ -63,6 +63,26 @@ nothing into the set. `--json` prints a verification Report, which
 Verify exits 0 when everything is intact, 1 when it found anything else, 2 when the
 target is not an Evidence Set or the arguments are invalid, and 130 when canceled.
 
+Describe the audio the set holds:
+
+```bash
+copyofa inspect /Volumes/Archive/Album
+copyofa inspect /Volumes/Archive/Album --json > album-inspection.json
+```
+
+Inspect first checks each preserved file against the Integrity Baseline, then decodes
+FLAC (8, 16 or 24 bits), integer PCM WAV and MP3, and reports each track's format,
+sample rate, bit depth, channels and duration. Other files are reported as not
+interpreted, with the reason. `--json` prints an inspection Report, which
+[Inspection Report format][inspection-report] describes. For FLAC and WAV it gives an
+Audio Digest, which recognizes the same audio after retagging or recompression and
+can be reproduced with `flac` or `ffmpeg`. MP3 has none, because its decoded samples
+depend on the decoder.
+
+Inspect exits 0 when every file was decoded or is not a supported format, 1 when a
+file could not be inspected or decoded, 2 when the target is not an Evidence Set or
+the arguments are invalid, and 130 when canceled. It writes nothing into the set.
+
 ## Documents
 
 - [Manifesto][manifesto]: vision, target users, principles and non-goals.
@@ -101,6 +121,7 @@ CopyOfA is licensed under the [Apache License 2.0][license].
 [decisions]: https://github.com/jmfontaine/copyofa/tree/main/docs/decisions
 [evidence-set]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/evidence-set.md
 [formats]: https://github.com/jmfontaine/copyofa/tree/main/docs/formats
+[inspection-report]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/inspection-report.md
 [license]: https://github.com/jmfontaine/copyofa/blob/main/LICENSE.txt
 [manifesto]: https://github.com/jmfontaine/copyofa/blob/main/docs/manifesto.md
 [product-map]: https://github.com/jmfontaine/copyofa/blob/main/docs/product-map.md
