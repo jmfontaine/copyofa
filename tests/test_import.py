@@ -567,6 +567,31 @@ def test_import_prints_json_result(run: Run, album: Path, archive: Path) -> None
 
 
 @pytest.mark.parametrize(
+    ("option", "message"),
+    [
+        ("--note", "the --note text"),
+        ("--ref", "a --ref value"),
+        ("--exclude", "an --exclude pattern"),
+    ],
+)
+def test_import_refuses_provenance_that_is_not_valid_utf8(
+    run: Run, album: Path, archive: Path, option: str, message: str
+) -> None:
+    # Python's stand-in for the byte 0xE9 typed in a Latin-1 terminal.
+    destination = archive / "Album"
+
+    outcome = run("import", album, "--to", destination, option, "caf\udce9")
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert outcome.err == (
+        f"copyofa: Refused: {message} is not valid UTF-8, which the Import Record "
+        "requires.\n"
+    )
+    assert list(archive.iterdir()) == []
+
+
+@pytest.mark.parametrize(
     "args",
     [
         ["import", "Album"],
