@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import json
+import unicodedata
 from typing import TYPE_CHECKING, Any
 
 import copyofa
@@ -304,7 +305,8 @@ def _peak(entry: dict[str, Any]) -> str:
 def _duration(entry: dict[str, Any]) -> str:
     if "frames" not in entry or "sample_rate" not in entry:
         return _absent(None)
-    return format_duration(entry["frames"], entry["sample_rate"])
+    # JSON Schema accepts 44100.0 as an integer; a hand-edited Report may hold one.
+    return format_duration(int(entry["frames"]), int(entry["sample_rate"]))
 
 
 def format_duration(frames: int, sample_rate: int) -> str:
@@ -339,9 +341,18 @@ def _table(header: Sequence[str] | None, rows: Sequence[tuple[str, ...]]) -> str
     return "\n".join(lines)
 
 
+# Control, format (such as bidirectional overrides), surrogate, private-use and
+# unassigned characters, and line and paragraph separators. Spaces such as U+00A0 are
+# shown as they are: harmless in HTML, and common in titles.
+_ESCAPED_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"})
+
+
 def _text(text: str) -> str:
-    """Escape text for HTML, showing each character that is not printable as its
-    escape: a lone surrogate, a path byte that is not valid UTF-8, as `\\udc80`.
+    """Escape text for HTML, showing each character that could hide or reorder text
+    as its escape: a lone surrogate, a path byte that is not valid UTF-8, as `\\udc80`.
     """
-    printable = "".join(c if c.isprintable() else repr(c)[1:-1] for c in text)
-    return html.escape(printable, quote=True)
+    shown = "".join(
+        repr(c)[1:-1] if unicodedata.category(c) in _ESCAPED_CATEGORIES else c
+        for c in text
+    )
+    return html.escape(shown, quote=True)

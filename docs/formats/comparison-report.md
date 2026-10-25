@@ -308,9 +308,10 @@ threshold, and does not color a value as good or bad.
 
 The page is self-contained and inert. It is one HTML5 document in UTF-8 with its
 styles inline. It has no script, no link and no external resource, and a Content
-Security Policy that forbids both. Every text of the Report is escaped; a character
-that is not printable, such as a lone surrogate for a path byte that is not valid
-UTF-8, appears as its escape, such as `\udc80`.
+Security Policy that forbids both. Every text of the Report is escaped. A character
+that could hide or reorder text, such as a control character, a bidirectional
+override, or a lone surrogate for a path byte that is not valid UTF-8, appears as its
+escape, such as `\udc80`; spaces such as U+00A0 appear as they are.
 
 View exits 0 when it printed the page, and 1 when the file cannot be read or the
 Report is invalid, unsupported or not a comparison Report, with the reason on stderr
