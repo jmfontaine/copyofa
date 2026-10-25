@@ -178,7 +178,7 @@ ffmpeg -i 01.flac -f s24le - | shasum -a 256
       "sample_rate": 44100,
       "channels": 2,
       "frames": 10782291,
-      "peak": [1.2177222967147827, 1.1910574436187744],
+      "peak": [1.2177221775054932, 1.1910574436187744],
       "leading_silence_frames": 1,
       "trailing_silence_frames": 0,
       "limitations": [
