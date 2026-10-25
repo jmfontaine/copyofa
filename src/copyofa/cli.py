@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter
 from typing import TYPE_CHECKING, Any
@@ -145,15 +146,28 @@ def _import(args: argparse.Namespace) -> int:
     for warning in result.warnings:
         print(f"copyofa: warning: {warning}", file=sys.stderr)
     if args.json:
-        print(_json(result.to_json()))
+        _print_json(result.to_json())
     else:
         _print_import(result)
     return EXIT_OK
 
 
-def _json(document: dict[str, Any]) -> str:
-    """Format a `--json` document; non-ASCII characters are escaped as `\\uXXXX`."""
-    return json.dumps(document, indent=2, ensure_ascii=True)
+# Lone surrogates: how Python represents file name bytes that are not valid UTF-8.
+_SURROGATE = re.compile(f"[{chr(0xD800)}-{chr(0xDFFF)}]")
+
+
+def _print_json(document: dict[str, Any]) -> None:
+    """Print a `--json` document as UTF-8, whatever the locale.
+
+    Lone surrogates are escaped as `\\uXXXX`, which `json.loads` turns back into the
+    original string, so the output stays valid UTF-8.
+    """
+    text = json.dumps(document, indent=2, ensure_ascii=False)
+    # Surrogates only occur inside JSON strings, where an escape is valid.
+    text = _SURROGATE.sub(lambda match: f"\\u{ord(match.group()):04x}", text)
+    sys.stdout.flush()
+    sys.stdout.buffer.write(f"{text}\n".encode())
+    sys.stdout.buffer.flush()
 
 
 def _print_import(result: ImportResult) -> None:
@@ -175,7 +189,7 @@ def _verify(args: argparse.Namespace) -> int:
         print(f"copyofa: {error}", file=sys.stderr)
         return EXIT_USAGE
     if args.json:
-        print(_json(report))
+        _print_json(report)
     else:
         _print_verification(report)
     return EXIT_OK if verifier.is_intact(report) else EXIT_PROBLEM
@@ -227,7 +241,7 @@ def _inspect(args: argparse.Namespace) -> int:
         print(f"copyofa: {error}", file=sys.stderr)
         return EXIT_USAGE
     if args.json:
-        print(_json(report))
+        _print_json(report)
     else:
         _print_inspection(report)
     return EXIT_PROBLEM if inspector.found_problems(report) else EXIT_OK
