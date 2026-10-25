@@ -35,7 +35,7 @@ class NotAnEvidenceSetError(CopyOfAError):
 
 
 @dataclass(frozen=True)
-class _Read:
+class RecordRead:
     """The bytes of a record file, or why they could not be read."""
 
     data: bytes | None
@@ -110,7 +110,7 @@ def read_baseline(root: Path) -> Baseline:
     """Check the tag files and read the payload manifest of the Evidence Set."""
     problems: list[str] = []
     # Read once: the bytes checked against the tag manifest are the bytes parsed.
-    manifest = _read_record(root, evidence_set.MANIFEST)
+    manifest = read_record(root, evidence_set.MANIFEST)
     tag_files = _check_tag_files(root, manifest, problems)
 
     baseline_id = None
@@ -185,9 +185,9 @@ def is_intact(report: dict[str, Any]) -> bool:
 
 
 def _check_tag_files(
-    root: Path, manifest: _Read, problems: list[str]
+    root: Path, manifest: RecordRead, problems: list[str]
 ) -> list[dict[str, str]]:
-    tag_manifest = _read_record(root, evidence_set.TAG_MANIFEST)
+    tag_manifest = read_record(root, evidence_set.TAG_MANIFEST)
     if tag_manifest.data is None:
         problems.append(f"{evidence_set.TAG_MANIFEST} {tag_manifest.problem}.")
         return []
@@ -222,22 +222,22 @@ def _check_tag_files(
     return results
 
 
-def _read_record(root: Path, name: str) -> _Read:
+def read_record(root: Path, name: str) -> RecordRead:
     path = root / name
     try:
         # Non-blocking, so a named pipe in place of a record cannot hang verify.
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
-        return _Read(None, "is missing")
+        return RecordRead(None, "is missing")
     except OSError as error:
-        return _Read(None, f"cannot be read: {error.strerror}")
+        return RecordRead(None, f"cannot be read: {error.strerror}")
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
-            return _Read(None, "is not a regular file")
+            return RecordRead(None, "is not a regular file")
         with os.fdopen(os.dup(fd), "rb") as file:
-            return _Read(file.read(), None)
+            return RecordRead(file.read(), None)
     except OSError as error:
-        return _Read(None, f"cannot be read: {error.strerror}")
+        return RecordRead(None, f"cannot be read: {error.strerror}")
     finally:
         os.close(fd)
 

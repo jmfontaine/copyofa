@@ -12,15 +12,25 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 import soundfile
-from conftest import RATE, requires_permissions, signal, snapshot, write_audio
+from conftest import (
+    RATE,
+    edit_record,
+    requires_permissions,
+    reseal_file,
+    signal,
+    snapshot,
+    synthetic_disc,
+    write_audio,
+)
 
 import copyofa
 from copyofa import inspector
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
-    from conftest import Outcome, Run
+    from conftest import Outcome, Run, StandIn
 
 
 def canonical_digest(samples: np.ndarray, bits: int) -> str:
@@ -442,7 +452,7 @@ def test_inspect_report_content(run: Run, make_set) -> None:
     entry = entries(report)["track.flac"]
     assert {key: value for key, value in report.items() if key != "files"} == {
         "report_kind": "copyofa.inspection",
-        "format_version": 1,
+        "format_version": 2,
         "copyofa_version": copyofa.__version__,
         "inspected_at": report["inspected_at"],
         "evidence_set": str(evidence_set),
@@ -648,3 +658,201 @@ def test_inspect_accepts_an_absent_flac_md5_signature(run: Run, make_set) -> Non
 
     assert outcome.code == 0
     assert report["files"][0]["flac_md5_signature"] == "absent"
+
+
+def test_inspect_describes_each_track_of_an_acquired_set(
+    run: Run, redumper: StandIn, acquired_set: Path
+) -> None:
+    outcome, report = inspect(run, acquired_set)
+
+    assert outcome.code == 0, outcome.err
+    assert report["format_version"] == 2
+    disc = synthetic_disc(redumper.config)
+    record = json.loads((acquired_set / "copyofa/acquisition-record.json").read_bytes())
+    tracks = report["disc"]["tracks"]
+    assert [
+        (track["number"], track["first_frame"], track["frame_count"])
+        for track in tracks
+    ] == [
+        (track["number"], track["first_frame"], track["frame_count"])
+        for track in record["tracks"]
+    ]
+    for track, data in zip(tracks, disc.tracks, strict=True):
+        samples = np.frombuffer(data, dtype="<i2").reshape(-1, 2)
+        assert track["outcome"] == "interpreted"
+        assert track["audio_digest"] == track["recorded_audio_digest"]
+        assert track["audio_digest"] == (
+            f"pcm1:44100:2:16:{hashlib.sha256(data).hexdigest()}"
+        )
+        assert track["frames"] == len(samples)
+        assert track["peak"] == np.abs(samples.astype(np.int32)).max(axis=0).tolist()
+    # The first track starts with silence in the synthetic disc.
+    leading = redumper.config["tracks"][0].get("leading_zero_frames", 0)
+    assert tracks[0]["leading_silence_frames"] == leading
+    image = next(
+        entry for entry in report["files"] if entry["path"] == "data/disc.scram.flac"
+    )
+    assert image["outcome"] == "interpreted"
+    assert image["frames"] == len(disc.image) // 4
+
+
+def test_inspect_exits_1_when_a_track_differs_from_its_recorded_digest(
+    run: Run, acquired_set: Path
+) -> None:
+    def change(record: dict) -> None:
+        record["tracks"][1]["audio_digest"] = "pcm1:44100:2:16:" + "0" * 64
+
+    edit_record(acquired_set, change, reseal=True)
+
+    outcome, report = inspect(run, acquired_set)
+
+    assert outcome.code == 1
+    tracks = report["disc"]["tracks"]
+    assert [track["outcome"] for track in tracks] == ["interpreted"] * len(tracks)
+    assert tracks[1]["recorded_audio_digest"] == "pcm1:44100:2:16:" + "0" * 64
+    assert tracks[1]["audio_digest"] != tracks[1]["recorded_audio_digest"]
+    text = run("inspect", acquired_set)
+    assert text.code == 1
+    assert "  track 2: " in text.out
+    assert "differs from the recorded one" in text.out
+
+
+def nest_record(evidence_set: Path, depth: int) -> None:
+    """Replace the Acquisition Record with nested arrays, and reseal it."""
+    path = evidence_set / "copyofa/acquisition-record.json"
+    path.write_text("[" * depth + "]" * depth)
+    reseal_file(evidence_set, "copyofa/acquisition-record.json")
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        (
+            lambda bag: edit_record(
+                bag, lambda record: record.update(note="edited"), reseal=False
+            ),
+            "the Acquisition Record's digest differs from the tag manifest's",
+        ),
+        (
+            lambda bag: (bag / "copyofa/acquisition-record.json").unlink(),
+            "the Acquisition Record is missing",
+        ),
+        (
+            lambda bag: edit_record(
+                bag, lambda record: record.update(format_version=2), reseal=True
+            ),
+            "the Acquisition Record is not format version 1 of copyofa.acquisition",
+        ),
+        (
+            lambda bag: edit_record(
+                bag, lambda record: record["tracks"][0].pop("frame_count"), reseal=True
+            ),
+            "the Acquisition Record cannot be used: track 1 has no valid frame_count",
+        ),
+        (
+            lambda bag: (bag / "manifest-sha256.txt").unlink(),
+            "the Integrity Baseline is unusable",
+        ),
+        (
+            lambda bag: nest_record(bag, 100_000),
+            "the Acquisition Record cannot be parsed: it is nested too deeply",
+        ),
+    ],
+    ids=[
+        "edited",
+        "missing",
+        "other version",
+        "no range",
+        "unusable baseline",
+        "nested too deeply",
+    ],
+)
+def test_inspect_decodes_no_track_when_the_record_cannot_be_used(
+    run: Run, acquired_set: Path, change: Callable[[Path], None], reason: str
+) -> None:
+    change(acquired_set)
+
+    outcome, report = inspect(run, acquired_set)
+
+    assert outcome.code == 1
+    assert report["disc"] == {"reason": reason}
+    text = run("inspect", acquired_set)
+    assert text.code == 1
+    assert f"Disc: not inspected ({reason})" in text.out
+
+
+def test_inspect_does_not_inspect_tracks_of_an_image_that_is_not_accepted(
+    run: Run, acquired_set: Path
+) -> None:
+    image = acquired_set / "data/disc.scram.flac"
+    data = bytearray(image.read_bytes())
+    data[-1] ^= 0xFF
+    image.write_bytes(bytes(data))
+
+    outcome, report = inspect(run, acquired_set)
+
+    assert outcome.code == 1
+    reason = (
+        "the disc image data/disc.scram.flac was not inspected: its digest differs "
+        "from the manifest's"
+    )
+    assert [
+        (track["outcome"], track["reason"]) for track in report["disc"]["tracks"]
+    ] == [("not_inspected", reason)] * 3
+    assert all("audio_digest" not in track for track in report["disc"]["tracks"])
+
+
+def test_inspect_reports_a_track_the_image_cannot_be_decoded_over_as_failed(
+    run: Run, acquired_set: Path
+) -> None:
+    def change(record: dict) -> None:
+        record["tracks"][2]["frame_count"] = record["disc"]["image"]["frames"]
+
+    edit_record(acquired_set, change, reseal=True)
+
+    outcome, report = inspect(run, acquired_set)
+
+    assert outcome.code == 1
+    tracks = report["disc"]["tracks"]
+    assert [track["outcome"] for track in tracks] == [
+        "interpreted",
+        "interpreted",
+        "failed",
+    ]
+    assert tracks[2]["reason"].startswith("the range ends after the image's ")
+    text = run("inspect", acquired_set)
+    assert text.code == 1
+    assert f"  failed: track 3 ({tracks[2]['reason']})\n" in text.out
+
+
+def test_inspect_prints_no_disc_for_an_imported_set(run: Run, make_set) -> None:
+    def fill(source: Path) -> None:
+        write_audio(source / "track.flac", signal(100, 1, 16), 16, "FLAC")
+
+    outcome, report = inspect(run, make_set(fill))
+
+    assert outcome.code == 0
+    assert report["format_version"] == 2
+    assert "disc" not in report
+
+
+def test_inspect_decodes_a_track_without_decoding_past_its_range(
+    run: Run, make_acquired_set: Callable[..., Path]
+) -> None:
+    # Tracks longer than a FLAC frame, and a damaged last FLAC frame, which holds
+    # the lead-out and the end of track 3. Decoding past track 2 would reach it.
+    acquired_set = make_acquired_set(tracks=[{"frames": 20 * 588}] * 3)
+    image = acquired_set / "data/disc.scram.flac"
+    data = bytearray(image.read_bytes())
+    data[-2:] = bytes(byte ^ 0xFF for byte in data[-2:])
+    image.write_bytes(bytes(data))
+    reseal_file(acquired_set, "data/disc.scram.flac")
+
+    outcome, report = inspect(run, acquired_set)
+
+    assert outcome.code == 1
+    assert [track["outcome"] for track in report["disc"]["tracks"]] == [
+        "interpreted",
+        "interpreted",
+        "failed",
+    ]

@@ -13,6 +13,13 @@ IMPORT_RECORD = "copyofa/import-record.json"
 ACQUISITION_RECORD = "copyofa/acquisition-record.json"
 DISC_IMAGE = "data/disc.scram.flac"
 """Where an acquired set stores its disc image."""
+ACQUISITION_RECORD_KIND = "copyofa.acquisition"
+ACQUISITION_RECORD_FORMAT_VERSION = 1
+
+# The audio of an acquired set's disc image, as of any audio CD.
+CD_SAMPLE_RATE = 44100
+CD_CHANNELS = 2
+CD_BITS_PER_SAMPLE = 16
 
 BAGIT_TXT_CONTENT = "BagIt-Version: 1.0\nTag-File-Character-Encoding: UTF-8\n"
 

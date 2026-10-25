@@ -767,3 +767,59 @@ def test_validate_changes_nothing(
     run("validate", reports["verification"], "--json")
 
     assert snapshot(tmp_path) == before
+
+
+def test_validate_accepts_an_inspection_report_of_format_version_1(
+    run: Run, reports: dict[str, Path], tmp_path: Path
+) -> None:
+    document = edited(
+        reports["inspection"], lambda report: report.update(format_version=1)
+    )
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 0, outcome.err
+    assert result["outcome"] == "valid"
+    assert result["format_version"] == 1
+
+
+DISC_EDITS: dict[str, tuple[Callable[[dict[str, Any]], None], str]] = {
+    "disc at version 1": (lambda report: report.update(format_version=1), ""),
+    "both a reason and tracks": (
+        lambda report: report["disc"].update(reason="edited"),
+        "/disc",
+    ),
+    "an interpreted track without its Audio Digest": (
+        lambda report: report["disc"]["tracks"][0].pop("audio_digest"),
+        "/disc/tracks/0",
+    ),
+    "a failed track with an Audio Digest": (
+        lambda report: report["disc"]["tracks"][0].update(
+            outcome="failed", reason="edited"
+        ),
+        "/disc/tracks/0",
+    ),
+    "an Audio Digest that is not of a CD": (
+        lambda report: report["disc"]["tracks"][0].update(
+            recorded_audio_digest="pcm1:48000:2:16:" + "0" * 64
+        ),
+        "/disc/tracks/0/recorded_audio_digest",
+    ),
+}
+
+
+@pytest.mark.parametrize("name", DISC_EDITS)
+def test_validate_checks_the_disc_of_an_inspection_report(
+    run: Run, acquired_set: Path, tmp_path: Path, name: str
+) -> None:
+    change, location = DISC_EDITS[name]
+    report = run("inspect", acquired_set, "--json")
+    assert report.code == 0, report.err
+    document = json.loads(report.out)
+    change(document)
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 1
+    assert result["outcome"] == "invalid"
+    assert location in {problem["location"] for problem in result["problems"]}

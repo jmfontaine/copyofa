@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jmfontaine/copyofa/main/src/copyofa/schemas/inspection-report-2.schema.json",
+  "title": "CopyOfA inspection Report, format version 2",
+  "description": "The Report that `copyofa inspect --json` prints: the audio in an Evidence Set, file by file, and track by track for an acquired set. See docs/formats/inspection-report.md.",
+  "type": "object",
+  "properties": {
+    "report_kind": { "const": "copyofa.inspection" },
+    "format_version": { "const": 2 },
+    "copyofa_version": { "type": "string" },
+    "inspected_at": { "$ref": "#/$defs/timestamp" },
+    "evidence_set": { "type": "string" },
+    "integrity_baseline": { "$ref": "#/$defs/integrity_baseline" },
+    "method": {
+      "type": "object",
+      "properties": {
+        "decoder": { "const": "libsndfile" },
+        "decoder_version": { "type": "string" }
+      },
+      "required": ["decoder", "decoder_version"],
+      "additionalProperties": false
+    },
+    "files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file" }
+    },
+    "disc": { "$ref": "#/$defs/disc" },
+    "counts": {
+      "type": "object",
+      "properties": {
+        "interpreted": { "$ref": "#/$defs/count" },
+        "not_interpreted": { "$ref": "#/$defs/count" },
+        "failed": { "$ref": "#/$defs/count" },
+        "not_inspected": { "$ref": "#/$defs/count" }
+      },
+      "required": ["interpreted", "not_interpreted", "failed", "not_inspected"],
+      "additionalProperties": false
+    },
+    "limitations": { "$ref": "#/$defs/sentences" }
+  },
+  "required": [
+    "report_kind",
+    "format_version",
+    "copyofa_version",
+    "inspected_at",
+    "evidence_set",
+    "integrity_baseline",
+    "method",
+    "files",
+    "counts",
+    "limitations"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "count": { "type": "integer", "minimum": 0 },
+    "sentences": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "minLength": 64,
+      "maxLength": 64
+    },
+    "audio_digest": {
+      "type": "string",
+      "pattern": "^pcm1:[1-9][0-9]*:[1-9][0-9]*:(8|16|24|32):[0-9a-f]{64}$",
+      "not": { "pattern": "\\n" }
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "minLength": 20,
+      "maxLength": 20
+    },
+    "integrity_baseline": {
+      "type": "object",
+      "properties": {
+        "manifest_sha256": { "$ref": "#/$defs/digest" },
+        "usable": { "type": "boolean" },
+        "problems": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["usable", "problems"],
+      "additionalProperties": false
+    },
+    "disc": {
+      "type": "object",
+      "properties": {
+        "reason": { "type": "string" },
+        "tracks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/track" }
+        }
+      },
+      "oneOf": [{ "required": ["reason"] }, { "required": ["tracks"] }],
+      "additionalProperties": false
+    },
+    "track": {
+      "type": "object",
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "first_frame": { "$ref": "#/$defs/count" },
+        "frame_count": { "type": "integer", "minimum": 1 },
+        "outcome": { "enum": ["interpreted", "failed", "not_inspected"] },
+        "reason": { "type": "string" },
+        "audio_digest": { "$ref": "#/$defs/cd_audio_digest" },
+        "recorded_audio_digest": { "$ref": "#/$defs/cd_audio_digest" },
+        "frames": { "type": "integer", "minimum": 1 },
+        "peak": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "integer", "minimum": 0, "maximum": 32768 }
+        },
+        "leading_silence_frames": { "$ref": "#/$defs/count" },
+        "trailing_silence_frames": { "$ref": "#/$defs/count" }
+      },
+      "required": [
+        "number",
+        "first_frame",
+        "frame_count",
+        "outcome",
+        "recorded_audio_digest"
+      ],
+      "additionalProperties": false,
+      "if": {
+        "properties": { "outcome": { "const": "interpreted" } },
+        "required": ["outcome"]
+      },
+      "then": {
+        "required": [
+          "audio_digest",
+          "frames",
+          "peak",
+          "leading_silence_frames",
+          "trailing_silence_frames"
+        ],
+        "properties": { "reason": false }
+      },
+      "else": {
+        "required": ["reason"],
+        "propertyNames": {
+          "enum": [
+            "number",
+            "first_frame",
+            "frame_count",
+            "outcome",
+            "reason",
+            "recorded_audio_digest"
+          ]
+        }
+      }
+    },
+    "cd_audio_digest": {
+      "type": "string",
+      "pattern": "^pcm1:44100:2:16:[0-9a-f]{64}$",
+      "not": { "pattern": "\\n" }
+    },
+    "file": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "outcome": {
+          "enum": ["interpreted", "not_interpreted", "failed", "not_inspected"]
+        },
+        "expected_digest": { "$ref": "#/$defs/digest" },
+        "observed_digest": { "$ref": "#/$defs/digest" },
+        "reason": { "type": "string" },
+        "format": { "enum": ["flac", "wav", "mp3"] },
+        "encoding": {
+          "enum": [
+            "pcm_s8",
+            "pcm_u8",
+            "pcm_16",
+            "pcm_24",
+            "pcm_32",
+            "mpeg_layer_iii"
+          ]
+        },
+        "sample_rate": { "type": "integer", "minimum": 1 },
+        "channels": { "type": "integer", "minimum": 1 },
+        "bits_per_sample": { "type": "integer", "enum": [8, 16, 24, 32] },
+        "frames": { "$ref": "#/$defs/count" },
+        "audio_digest": { "$ref": "#/$defs/audio_digest" },
+        "peak": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "leading_silence_frames": { "$ref": "#/$defs/count" },
+        "trailing_silence_frames": { "$ref": "#/$defs/count" },
+        "flac_md5_signature": { "enum": ["matching", "differs", "absent"] },
+        "limitations": { "$ref": "#/$defs/sentences" }
+      },
+      "required": ["path", "outcome", "expected_digest"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "outcome": { "const": "interpreted" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": [
+              "observed_digest",
+              "format",
+              "encoding",
+              "sample_rate",
+              "channels",
+              "frames",
+              "peak",
+              "leading_silence_frames",
+              "trailing_silence_frames"
+            ],
+            "properties": { "reason": false }
+          }
+        },
+        {
+          "if": {
+            "properties": { "outcome": { "enum": ["not_interpreted", "failed"] } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": ["observed_digest", "reason"],
+            "propertyNames": {
+              "enum": [
+                "path",
+                "outcome",
+                "expected_digest",
+                "observed_digest",
+                "reason"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "outcome": { "const": "not_inspected" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": ["reason"],
+            "propertyNames": {
+              "enum": [
+                "path",
+                "outcome",
+                "expected_digest",
+                "observed_digest",
+                "reason"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "format": { "enum": ["flac", "wav"] } },
+            "required": ["format"]
+          },
+          "then": { "required": ["bits_per_sample", "audio_digest"] }
+        },
+        {
+          "if": {
+            "properties": { "format": { "const": "mp3" } },
+            "required": ["format"]
+          },
+          "then": {
+            "required": ["limitations"],
+            "properties": {
+              "bits_per_sample": false,
+              "audio_digest": false,
+              "flac_md5_signature": false
+            }
+          }
+        }
+      ]
+    }
+  }
+}

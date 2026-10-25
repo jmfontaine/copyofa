@@ -24,9 +24,6 @@ from copyofa.errors import CopyOfAError
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
 
-ACQUISITION_RECORD_KIND = "copyofa.acquisition"
-ACQUISITION_RECORD_FORMAT_VERSION = 1
-
 READER = "redumper"
 MINIMUM_BUILD = 768
 """The oldest redumper build acquire accepts: the one whose output it was tested on."""
@@ -34,10 +31,7 @@ MINIMUM_BUILD = 768
 IMAGE_NAME = "disc"
 """The `--image-name` acquire gives redumper, and so the stem of every file it keeps."""
 
-SAMPLE_RATE = 44100
-CHANNELS = 2
-BITS_PER_SAMPLE = 16
-FRAME_BYTES = CHANNELS * BITS_PER_SAMPLE // 8
+FRAME_BYTES = evidence_set.CD_CHANNELS * evidence_set.CD_BITS_PER_SAMPLE // 8
 
 FLAC = "flac"
 XZ = "xz"
@@ -131,8 +125,8 @@ def acquire(
         arguments.append(f"--drive={drive}")
 
     record: dict[str, Any] = {
-        "record_kind": ACQUISITION_RECORD_KIND,
-        "format_version": ACQUISITION_RECORD_FORMAT_VERSION,
+        "record_kind": evidence_set.ACQUISITION_RECORD_KIND,
+        "format_version": evidence_set.ACQUISITION_RECORD_FORMAT_VERSION,
         "copyofa_version": copyofa.__version__,
         "acquired_at": acquired_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
@@ -183,9 +177,9 @@ def acquire(
         disc["image"] = {
             "path": evidence_set.DISC_IMAGE,
             "frames": image.frames,
-            "sample_rate": SAMPLE_RATE,
-            "channels": CHANNELS,
-            "bits_per_sample": BITS_PER_SAMPLE,
+            "sample_rate": evidence_set.CD_SAMPLE_RATE,
+            "channels": evidence_set.CD_CHANNELS,
+            "bits_per_sample": evidence_set.CD_BITS_PER_SAMPLE,
         }
         record["disc"] = disc
         record["read_errors"] = log.read_errors
@@ -405,8 +399,8 @@ class _Track:
             "first_frame": self.first_frame,
             "frame_count": self.frame_count,
             "audio_digest": (
-                f"{inspector.DIGEST_SCHEME}:{SAMPLE_RATE}:{CHANNELS}:"
-                f"{BITS_PER_SAMPLE}:{self.sha256}"
+                f"{inspector.DIGEST_SCHEME}:{evidence_set.CD_SAMPLE_RATE}:{evidence_set.CD_CHANNELS}:"
+                f"{evidence_set.CD_BITS_PER_SAMPLE}:{self.sha256}"
             ),
             **self.cue,
             "error_frames": self.error_frames,
@@ -716,23 +710,23 @@ def _compress_image(source: Path, target: Path) -> None:
         soundfile.SoundFile(
             target,
             "x",
-            SAMPLE_RATE,
-            CHANNELS,
-            f"PCM_{BITS_PER_SAMPLE}",
+            evidence_set.CD_SAMPLE_RATE,
+            evidence_set.CD_CHANNELS,
+            f"PCM_{evidence_set.CD_BITS_PER_SAMPLE}",
             format="FLAC",
             compression_level=1.0,
         ) as sound,
     ):
         while chunk := file.read(_IMAGE_BLOCK_FRAMES * FRAME_BYTES):
             samples = np.frombuffer(chunk, dtype="<i2").astype(np.int16, copy=False)
-            sound.write(samples.reshape(-1, CHANNELS))
+            sound.write(samples.reshape(-1, evidence_set.CD_CHANNELS))
     staging.sync_file(target)
 
 
 def _decoded_image_digest(path: Path) -> str:
     """Decode the stored image; return the SHA-256 of its little-endian PCM."""
     digest = hashlib.sha256()
-    shift = 32 - BITS_PER_SAMPLE
+    shift = 32 - evidence_set.CD_BITS_PER_SAMPLE
     with soundfile.SoundFile(path) as sound:
         for block in inspector.read_blocks(sound, "int32"):
             digest.update(np.right_shift(block, shift).astype("<i2").tobytes())

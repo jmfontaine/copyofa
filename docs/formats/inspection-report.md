@@ -11,12 +11,16 @@ copyofa inspect /Volumes/Archive/Album --json > album-inspection.json
 ```
 
 A Report describes each preserved file's format and properties and, for lossless
-audio, gives its Audio Digest. It draws no conclusion about where the audio comes from
-or how well it was acquired.
+audio, gives its Audio Digest. For an [acquired set](evidence-set.md#acquired-sets), it
+also describes each track of the disc. It draws no conclusion about where the audio
+comes from or how well it was acquired.
 
-Its JSON Schema is
+Inspect prints format version 2. Its JSON Schema is
+[inspection-report-2.schema.json](../../src/copyofa/schemas/inspection-report-2.schema.json),
+and that of [format version 1](#format-version-1) is
 [inspection-report-1.schema.json](../../src/copyofa/schemas/inspection-report-1.schema.json);
-[`copyofa validate`](validation-result.md) checks a Report against it.
+[`copyofa validate`](validation-result.md) checks a Report against the schema of its
+version.
 
 ## How inspect works
 
@@ -41,6 +45,15 @@ Its JSON Schema is
    STREAMINFO gives no length. A file that is not interpreted may still hold audio.
    Inspect does not open archives or read tags and embedded artwork.
 
+4. **Tracks of an acquired set.** When the tag manifest lists the Acquisition Record,
+   inspect reads it once, and uses it only when the Integrity Baseline is usable and
+   the bytes read have the SHA-256 the tag manifest records, parse as JSON, and give
+   format version 1 of `copyofa.acquisition`, a disc image that `manifest-sha256.txt`
+   lists, 16-bit stereo at 44.1 kHz, and a number, a range and an Audio Digest for
+   each track. For each track in the record's order, inspect then reads the image
+   completely, compares its SHA-256 with the manifest's as for a file, and decodes the
+   image over the track's range, from its first frame for its frame count.
+
 Files that `manifest-sha256.txt` does not list are not inspected; `verify` reports
 them. Inspect writes nothing into the set.
 
@@ -55,18 +68,29 @@ Each listed file gets exactly one outcome:
 | `failed` | The content is supported audio or FLAC, or the name ends in `.flac`, `.wav` or `.mp3` (in any case), but the file could not be opened or decoded completely. |
 | `not_inspected` | The file is missing, could not be read, is not a regular file, is not the accepted bytes, changed while inspected, or the Integrity Baseline is unusable. |
 
+Each track of an acquired set gets exactly one of these outcomes:
+
+| Outcome | Meaning |
+| --- | --- |
+| `interpreted` | The image is the accepted bytes, and its range was decoded completely. |
+| `failed` | The image could not be decoded over the range: it is not 16-bit stereo FLAC at 44.1 kHz, the range ends after the image, or decoding stopped. |
+| `not_inspected` | The image was not inspected, for any reason a file is `not_inspected`, such as when it is not the accepted bytes. |
+
+The image file itself keeps its entry in `files`, as any FLAC file.
+
 ## Fields
 
 | Field | Content |
 | --- | --- |
 | `report_kind` | Always `copyofa.inspection`. |
-| `format_version` | The version of this format, `1`. A later change to the fields increments it. |
+| `format_version` | The version of this format, `2`. A later change to the fields increments it. |
 | `copyofa_version` | The version of CopyOfA that ran the inspection. |
 | `inspected_at` | The inspection time in UTC, such as `2026-10-25T18:30:00Z`. |
 | `evidence_set` | The Evidence Set's path, as the verification Report records it. |
 | `integrity_baseline` | The baseline used: `manifest_sha256`, `usable` and `problems`, as in the verification Report. |
 | `method` | `decoder`, always `libsndfile`, and `decoder_version`, such as `1.2.2`. The version of the mpg123 library that libsndfile uses for MP3 is not available to CopyOfA. |
 | `files` | One entry per entry of `manifest-sha256.txt`, in its order; empty when that manifest is missing or cannot be parsed. |
+| `disc` | For an acquired set, a set whose tag manifest lists `copyofa/acquisition-record.json`: either `tracks`, one entry per track of the Acquisition Record, in its order, or, when the record cannot be used, `reason`, a sentence saying why, and no track. Absent for any other set. |
 | `counts` | The number of files per outcome: `interpreted`, `not_interpreted`, `failed` and `not_inspected`. |
 | `limitations` | Sentences stating what the whole Report does not establish or did not examine. |
 
@@ -112,6 +136,23 @@ An `interpreted` entry also holds:
   means the file is not the audio its encoder wrote, and makes inspect exit 1.
 - `limitations`: for MP3, why it has no Audio Digest.
 
+Each entry of `tracks` holds:
+
+- `number`, `first_frame` and `frame_count`: the track's number and its range in the
+  image, in frames, as the Acquisition Record gives them.
+- `outcome`: one of the track outcomes above.
+- `reason`: why the outcome is not `interpreted`; absent when it is. For a track
+  `not_inspected`, it names the image and says why it was not inspected.
+- `audio_digest`: the Audio Digest of the decoded range; present only when
+  `interpreted`.
+- `recorded_audio_digest`: the Audio Digest the Acquisition Record gives, computed at
+  acquisition from redumper's track file.
+- `frames`, `peak`, `leading_silence_frames` and `trailing_silence_frames`: as for a
+  file, measured over the range; present only when `interpreted`.
+
+A track whose `audio_digest` differs from its `recorded_audio_digest` is not the audio
+acquired, and makes inspect exit 1.
+
 ## Audio Digest
 
 An Audio Digest recognizes identical decoded audio, as
@@ -137,13 +178,19 @@ flac -d --force-raw-format --endian=little --sign=signed -c 01.flac | shasum -a 
 ffmpeg -i 01.flac -f s24le - | shasum -a 256
 ```
 
+## Format version 1
+
+Inspect printed format version 1 before CopyOfA 0.5.0. It is version 2 without
+`disc`, and `format_version` is `1`. `copyofa validate` still accepts it, and the
+version 1 schema is unchanged. A Report with `disc` is not valid at version 1.
+
 ## Example
 
 ```json
 {
   "report_kind": "copyofa.inspection",
-  "format_version": 1,
-  "copyofa_version": "0.2.0",
+  "format_version": 2,
+  "copyofa_version": "0.5.0",
   "inspected_at": "2026-10-25T18:30:00Z",
   "evidence_set": "/Volumes/Archive/Album",
   "integrity_baseline": {
@@ -215,10 +262,54 @@ ffmpeg -i 01.flac -f s24le - | shasum -a 256
 The example is shortened: a Report holds all 64 hexadecimal digits of each digest, and
 the whole of each limitation.
 
+The `disc` of an acquired set, *Add Violence* by Nine Inch Nails (2017 CD), with two
+of its five tracks; its image, `data/disc.scram.flac`, has its own entry in `files`:
+
+```json
+"disc": {
+  "tracks": [
+    {
+      "number": 1,
+      "first_frame": 26548188,
+      "frame_count": 9285108,
+      "outcome": "interpreted",
+      "audio_digest": "pcm1:44100:2:16:1e9b66e1…",
+      "recorded_audio_digest": "pcm1:44100:2:16:1e9b66e1…",
+      "frames": 9285108,
+      "peak": [28930, 28922],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0
+    },
+    {
+      "number": 5,
+      "first_frame": 67608228,
+      "frame_count": 31052868,
+      "outcome": "interpreted",
+      "audio_digest": "pcm1:44100:2:16:7cb0b19d…",
+      "recorded_audio_digest": "pcm1:44100:2:16:7cb0b19d…",
+      "frames": 31052868,
+      "peak": [32768, 32768],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 356
+    }
+  ]
+}
+```
+
+When the Acquisition Record cannot be used, `disc` holds only the reason:
+
+```json
+"disc": {
+  "reason": "the Acquisition Record's digest differs from the tag manifest's"
+}
+```
+
 ## Exit codes
 
 `copyofa inspect` exits 0 when the Integrity Baseline is usable, every listed file is
-`interpreted` or `not_interpreted`, and no FLAC MD5 signature differs. It exits 1
-otherwise, and still prints its result or Report. It exits 2, printing nothing on
-stdout, when the target is not an Evidence Set or the arguments are invalid, and 130
-when canceled with Ctrl-C. mpg123 may write notes about damaged MP3 frames to stderr.
+`interpreted` or `not_interpreted`, no FLAC MD5 signature differs, and, for an acquired
+set, the Acquisition Record can be used and every track is `interpreted` with its
+recorded Audio Digest. It exits 1 otherwise, and still prints its result or Report. It
+exits 2, printing nothing on stdout, when the target is not an Evidence Set or the
+arguments are invalid, and 130 when canceled with Ctrl-C. mpg123 may write notes about
+damaged MP3 frames to stderr.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import functools
+import hashlib
 import json
 import os
 import random
@@ -506,3 +507,31 @@ def make_acquired_set(
 def acquired_set(make_acquired_set: Callable[..., Path]) -> Path:
     """An Evidence Set acquired from the synthetic disc DISC."""
     return make_acquired_set()
+
+
+def edit_record(
+    evidence_set: Path, change: Callable[[dict[str, Any]], None], *, reseal: bool
+) -> None:
+    """Change the Acquisition Record, and the tag manifest to match when reseal."""
+    path = evidence_set / "copyofa/acquisition-record.json"
+    record = json.loads(path.read_bytes())
+    change(record)
+    path.write_text(json.dumps(record, indent=2) + "\n")
+    if reseal:
+        reseal_file(evidence_set, "copyofa/acquisition-record.json")
+
+
+def reseal_file(evidence_set: Path, name: str) -> None:
+    """Record a changed file's digest in the manifest that lists it."""
+    manifest = evidence_set / (
+        "manifest-sha256.txt" if name.startswith("data/") else "tagmanifest-sha256.txt"
+    )
+    digest = hashlib.sha256((evidence_set / name).read_bytes()).hexdigest()
+    manifest.write_text(
+        "".join(
+            f"{digest}  {name}\n" if line.endswith(f"  {name}") else f"{line}\n"
+            for line in manifest.read_text().splitlines()
+        )
+    )
+    if manifest.name == "manifest-sha256.txt":
+        reseal_file(evidence_set, manifest.name)

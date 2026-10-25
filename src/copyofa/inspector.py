@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import re
 import stat
 from collections import Counter
 from dataclasses import dataclass
@@ -15,7 +17,7 @@ import numpy as np
 import soundfile
 
 import copyofa
-from copyofa import verifier
+from copyofa import evidence_set, verifier
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -26,7 +28,7 @@ if TYPE_CHECKING:
     Sink = Callable[[npt.NDArray[np.float32]], None]
 
 REPORT_KIND = "copyofa.inspection"
-REPORT_FORMAT_VERSION = 1
+REPORT_FORMAT_VERSION = 2
 
 INTERPRETED = "interpreted"
 NOT_INTERPRETED = "not_interpreted"
@@ -64,6 +66,14 @@ MP3_LIMITATION = (
 )
 
 _UNUSABLE = "the Integrity Baseline is unusable"
+_RECORD = "the Acquisition Record"
+_CD_FORMAT = (
+    evidence_set.CD_SAMPLE_RATE,
+    evidence_set.CD_CHANNELS,
+    evidence_set.CD_BITS_PER_SAMPLE,
+)
+_CD_DIGEST_PREFIX = f"{DIGEST_SCHEME}:{':'.join(map(str, _CD_FORMAT))}:"
+_CD_DIGEST = re.compile(rf"{_CD_DIGEST_PREFIX}[0-9a-f]{{64}}")
 _EXPECTED_SUFFIXES = frozenset({".flac", ".wav", ".mp3"})
 _BLOCK_FRAMES = 1 << 16
 
@@ -89,6 +99,37 @@ class _UnreadableError(Exception):
     """A FLAC stream whose STREAMINFO block cannot be read."""
 
 
+class UnusableRecordError(Exception):
+    """An Acquisition Record that cannot be used; the message says why."""
+
+
+@dataclass(frozen=True)
+class RecordedTrack:
+    """A track as the Acquisition Record gives it."""
+
+    number: int
+    first_frame: int
+    """Where the track starts in the image, in frames."""
+    frame_count: int
+    audio_digest: str
+    """The Audio Digest recorded at acquisition."""
+
+
+@dataclass(frozen=True)
+class AcquiredDisc:
+    """What a usable Acquisition Record says about the disc image and its tracks."""
+
+    image: str
+    """The image's path in the Evidence Set."""
+    image_digest: str
+    """The image's SHA-256, as the payload manifest records it."""
+    tracks: tuple[RecordedTrack, ...]
+
+    def track(self, number: int) -> RecordedTrack | None:
+        """Return the track with this number, or None when the record lists none."""
+        return next((track for track in self.tracks if track.number == number), None)
+
+
 def inspect(
     target: str, progress: Callable[[dict[str, Any]], None] | None = None
 ) -> dict[str, Any]:
@@ -109,6 +150,7 @@ def inspect(
         if progress is not None:
             progress(entry)
         files.append(entry)
+    disc = _inspect_disc(root, baseline, progress)
     counts = Counter(entry["outcome"] for entry in files)
     return {
         "report_kind": REPORT_KIND,
@@ -122,6 +164,7 @@ def inspect(
             "decoder_version": soundfile.__libsndfile_version__,
         },
         "files": files,
+        **({} if disc is None else {"disc": disc}),
         "counts": {outcome: counts[outcome] for outcome in OUTCOMES},
         "limitations": list(LIMITATIONS),
     }
@@ -129,11 +172,160 @@ def inspect(
 
 def found_problems(report: dict[str, Any]) -> bool:
     """Tell whether an inspection Report found anything that makes inspect exit 1."""
-    return not report["integrity_baseline"]["usable"] or any(
-        entry["outcome"] in {FAILED, NOT_INSPECTED}
-        or entry.get("flac_md5_signature") == MD5_DIFFERS
-        for entry in report["files"]
+    disc = report.get("disc", {})
+    return (
+        not report["integrity_baseline"]["usable"]
+        or any(
+            entry["outcome"] in {FAILED, NOT_INSPECTED}
+            or entry.get("flac_md5_signature") == MD5_DIFFERS
+            for entry in report["files"]
+        )
+        or "reason" in disc
+        or any(
+            track["outcome"] != INTERPRETED
+            or track["audio_digest"] != track["recorded_audio_digest"]
+            for track in disc.get("tracks", [])
+        )
     )
+
+
+def _inspect_disc(
+    root: Path,
+    baseline: verifier.Baseline,
+    progress: Callable[[dict[str, Any]], None] | None,
+) -> dict[str, Any] | None:
+    """Describe each track of an acquired set; None for a set that is not one."""
+    try:
+        disc = read_acquired_disc(root, baseline)
+    except UnusableRecordError as error:
+        return {"reason": str(error)}
+    if disc is None:
+        return None
+    tracks = []
+    for track in disc.tracks:
+        findings = decode_track(root, disc, track)
+        entry: dict[str, Any] = {
+            "number": track.number,
+            "first_frame": track.first_frame,
+            "frame_count": track.frame_count,
+            "outcome": findings["outcome"],
+        }
+        if "reason" in findings:
+            entry["reason"] = findings["reason"]
+        if "audio_digest" in findings:
+            entry["audio_digest"] = findings["audio_digest"]
+        entry["recorded_audio_digest"] = track.audio_digest
+        if findings["outcome"] == INTERPRETED:
+            for key in (
+                "frames",
+                "peak",
+                "leading_silence_frames",
+                "trailing_silence_frames",
+            ):
+                entry[key] = findings[key]
+        if progress is not None:
+            progress(entry)
+        tracks.append(entry)
+    return {"tracks": tracks}
+
+
+def read_acquired_disc(root: Path, baseline: verifier.Baseline) -> AcquiredDisc | None:
+    """Read the Acquisition Record of the Evidence Set at root, if it may be used.
+
+    Returns None when the tag manifest does not list the record: the set is not an
+    acquired set. Raises UnusableRecordError when the baseline is unusable, or the
+    record is not the bytes the tag manifest records or cannot be read or parsed.
+    """
+    listed = next(
+        (
+            item
+            for item in baseline.tag_files
+            if item["path"] == evidence_set.ACQUISITION_RECORD
+        ),
+        None,
+    )
+    if listed is None:
+        return None
+    if not baseline.usable:
+        raise UnusableRecordError(_UNUSABLE)
+    problem = verifier.find_file(root, evidence_set.ACQUISITION_RECORD)
+    if problem is not None:
+        if problem[0] == verifier.MISSING:
+            raise UnusableRecordError(f"{_RECORD} is missing")
+        raise UnusableRecordError(f"{_RECORD} cannot be read: {problem[1]}")
+    # Read once: the bytes checked against the tag manifest are the bytes parsed.
+    read = verifier.read_record(root, evidence_set.ACQUISITION_RECORD)
+    if read.data is None:
+        raise UnusableRecordError(f"{_RECORD} {read.problem}")
+    if hashlib.sha256(read.data).hexdigest() != listed["expected_digest"]:
+        raise UnusableRecordError(f"{_RECORD}'s digest differs from the tag manifest's")
+    try:
+        record = json.loads(read.data)
+    except ValueError as error:
+        raise UnusableRecordError(f"{_RECORD} cannot be parsed: {error}") from None
+    except RecursionError:
+        raise UnusableRecordError(
+            f"{_RECORD} cannot be parsed: it is nested too deeply"
+        ) from None
+    return _acquired_disc(record, {path: digest for digest, path in baseline.entries})
+
+
+def _acquired_disc(record: Any, manifest: dict[str, str]) -> AcquiredDisc:
+    """Take the image and the track ranges from a parsed Acquisition Record."""
+    if not isinstance(record, dict):
+        raise _unusable("it is not a JSON object")
+    kind = evidence_set.ACQUISITION_RECORD_KIND
+    version = evidence_set.ACQUISITION_RECORD_FORMAT_VERSION
+    if (
+        record.get("record_kind") != kind
+        or record.get("format_version") != version
+        or isinstance(record.get("format_version"), bool)
+    ):
+        raise UnusableRecordError(
+            f"{_RECORD} is not format version {version} of {kind}"
+        )
+    disc = record.get("disc")
+    image = disc.get("image") if isinstance(disc, dict) else None
+    if not isinstance(image, dict) or not isinstance(image.get("path"), str):
+        raise _unusable("it names no disc image")
+    if image["path"] not in manifest:
+        raise _unusable(
+            f"its disc image {image['path']} is not listed in {evidence_set.MANIFEST}"
+        )
+    if (
+        image.get("sample_rate"),
+        image.get("channels"),
+        image.get("bits_per_sample"),
+    ) != _CD_FORMAT:
+        raise _unusable("its disc image is not 16-bit stereo at 44.1 kHz")
+    entries = record.get("tracks")
+    if not isinstance(entries, list) or not entries:
+        raise _unusable("it lists no track")
+    tracks: list[RecordedTrack] = []
+    for index, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict) or not _is_count(entry.get("number"), 1):
+            raise _unusable(f"its track entry {index} has no valid number")
+        number = entry["number"]
+        if any(track.number == number for track in tracks):
+            raise _unusable(f"it lists track {number} twice")
+        for field, minimum in (("first_frame", 0), ("frame_count", 1)):
+            if not _is_count(entry.get(field), minimum):
+                raise _unusable(f"track {number} has no valid {field}")
+        digest = entry.get("audio_digest")
+        if not isinstance(digest, str) or not _CD_DIGEST.fullmatch(digest):
+            raise _unusable(f"track {number} has no valid audio_digest")
+        tracks.append(
+            RecordedTrack(number, entry["first_frame"], entry["frame_count"], digest)
+        )
+    return AcquiredDisc(image["path"], manifest[image["path"]], tuple(tracks))
+
+
+def _unusable(reason: str) -> UnusableRecordError:
+    return UnusableRecordError(f"{_RECORD} cannot be used: {reason}")
+
+
+def _is_count(value: Any, minimum: int) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= minimum
 
 
 def _read_streaminfo(file: BinaryIO) -> _StreamInfo | None:
@@ -202,51 +394,149 @@ def inspect_file(
     scale; 32-bit PCM is rounded to float32's 24-bit precision. They are the file's
     audio only when the entry's outcome is `interpreted`.
     """
+    suffix = PurePosixPath(path).suffix.lower()
+    findings = _read_accepted(
+        root, path, expected, lambda file: _interpret(file, suffix, sink)
+    )
+    entry = _entry(
+        path,
+        expected,
+        findings.pop("outcome"),
+        observed=findings.pop("observed_digest", None),
+    )
+    entry.update(findings)
+    return entry
+
+
+def decode_track(
+    root: Path,
+    disc: AcquiredDisc,
+    track: RecordedTrack,
+    sink: Callable[[npt.NDArray[np.float32]], None] | None = None,
+) -> dict[str, Any]:
+    """Check the disc image against the baseline, then decode one track's range.
+
+    Returns the track's outcome, with a reason when it is not `interpreted`, the
+    image's File Digest when the image was read completely, and, when interpreted,
+    the track's audio properties, frames, Audio Digest, peak and silences. sink
+    receives the track's frames as inspect_file's does.
+    """
+    findings = _read_accepted(
+        root,
+        disc.image,
+        disc.image_digest,
+        lambda file: _decode_range(file, track, sink),
+    )
+    if findings["outcome"] == NOT_INSPECTED:
+        findings["reason"] = (
+            f"the disc image {disc.image} was not inspected: {findings['reason']}"
+        )
+    return findings
+
+
+def _read_accepted(
+    root: Path,
+    path: str,
+    expected: str,
+    interpret: Callable[[BinaryIO], dict[str, Any]],
+) -> dict[str, Any]:
+    """Read a listed file completely, check its SHA-256, then interpret it.
+
+    Returns interpret's findings, with `outcome` `interpreted` unless they give
+    another, or `not_inspected` with a reason; with `observed_digest` once the file
+    was read completely.
+    """
     problem = verifier.find_file(root, path)
     if problem is not None:
-        return _entry(path, expected, NOT_INSPECTED, reason=problem[1])
+        return _not_inspected(problem[1])
     try:
         # Non-blocking, so a named pipe swapped in cannot hang inspect.
         fd = os.open(root / path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError as error:
-        return _entry(
-            path, expected, NOT_INSPECTED, reason=f"cannot be read: {error.strerror}"
-        )
+        return _not_inspected(f"cannot be read: {error.strerror}")
     try:
         with os.fdopen(fd, "rb") as file:
             before = os.fstat(fd)
             if not stat.S_ISREG(before.st_mode):
-                return _entry(
-                    path,
-                    expected,
-                    NOT_INSPECTED,
-                    reason="a special file, not a regular file",
-                )
+                return _not_inspected("a special file, not a regular file")
             observed = hashlib.file_digest(file, "sha256").hexdigest()
             if observed != expected:
-                return _entry(
-                    path,
-                    expected,
-                    NOT_INSPECTED,
-                    observed=observed,
-                    reason="its digest differs from the manifest's",
+                return _not_inspected(
+                    "its digest differs from the manifest's", observed
                 )
-            entry = _entry(path, expected, INTERPRETED, observed=observed)
-            entry.update(_interpret(file, PurePosixPath(path).suffix.lower(), sink))
+            findings = {
+                "outcome": INTERPRETED,
+                "observed_digest": observed,
+                **interpret(file),
+            }
             after = os.fstat(fd)
     except OSError as error:
-        return _entry(
-            path, expected, NOT_INSPECTED, reason=f"cannot be read: {error.strerror}"
-        )
+        return _not_inspected(f"cannot be read: {error.strerror}")
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
-        return _entry(
-            path,
-            expected,
-            NOT_INSPECTED,
-            observed=observed,
-            reason="the file changed while it was inspected",
-        )
-    return entry
+        return _not_inspected("the file changed while it was inspected", observed)
+    return findings
+
+
+def _not_inspected(reason: str, observed: str | None = None) -> dict[str, Any]:
+    findings = {"outcome": NOT_INSPECTED, "reason": reason}
+    if observed is not None:
+        findings["observed_digest"] = observed
+    return findings
+
+
+def _decode_range(
+    file: BinaryIO, track: RecordedTrack, sink: Sink | None
+) -> dict[str, Any]:
+    """Decode a track's range of the disc image exactly and measure it."""
+    os.lseek(file.fileno(), 0, os.SEEK_SET)
+    # A duplicate, which libsndfile owns and closes, as in _interpret.
+    duplicate = os.dup(file.fileno())
+    try:
+        sound = soundfile.SoundFile(duplicate, closefd=True)
+    except soundfile.LibsndfileError as error:
+        return _failed(f"libsndfile cannot open the disc image: {error.error_string}")
+    with sound:
+        bits = evidence_set.CD_BITS_PER_SAMPLE
+        if (
+            sound.format != "FLAC"
+            or (sound.samplerate, sound.channels, _PCM_BITS.get(sound.subtype))
+            != _CD_FORMAT
+        ):
+            return _failed("the disc image is not 16-bit stereo FLAC at 44.1 kHz")
+        end = track.first_frame + track.frame_count
+        if end > sound.frames:
+            return _failed(
+                f"the range ends after the image's {sound.frames} frames, at {end}"
+            )
+        digest = hashlib.sha256()
+        measures = _Measures(sound.channels, integer=True)
+        frames = 0
+        try:
+            sound.seek(track.first_frame)
+            # Only the range, so no error outside it makes the track fail.
+            for block in read_blocks(sound, "int32", track.frame_count):
+                # libsndfile scales integer samples to the full 32-bit range.
+                samples = np.right_shift(block, 32 - bits)
+                digest.update(_canonical_bytes(samples, bits))
+                measures.add(samples)
+                if sink is not None:
+                    sink(samples.astype(np.float32) * np.float32(1 / (1 << (bits - 1))))
+                frames += len(samples)
+        except soundfile.LibsndfileError as error:
+            return _failed(
+                f"decoding stopped after {frames} frames of the range: "
+                f"{error.error_string}"
+            )
+        if frames != track.frame_count:
+            return _failed(
+                f"decoding stopped after {frames} of the range's "
+                f"{track.frame_count} frames"
+            )
+        return {
+            **_properties(sound, "flac", frames, bits),
+            "audio_digest": f"{_CD_DIGEST_PREFIX}{digest.hexdigest()}",
+            **measures.to_json(),
+        }
 
 
 def _interpret(file: BinaryIO, suffix: str, sink: Sink | None) -> dict[str, Any]:
@@ -412,11 +702,14 @@ def _decode_mp3(sound: soundfile.SoundFile, sink: Sink | None) -> dict[str, Any]
 _CTYPES = {"int32": "int", "float32": "float"}
 
 
-def read_blocks(sound: soundfile.SoundFile, dtype: str) -> Iterator[np.ndarray]:
+def read_blocks(
+    sound: soundfile.SoundFile, dtype: str, limit: int | None = None
+) -> Iterator[np.ndarray]:
     """Yield the decoded frames in order, until libsndfile has no more.
 
-    Each block is shaped (frames, channels). Raises soundfile.LibsndfileError when
-    libsndfile reports an error.
+    Each block is shaped (frames, channels). With limit, asks libsndfile for no more
+    than limit frames in all. Raises soundfile.LibsndfileError when libsndfile
+    reports an error.
     """
     # KLUDGE: soundfile's read() and blocks() cap reading at the header's frame
     # count, which an MP3 may overstate or understate, blocks() yields stale data
@@ -427,15 +720,19 @@ def read_blocks(sound: soundfile.SoundFile, dtype: str) -> Iterator[np.ndarray]:
     ctype = _CTYPES[dtype]
     read = getattr(soundfile._snd, f"sf_readf_{ctype}")
     handle = sound._file
-    while True:
-        block = np.empty((_BLOCK_FRAMES, sound.channels), dtype=dtype)
+    remaining = limit
+    while remaining is None or remaining > 0:
+        size = _BLOCK_FRAMES if remaining is None else min(_BLOCK_FRAMES, remaining)
+        block = np.empty((size, sound.channels), dtype=dtype)
         pointer = soundfile._ffi.cast(f"{ctype} *", soundfile._ffi.from_buffer(block))
-        count = read(handle, pointer, _BLOCK_FRAMES)
+        count = read(handle, pointer, size)
         code = soundfile._snd.sf_error(handle)
         if code:
             raise soundfile.LibsndfileError(code)
         if not count:
             return
+        if remaining is not None:
+            remaining -= count
         yield block[:count]
 
 
