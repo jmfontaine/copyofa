@@ -241,21 +241,23 @@ the collector already owns.
 
 ### Now
 
-- **[v0.1.0](https://github.com/jmfontaine/copyofa/milestone/1): Preserve and Verify a
-  Selected File Delivery** — Acquire Audio and Record Its Origins; Preserve Evidence
-  Throughout Its Lifetime. S2 and S6. Specified in the
-  [brief](briefs/0001-preserve-and-verify-file-delivery.md); published to PyPI.
+- **[v0.2.0](https://github.com/jmfontaine/copyofa/milestone/2): Describe the Audio in
+  an Evidence Set** — Understand Audio. S2. Decodes FLAC, WAV and MP3 in a preserved
+  set and reports their properties, an Audio Identity for lossless audio, and exact
+  measurements in an inspection Report. Specified in the
+  [brief](briefs/0002-describe-audio-in-evidence-set.md).
 
 ### Next
 
-- **Inspect Audio and Share Its Analysis** — Understand Audio; Share and Evaluate
-  Findings. S2 and S5. It builds on files already preserved in an Evidence Set and
-  brings the audio decoding and Audio Identity that comparison and discovery need.
+- **Compare Selected Tracks and Share the Finding** — Compare and Discover
+  Relationships; Share and Evaluate Findings. S3 and S5. Builds on Audio Identity and
+  brings the portable human-readable view and Report validation with the first
+  Comparison Report.
 
 ### Later
 
-- **Compare Selected Tracks or Editions** — Compare and Discover Relationships; Share
-  and Evaluate Findings. S3–S5.
+- **Compare Editions** — Compare and Discover Relationships; Share and Evaluate
+  Findings. S4, built on track comparison.
 - **Preserve a Supported CD and Use Its Audio Later** — Acquire Audio and Record Its
   Origins; Preserve Evidence Throughout Its Lifetime. S1, connected to S2–S6. Lossless
   export is also useful for preserved file inputs and can be delivered earlier.

@@ -4,6 +4,7 @@
   "language": "en",
   "ignorePaths": [".copier-answers.yml"],
   "words": [
+    "ALAC",
     "bagit",
     "Bandcamp",
     "capsys",
@@ -32,6 +33,7 @@
     "Jean",
     "jmfontaine",
     "keepends",
+    "libsndfile",
     "Marc",
     "mispressings",
     "mkfifo",
@@ -58,10 +60,13 @@
     "redumper",
     "refurb",
     "relock",
+    "retagging",
     "rumdl",
     "scopeless",
     "sdist",
     "sdists",
+    "soundfile",
+    "streaminfo",
     "strerror",
     "striptags",
     "tagmanifest",
@@ -69,6 +74,7 @@
     "unraisable",
     "venv",
     "verifytypes",
+    "Vorbis",
     "worktrees",
     "WRONLY"
   ]
