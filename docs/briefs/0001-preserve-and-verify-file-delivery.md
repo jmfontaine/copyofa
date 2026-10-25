@@ -189,9 +189,12 @@ Each criterion is verified by an automated test unless stated otherwise.
 
 - **AC1 — Bag created.** `copyofa import` produces a destination containing the
   layout in Design decisions, with every payload file byte-identical to its source,
-  including files whose names need percent-encoding in a manifest (`%`, CR, LF). The
-  independent `bagit.py --validate <destination>` (run once by hand, with
-  `uvx --from bagit bagit.py`) reports the bag valid.
+  including files whose names need percent-encoding in a manifest (`%`, CR, LF). For a
+  set whose file names contain no `%`, the independent
+  `bagit.py --validate <destination>` (run once by hand, with
+  `uvx --from bagit bagit.py`) reports the bag valid. The manifest writes `%` as `%25`,
+  as RFC 8493 section 2.1.3 requires; bagit-python does not decode it
+  ([bagit-python#157](https://github.com/LibraryOfCongress/bagit-python/issues/157)).
 - **AC2 — Import Record.** The record holds the fields in Requirements. A note and
   references appear exactly as supplied; without them, those fields are absent rather
   than empty or invented.

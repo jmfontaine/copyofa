@@ -75,6 +75,11 @@ Alternatives considered:
   `.DS_Store`, which Finder writes while a collector browses a set, and import never
   preserves them. `bagit.py` would report such a bag invalid; CopyOfA reports it
   intact when every preserved file matches, because those files are not evidence.
+- Checking a set with an independent tool depends on that tool following RFC 8493
+  section 2.1.3. bagit-python does not decode `%25`
+  ([bagit-python#157](https://github.com/LibraryOfCongress/bagit-python/issues/157)),
+  so it reports a set with `%` in a file name incomplete. CopyOfA keeps the standard
+  encoding rather than follow a tool's bug.
 - Repair must run on a staging copy and be accepted against `manifest-sha256.txt`.
   par2cmdline's default repair leaves the damaged original as `<name>.1` beside the
   repaired file, which invalidates the bag, and its `-p` option deletes the PAR2 files

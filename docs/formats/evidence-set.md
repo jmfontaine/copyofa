@@ -153,4 +153,6 @@ Each prints `OK` per file and exits 0 when every listed file matches. On Linux,
 - The Library of Congress validator, `bagit.py --validate <set>` (for example through
   `uvx --from bagit bagit.py`), also checks that no file under `data/` is unlisted. It
   reports a set invalid once Finder has added a `.DS_Store` to it, and bagit.py 1.9.0
-  does not decode `%25`, so it also reports a set with `%` in a file name invalid.
+  does not decode `%25`
+  ([bagit-python#157](https://github.com/LibraryOfCongress/bagit-python/issues/157)),
+  so it also reports a set with `%` in a file name invalid.
