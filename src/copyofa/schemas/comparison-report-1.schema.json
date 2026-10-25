@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/jmfontaine/copyofa/main/src/copyofa/schemas/comparison-report-1.schema.json",
   "title": "CopyOfA comparison Report, format version 1",
-  "description": "The Report that `copyofa compare --json` prints: measurements of how the audio of two preserved tracks relates. See docs/formats/comparison-report.md.",
+  "description": "The Report that `copyofa compare --json` printed before CopyOfA 0.4.0: measurements of how the audio of two preserved tracks relates. See Format version 1 in docs/formats/comparison-report.md.",
   "type": "object",
   "properties": {
     "report_kind": { "const": "copyofa.comparison" },
