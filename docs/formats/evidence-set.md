@@ -101,14 +101,38 @@ under `data/`, so browsing a set in Finder does not make it fail verification:
 
 ## How an Evidence Set is accepted
 
-Import reads each source file once, computing its SHA-256 while copying it into a
+Before copying anything, import refuses, exiting 1 and creating nothing, when:
+
+- a source does not exist, has no base name (`/`), or is neither a regular file nor a
+  directory;
+- a source is itself a symbolic link. Import never follows links, so name the link's
+  target instead;
+- two sources are the same file or directory, or one lies inside the other;
+- two sources share a base name. Base names are compared case-insensitively and after
+  Unicode normalization, as a case-insensitive volume, the default on macOS, compares
+  them: `Album` and `album` are refused together even on a case-sensitive volume,
+  because the set must stay valid once moved to a macOS volume;
+- the destination exists, its parent does not exist or cannot be opened, or it lies
+  inside a source;
+- a staging directory left by an earlier import exists (see below);
+- the path of a source or of the destination, or a name in a directory import lists
+  (not one inside an excluded directory), is not valid UTF-8, which BagIt manifests
+  require;
+- the selection leaves no file to preserve.
+
+It also fails before copying anything when a selected directory cannot be listed or a
+selected file cannot be opened; the error names it, and excluding it lets the rest be
+imported.
+
+Import then reads each source file once, computing its SHA-256 while copying it into a
 staging directory, `<destination>.copyofa-staging`, beside the destination. It then
 re-reads the stored copy and compares digests, and fails if they differ or if the
 source file's size or modification time changed during the copy. Only when every file
 and tag file is written does it rename the staging directory to the destination. A
-set at the destination is therefore complete. A staging directory left behind by a
-crash is never reused or deleted by CopyOfA: the next import to that destination
-refuses and names it.
+set at the destination is therefore complete. If syncing the destination's parent
+directory fails after that rename, the set is kept and import warns on stderr. A
+staging directory left behind by a crash is never reused or deleted by CopyOfA: the
+next import to that destination refuses and names it.
 
 ## Checking a set without CopyOfA
 

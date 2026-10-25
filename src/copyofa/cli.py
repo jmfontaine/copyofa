@@ -113,7 +113,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _import(args: argparse.Namespace) -> int:
     def progress(path: str, size: int) -> None:
-        print(f"Preserved {_printable(path)} ({size} bytes)", file=sys.stderr)
+        print(f"Preserved {_printable(path)} ({_count(size, 'byte')})", file=sys.stderr)
 
     try:
         result = import_evidence(
@@ -127,6 +127,8 @@ def _import(args: argparse.Namespace) -> int:
     except (CopyOfAError, OSError) as error:
         print(f"copyofa: {error}", file=sys.stderr)
         return EXIT_PROBLEM
+    for warning in result.warnings:
+        print(f"copyofa: warning: {warning}", file=sys.stderr)
     if args.json:
         print(json.dumps(result.to_json(), indent=2, ensure_ascii=False))
     else:
@@ -137,8 +139,8 @@ def _import(args: argparse.Namespace) -> int:
 def _print_import(result: ImportResult) -> None:
     exclusions = result.import_record["exclusions"]
     print(f"Accepted Evidence Set {_printable(str(result.evidence_set))}")
-    print(f"Preserved {result.files} files, {result.bytes} bytes")
-    print(f"Excluded {len(exclusions)}")
+    print(f"Preserved {_count(result.files, 'file')}, {_count(result.bytes, 'byte')}")
+    print(f"Excluded {_count(len(exclusions), 'item')}")
     for exclusion in exclusions:
         reason = exclusion["reason"].replace("_", " ")
         if "pattern" in exclusion:
@@ -192,6 +194,11 @@ def _print_items(title: str, items: list[dict[str, str]]) -> None:
         if item["outcome"] != verifier.CHANGED:
             line = f"{line} ({item['reason']})"
         print(_printable(line))
+
+
+def _count(number: int, noun: str) -> str:
+    """Format a count with its noun, such as `1 file` or `2 files`."""
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
 
 
 def _printable(text: str) -> str:

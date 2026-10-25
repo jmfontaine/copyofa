@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -505,6 +506,43 @@ def test_import_cleans_up_when_ctrl_c_arrives_right_after_creating(
     assert outcome.code == 130
     assert outcome.out == ""
     assert list(archive.iterdir()) == []
+
+
+def test_import_keeps_accepted_set_when_syncing_its_parent_fails(
+    run: Run, album: Path, archive: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fsync = os.fsync
+
+    def failing_on_directories(fd: int) -> None:
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError(errno.EIO, os.strerror(errno.EIO))
+        fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", failing_on_directories)
+    destination = archive / "Album"
+
+    outcome = run("import", album, "--to", destination)
+
+    assert outcome.code == 0
+    assert outcome.out.startswith(f"Accepted Evidence Set {destination}\n")
+    assert f"copyofa: warning: could not sync {archive}" in outcome.err
+    assert sorted(path.name for path in archive.iterdir()) == ["Album"]
+    assert set(read_manifest(destination / "manifest-sha256.txt")) == payload_files(
+        destination
+    )
+
+
+def test_import_output_counts_in_singular(
+    run: Run, tmp_path: Path, archive: Path
+) -> None:
+    source = tmp_path / "one.txt"
+    source.write_bytes(b"x")
+
+    outcome = run("import", source, "--to", archive / "One")
+
+    assert outcome.code == 0
+    assert "Preserved data/one.txt (1 byte)\n" in outcome.err
+    assert "Preserved 1 file, 1 byte\nExcluded 0 items\n" in outcome.out
 
 
 def test_import_prints_json_result(run: Run, album: Path, archive: Path) -> None:
