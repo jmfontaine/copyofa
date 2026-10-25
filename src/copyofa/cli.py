@@ -10,13 +10,14 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 import copyofa
-from copyofa import comparator, inspector, validator, verifier, viewer
+from copyofa import acquirer, comparator, inspector, validator, verifier, viewer
 from copyofa.errors import CopyOfAError
 from copyofa.importer import import_evidence
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from copyofa.acquirer import AcquisitionResult
     from copyofa.importer import ImportResult
 
 EXIT_OK = 0
@@ -86,6 +87,45 @@ def _parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="print the result as JSON"
     )
     importing.set_defaults(handler=_import)
+
+    acquiring = commands.add_parser(
+        "acquire",
+        help="read a plain audio CD with redumper into a new Evidence Set",
+        description=(
+            "Read a plain audio CD with redumper, build b768 or later, and preserve "
+            "everything it wrote but the track files as a new Evidence Set, with an "
+            "Acquisition Record. Exits 0 when the set was accepted and the disc read "
+            "without error, and 1 when it was read with errors, refused or failed."
+        ),
+    )
+    acquiring.add_argument(
+        "--to",
+        required=True,
+        metavar="destination",
+        help="the Evidence Set to create; it must not exist, its parent must",
+    )
+    acquiring.add_argument(
+        "--drive",
+        action=_StoreOnce,
+        metavar="drive",
+        help=(
+            "the drive to read, as redumper's --drive names it, such as disk6; "
+            "by default, the first drive holding a disc"
+        ),
+    )
+    acquiring.add_argument(
+        "--note", action=_StoreOnce, help="a free-form note about the provenance"
+    )
+    acquiring.add_argument(
+        "--ref",
+        action="append",
+        metavar="reference",
+        help="an external reference, such as discogs=r123456 (repeatable)",
+    )
+    acquiring.add_argument(
+        "--json", action="store_true", help="print the result as JSON"
+    )
+    acquiring.set_defaults(handler=_acquire)
 
     verifying = commands.add_parser(
         "verify",
@@ -205,6 +245,78 @@ def _import(args: argparse.Namespace) -> int:
     else:
         _print_import(result)
     return EXIT_OK
+
+
+def _acquire(args: argparse.Namespace) -> int:
+    def progress(message: str) -> None:
+        print(_printable(message), file=sys.stderr)
+
+    try:
+        result = acquirer.acquire(
+            args.to,
+            drive=args.drive,
+            note=args.note,
+            references=args.ref,
+            progress=progress,
+        )
+    except (CopyOfAError, OSError) as error:
+        print(f"copyofa: {error}", file=sys.stderr)
+        return EXIT_PROBLEM
+    for warning in result.warnings:
+        print(f"copyofa: warning: {warning}", file=sys.stderr)
+    read_errors = acquirer.has_read_errors(result.acquisition_record)
+    if read_errors:
+        print(
+            "copyofa: the Evidence Set was accepted, but the disc was read with errors",
+            file=sys.stderr,
+        )
+    if args.json:
+        _print_json(result.to_json())
+    else:
+        _print_acquisition(result)
+    return EXIT_PROBLEM if read_errors else EXIT_OK
+
+
+def _print_acquisition(result: AcquisitionResult) -> None:
+    record = result.acquisition_record
+    drive = record["drive"]
+    details = []
+    if "firmware_revision" in drive:
+        details.append(f"firmware {drive['firmware_revision']}")
+    if "read_offset" in drive:
+        details.append(f"read offset {drive['read_offset']:+}")
+    print(f"Accepted Evidence Set {_printable(str(result.evidence_set))}")
+    described = f"{drive['vendor']} {drive['product']}"
+    if details:
+        described = f"{described} ({', '.join(details)})"
+    print(_printable(f"Drive: {described}"))
+    reader = record["reader"]
+    print(_printable(f"Reader: {reader['name']} {reader['build']}"))
+    disc = record["disc"]
+    if "write_offset" in disc:
+        print(f"Disc write offset: {disc['write_offset']:+}")
+    errors = record["read_errors"]
+    print(
+        f"Read errors: "
+        f"{'found' if acquirer.has_read_errors(record) else 'none'} "
+        f"(SCSI {_count(errors['scsi_samples'], 'sample')}, "
+        f"C2 {_count(errors['c2_samples'], 'sample')}; "
+        f"subchannel Q {_count(errors['subchannel_q_sectors'], 'sector')})"
+    )
+    print(f"Tracks: {len(record['tracks'])}")
+    for track in record["tracks"]:
+        line = (
+            f"  {track['number']}: "
+            f"{viewer.format_duration(track['frame_count'], acquirer.SAMPLE_RATE)}, "
+            f"{track['audio_digest']}"
+        )
+        if track["error_frames"]:
+            line = (
+                f"{line}, {_count(track['error_frames'], 'frame')} not read "
+                "successfully"
+            )
+        print(line)
+    print(f"Preserved {_count(result.files, 'file')}, {_count(result.bytes, 'byte')}")
 
 
 # Lone surrogates: how Python represents file name bytes that are not valid UTF-8.

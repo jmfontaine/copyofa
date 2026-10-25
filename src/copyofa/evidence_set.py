@@ -10,6 +10,9 @@ MANIFEST = "manifest-sha256.txt"
 TAG_MANIFEST = "tagmanifest-sha256.txt"
 PAYLOAD_DIR = "data"
 IMPORT_RECORD = "copyofa/import-record.json"
+ACQUISITION_RECORD = "copyofa/acquisition-record.json"
+DISC_IMAGE = "data/disc.scram.flac"
+"""Where an acquired set stores its disc image."""
 
 BAGIT_TXT_CONTENT = "BagIt-Version: 1.0\nTag-File-Character-Encoding: UTF-8\n"
 

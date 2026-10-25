@@ -117,8 +117,10 @@ A Python CLI published to PyPI. The `copyofa` console script calls
 An Evidence Set is a BagIt 1.0 bag with SHA-256 manifests, its Preserved Evidence
 under `data/` and CopyOfA's records in the `copyofa/` tag directory, as
 [ADR 0001](docs/decisions/0001-store-evidence-sets-as-bagit-bags.md) decides.
-[docs/formats/evidence-set.md](docs/formats/evidence-set.md) documents the layout and
-the Import Record; change it with any change to what import writes.
+[docs/formats/evidence-set.md](docs/formats/evidence-set.md) documents the layout, the
+Import Record and the Acquisition Record; change it with any change to what import or
+acquire writes. Import and acquire create their destination through the staging
+directory `src/copyofa/staging.py` manages.
 [docs/formats/verification-report.md](docs/formats/verification-report.md) documents
 the Report verify prints,
 [docs/formats/inspection-report.md](docs/formats/inspection-report.md) the Report
@@ -164,6 +166,22 @@ functions rather than soundfile's `read()` (see the `KLUDGE` in
 comparison method (resampling, alignment, measurements) is decided in
 [ADR 0003](docs/decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md).
 
+### Disc acquisition
+
+`acquire` reads a plain audio CD with [redumper](https://github.com/superg/redumper),
+an external program needed only by acquire, never a Python dependency: build b768 or
+later on `PATH`, run once as `redumper disc`, as
+[ADR 0005](docs/decisions/0005-acquire-audio-cds-with-redumper.md) decides. Acquire
+reads the drive, the table of contents, the offsets and the error counts from
+redumper's log, and the tracks' files, ISRCs and CD-Text from its cue sheet. An
+acquired set stores redumper's image as 16-bit stereo FLAC, written by libsndfile at
+its highest compression level, its state and subchannel as xz, written by Python's
+`lzma`, its other files as written, and no track file; each track is a range of the
+image the Acquisition Record gives. soundfile's minimum, 0.13, is its first release
+that sets a FLAC compression level. Tests run a stand-in `redumper`, defined in
+`tests/conftest.py`, that writes small synthetic files and a log in build b768's
+format.
+
 ### Command conventions
 
 Every command follows the conventions `import` and `verify` set in v0.1.0, as
@@ -176,7 +194,8 @@ Every command follows the conventions `import` and `verify` set in v0.1.0, as
 - Exit 0 on success, 1 when the command refused, failed or found a problem (a result
   is still printed when there is one), 2 for invalid arguments or, for a command that
   reads an Evidence Set, a target that is not one, and 130 when canceled with Ctrl-C.
-  Import exits 1 for a source or destination it refuses, validate and view for a file
+  Import and acquire exit 1 for a source or destination they refuse, acquire also for
+  a set it accepted from a disc read with errors, validate and view for a file
   they cannot read, and view for a Report it refuses. View prints an HTML page, not
   JSON, and has no `--json`
 - Stdout stays empty whenever no result is produced

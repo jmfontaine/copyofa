@@ -542,3 +542,33 @@ def test_verify_json_prints_non_ascii_characters_as_utf8(
     assert outcome.code == 0
     assert '"path": "data/Café/Été.flac"' in outcome.out
     assert outcomes(report) == {"data/Café/Été.flac": "matching"}
+
+
+def test_verify_finds_an_acquired_set_intact(run: Run, acquired_set: Path) -> None:
+    outcome = run("verify", acquired_set, "--json")
+
+    assert outcome.code == 0, outcome.out
+    report = json.loads(outcome.out)
+    assert verifier.is_intact(report)
+    assert "copyofa/acquisition-record.json" in {
+        item["path"] for item in report["tag_files"]
+    }
+
+
+@pytest.mark.parametrize(
+    "changed", ["data/disc.scram.flac", "copyofa/acquisition-record.json"]
+)
+def test_verify_reports_a_change_in_an_acquired_set(
+    run: Run, acquired_set: Path, changed: str
+) -> None:
+    path = acquired_set / changed
+    data = bytearray(path.read_bytes())
+    data[len(data) // 2] ^= 0x01
+    path.write_bytes(data)
+
+    outcome = run("verify", acquired_set, "--json")
+
+    assert outcome.code == 1
+    report = json.loads(outcome.out)
+    items = report["payload"] + report["tag_files"]
+    assert {item["path"]: item["outcome"] for item in items}[changed] == "changed"
