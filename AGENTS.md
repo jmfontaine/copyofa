@@ -100,7 +100,16 @@ makes PyPI reject any upload. The `copyofa` console script calls
 - `src/copyofa/`: the package (src layout)
 - `tests/`: the pytest suite
 - `docs/`: durable project documents: the Manifesto, the Product Map, release briefs
-  (`docs/briefs/`), and architecture decision records (`docs/decisions/`)
+  (`docs/briefs/`), architecture decision records (`docs/decisions/`), and the formats
+  of the files CopyOfA writes (`docs/formats/`)
+
+### Evidence Set format
+
+An Evidence Set is a BagIt 1.0 bag with SHA-256 manifests, its Preserved Evidence
+under `data/` and CopyOfA's records in the `copyofa/` tag directory, as
+[ADR 0001](docs/decisions/0001-store-evidence-sets-as-bagit-bags.md) decides.
+[docs/formats/evidence-set.md](docs/formats/evidence-set.md) documents the layout and
+the Import Record; change it with any change to what import writes.
 
 ### Testing
 
