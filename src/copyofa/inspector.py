@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import os
 import stat
@@ -248,14 +247,12 @@ def _interpret(file: BinaryIO, suffix: str) -> dict[str, Any]:
     # Ctrl-C or an I/O error is not lost inside a cffi callback. Rewind the
     # descriptor itself; the file object's buffer may have kept it elsewhere.
     os.lseek(file.fileno(), 0, os.SEEK_SET)
-    # A duplicate, which libsndfile owns: libsndfile 1.2.0 closes the descriptor it
-    # was given when it cannot open the file, even when told not to.
+    # A duplicate, which libsndfile owns and closes, also when it cannot open the
+    # file: libsndfile 1.2.0 does so even when told not to close it.
     duplicate = os.dup(file.fileno())
     try:
         sound = soundfile.SoundFile(duplicate, closefd=True)
     except soundfile.LibsndfileError as error:
-        with contextlib.suppress(OSError):
-            os.close(duplicate)
         if streaminfo is not None or suffix in _EXPECTED_SUFFIXES:
             return _failed(f"libsndfile cannot open it: {error.error_string}")
         return _not_interpreted("no supported audio format was recognized")
