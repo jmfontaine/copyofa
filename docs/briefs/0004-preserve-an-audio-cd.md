@@ -167,12 +167,13 @@ that redumper does not report are absent, never invented.
   be used make that input `not_inspected` with the reason, and compare exits 1, as for
   a file the set does not list.
 - **Comparison Report format version 3** is version 2 with one field added to an
-  input that is a track of an acquired set: `track`, its number, first frame and
-  length in the image. In that input, `path`, `expected_digest` and `observed_digest`
-  describe the image file; `outcome`, `reason`, the audio properties, `frames`,
-  `audio_digest`, `peak` and the silences describe the track, with inspect's track
-  outcomes; `flac_md5_signature` is absent, since it covers the whole image. Compare
-  prints version 3 from this release on.
+  input given with `--track-a` or `--track-b`: `track`, its number, and its first
+  frame and length in the image when the record gives them. In that input, `path`,
+  `expected_digest` and `observed_digest` describe the image file, and `path` is
+  absent when no usable record names the image; `outcome`, `reason`, the audio
+  properties, `frames`, `audio_digest`, `peak` and the silences describe the track,
+  with inspect's track outcomes; `flac_md5_signature` is absent, since it covers the
+  whole image. Compare prints version 3 from this release on.
 - **View** renders version 3, showing each input's track; validate and view keep
   accepting versions 1 and 2.
 
@@ -272,10 +273,11 @@ format of build b768.
   schemas ship in the package, and every Report the test suite produces validates.
 - **AC11 — Documented.** `docs/formats/evidence-set.md` documents acquired sets, the
   Acquisition Record, the acquisition result `--json` prints, and how to restore
-  redumper's files; the inspection and comparison Report documents their new versions;
-  `docs/formats/export-result.md` the export result. The README shows acquire and
-  export. The Architecture section of AGENTS.md records redumper as an external
-  program, the stored formats, soundfile's new minimum, and the new document.
+  redumper's files; the inspection and comparison Report documents their new versions
+  and compare's new synopsis; `docs/formats/export-result.md` the export result. The
+  README shows acquire, export and compare on a track. The Architecture section of
+  AGENTS.md records redumper as an external program, the stored formats, soundfile's
+  new minimum, and the new document.
 - **AC12 — A real disc (by hand, once).** *Add Violence* is acquired on the
   maintainer's drive into a set of about 148 MB. Verify passes. Inspect gives the five
   Audio Digests the spike recorded, starting `1e9b66e1`, `7ce35410`, `ec9ef8df`,
