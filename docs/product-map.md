@@ -241,21 +241,22 @@ the collector already owns.
 
 ### Now
 
-- **[v0.4.0](https://github.com/jmfontaine/copyofa/milestone/4): Share a Comparison
-  Report** — Share and Evaluate Findings. S5, starting with S3's Comparison Report. A
-  collector shares a Comparison Report, leaving out where their Evidence Sets are
-  stored if they choose, with a self-contained HTML view that opens in any browser. A
-  recipient validates the Report against its published JSON Schema, with CopyOfA or
-  any JSON Schema validator. Every Report kind gets a schema. Specified in
-  [brief 0003](briefs/0003-share-a-comparison-report.md), with the schemas decided in
-  [ADR 0004](decisions/0004-publish-each-report-format-as-a-json-schema.md).
+- **[v0.5.0](https://github.com/jmfontaine/copyofa/milestone/5): Preserve an Audio
+  CD** — Acquire Audio and Record Its Origins; Preserve Evidence Throughout Its
+  Lifetime. S1, for plain audio CDs. A collector preserves a CD with redumper as an
+  Evidence Set that holds everything meaningful the reading produced, compressed, and
+  nothing the rest reproduces, then verifies, inspects, compares and exports its
+  tracks without the disc. Specified in
+  [brief 0004](briefs/0004-preserve-an-audio-cd.md), with acquisition and storage
+  decided in [ADR 0005](decisions/0005-acquire-audio-cds-with-redumper.md).
 
 ### Next
 
 - **Locate Matching Portions and Edits Between Tracks** — Compare and Discover
   Relationships. S3's partial matches and their affected ranges, which one global
   offset does not locate. Edition comparison may need it: the tracks of two editions
-  can be edited differently.
+  can differ in length and content, as those of a CD and a download of *Add Violence*
+  do.
 
 ### Later
 
@@ -265,9 +266,11 @@ the collector already owns.
   rest of S5: compare a received Report with the recipient's own copy, or reproduce its
   measurements, as checks distinct from validation. Views of inspection and
   verification Reports may come with it.
-- **Preserve a Supported CD and Use Its Audio Later** — Acquire Audio and Record Its
-  Origins; Preserve Evidence Throughout Its Lifetime. S1, connected to S2–S6. Lossless
-  export is also useful for preserved file inputs and can be delivered earlier.
+- **Acquire More Kinds of Disc** — Acquire Audio and Record Its Origins. S1 beyond
+  plain audio CDs: CD-Extra and mixed-mode discs, audio before the first track, and
+  damaged discs that need retries.
+- **Export Imported Audio** — Preserve Evidence Throughout Its Lifetime. Lossless
+  export, delivered for acquired CDs in v0.5.0, for imported files too.
 - **Find Related Audio Among Selected Material** — Compare and Discover Relationships.
   S7.
 - **Repair Limited Archive Damage Using Optional Recovery Information** — Preserve
