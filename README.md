@@ -16,6 +16,8 @@ into a self-contained HTML page, and `validate` checks any Report against its
 published JSON Schema. The fifth, v0.5.0, preserves a plain audio CD: `acquire` reads
 it with redumper into an Evidence Set that stores the disc image compressed, `inspect`
 and `compare` read its tracks from the image, and `export` writes them as FLAC files.
+The sixth, v0.6.0, locates matching portions: `compare` reports which portions of one
+track appear in the other, where and how alike, and which audio appears in only one.
 The roadmap in the Product Map lists what comes next.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
