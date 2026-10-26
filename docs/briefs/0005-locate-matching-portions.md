@@ -49,6 +49,7 @@ affected ranges:
 ## Out of scope
 
 - Speed, pitch and drift differences; they give no portion, which the Report states.
+  Inputs shorter than one window (5 s) give no portion either.
 - Comparing whole discs or releases as such (the Later outcome Compare Editions).
   Compare still takes two inputs, which may be long.
 - Choosing thresholds or the window length; they are fixed.
@@ -71,23 +72,25 @@ affected ranges:
 ### Comparison Report format version 4
 
 - **`method`** gives ADR 0003's decoder, resampler and common rate, `alignment`
-  `windowed_portions`, and `parameters`: every value ADR 0006 fixes (decimation and
-  its resampler quality, first-difference coefficient, window length, silent-window
-  ratio, candidate threshold, candidates per window and their spacing, chaining
-  tolerance, block length, matched-block residual, evidence floor, silence-against-
-  signal level, acceptance residual, minimum portion length, alternate margin and
-  coverage), with units.
+  `windowed_portions`, and `parameters`: every value ADR 0006 decision 7 lists, with
+  its unit. ADR 0006 is the authority for that list.
 - **`measurements`** holds, in place of `offset` and `overlap`:
   - `portions`: each with its `rank` (`primary` or `alternate`), its range in A and
     in B (`start_frame` and `frames`), its `offset`, its residual after the per-block
     gains, and ADR 0003's `downmix` and `channels` measurements over it, residual
-    windows included. Primaries come first, in A's order, then alternates.
+    windows included, and its own `absent` for each of these values the audio leaves
+    undefined (such as the residual of identical audio, or `channels` when the channel
+    counts differ), with the reason. Primaries come first, in A's order, then
+    alternates.
   - `unmatched`: for A and for B, the ranges no primary portion covers, each with
-    `start_frame`, `frames`, its level in dBFS (absent for digital silence) and
-    whether it is `digitally_silent`.
+    `start_frame`, `frames`, whether it is `digitally_silent`, and, when it is not, its
+    `level_dbfs` as ADR 0006 defines it.
   - `identical_audio`, as in version 3.
-  - `absent`: why `portions` is empty, such as "no portion found" or a track with no
-    frames.
+  - `absent`: why `portions` is empty, such as "no portion found", an input shorter
+    than one window, or a track with no frames.
+- **`limitations`** state the method's limits instead of version 3's sentence on one
+  global offset: portions shorter than about 2.5 s may be missed, inputs shorter than
+  5 s give none, and speed or drift differences give none.
 - Frames are counted at `common_sample_rate`. Inputs and everything else stay as in
   version 3. Compare prints version 4 from this release on; validate and view keep
   accepting versions 1 to 3.
@@ -125,24 +128,32 @@ None.
 
 Each criterion is verified by an automated test unless stated otherwise. Tests build
 their inputs from generated signals, so that each expected portion is known; they
-ship no recording.
+ship no recording. Existing compare tests whose signals are shorter than one window
+(5 s) are given longer signals where they need a portion.
 
 - **AC1 — Edits found.** From a generated signal, variants with a cut, an inserted
   section from another signal, a repeated section, added leading and trailing silence,
   a fade-in and fade-out, a crossfade at a cut, a shift, a 0.3 s replacement and an
-  inverted polarity each give the expected primary portions: every offset exact, every
-  boundary within 32 frames, no extra primary portion. The same holds after resampling
-  B to 48 kHz, at 24 bits, and with a −1.5 dB gain.
-- **AC2 — Repeats and no match.** A section repeated in B gives an alternate portion
-  ranked after the primary. Two unrelated generated signals give no portion, with the
-  reason in `absent`, and compare exits 0.
+  inverted polarity each give the expected primary portions, with no extra primary
+  portion and every offset exact. Every boundary is within 32 frames of the expected
+  one, except that a fade's boundary is within one block (2048 frames) of the frame
+  where the faded signal's mean power over a block crosses −80 dBFS, and any boundary
+  inside a crossfade counts as expected. The same holds after resampling B to 48 kHz,
+  at 24 bits, and with a −1.5 dB gain.
+- **AC2 — Repeats and no match.** B holding a section of A twice, once exact and once
+  with noise added about 20 dB below it, gives the noisy copy as an alternate, ranked
+  after the primary; two exact copies give two primaries. Two unrelated generated
+  signals give no portion, with the reason in `absent`, and compare exits 0; so do
+  inputs shorter than 5 s.
 - **AC3 — Unmatched ranges.** Audio that only A holds and audio that only B holds are
   reported as unmatched with their level; digital silence is flagged and has no level.
-- **AC4 — Identical audio.** Two inputs with equal Audio Digests give one portion over
-  both, `identical_audio` true, and no search.
-- **AC5 — Report.** Compare prints format version 4 with every ADR 0006 parameter in
-  `method`; the version 4 schema ships in the package; every comparison Report the
-  test suite produces validates; validate accepts versions 1 to 4.
+- **AC4 — Identical audio.** Two inputs with equal Audio Digests give
+  `identical_audio` true and one primary portion over both at offset 0, whose residual
+  is absent with its reason.
+- **AC5 — Report.** Compare prints format version 4 with every parameter ADR 0006
+  decision 7 lists in `method`; the version 4 schema ships in the package; every
+  comparison Report the test suite produces validates; validate accepts versions 1 to
+  4.
 - **AC6 — Results and view.** The short result lists the portions and unmatched
   ranges, or says no portion was found. View renders a version 4 Report with
   portions, alternates, unmatched ranges and no portion, and still renders versions 1
@@ -158,9 +169,9 @@ ship no recording.
     as `--track-a 3` against the set's `data/disc.scram.flac`: one primary portion
     covering the whole track, whose range in B starts at frame 46845360.
   - The CD's track 4 against the download's: one primary portion at +34,946 frames,
-    the download's last 4.1 s unmatched and audible, and the repeated section as two
-    more portions. Track 3: primary portions at −4,075 frames with gaps in A, as the
-    spike found.
+    the download's last 4.1 s unmatched at about −21 dBFS and not digitally silent,
+    and the repeated section as two more portions. Track 3: primary portions at
+    −4,075 frames with gaps in A, as the spike found.
 
 ## Manifesto alignment
 

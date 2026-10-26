@@ -25,16 +25,18 @@ A spike tested a windowed method on content known to be identical, so that every
 expected answer was known:
 
 - **Edits made to a CD track with an answer key** (cut, insertion from another track,
-  repetition, added silence, fades, a crossfade, a shift, a 0.3 s replacement, a
-  dropout, inverted polarity), each also resampled to 48 and 96 kHz, at 24 bits, with a
-  gain change, and as 128 and 320 kbps MP3: 240 runs, none of 426 expected portions
-  missed, every offset exact, boundaries within 0 to 20 frames on lossless inputs.
+  repetition, added silence, fades, a crossfade, a shift, combined edits), each also
+  resampled to 48 and 96 kHz, at 24 bits, with a gain change, and as 128 and 320 kbps
+  MP3, and a 0.3 s replacement, a dropout and an inverted polarity at 16 bits and as
+  128 kbps MP3: with the 5-second windows decided below, 80 runs and none of 142
+  expected portions missed (240 runs and 426 portions over three window lengths), every
+  offset exact, boundaries within 0 to 20 frames on lossless inputs.
 - **The same audio cut differently** (each CD track inside its disc image, tracks
-  joined into one stream, a 48 kHz download against its own tracks): 56 runs, all
-  exact.
+  joined into one stream, a 48 kHz download against its own tracks): 26 runs at
+  5-second windows, 56 over three window lengths, all exact.
 - **Format siblings:** *The Downward Spiral* (2017) as FLAC and WAV have equal Audio
   Digests on all 14 tracks; FLAC against MP3, and *Broken* WAV against MP3, gave one
-  portion at offset 0 for each of 22 pairs, with no false edit.
+  primary portion at offset 0 for each of 22 pairs, with no false edit.
 - **Unrelated tracks:** 35 pairs gave no portion.
 
 On the same edited files, ADR 0003's global offset gave correlations of 0.67 to 0.93
@@ -53,38 +55,63 @@ portions, found on the mono downmixes at the common rate. The `alignment` of the
 Report becomes `windowed_portions`.
 
 1. **Coarse search.** Both downmixes are decimated by 16 with libsoxr at its `HQ`
-   quality and filtered with a first difference of coefficient 0.5. A is cut into
-   5-second windows, without overlap. For each window that is not silent (energy at
-   least 10⁻⁴ of the mean window energy), the magnitude of its normalized
-   cross-correlation with every position of B that holds the whole window gives up to
-   three candidates of at least 0.4, 0.5 s apart. Candidates of neighboring windows,
-   one window may be skipped, whose offsets differ by at most 32 frames are chained.
-2. **Refinement at the common rate.** For each chain, strongest first, the offset is
-   the integer within 32 frames of the coarse one that maximizes |Σ*ab*| / ‖*b*‖ over
-   the chain's core (its strongest window and the neighbors at 0.85 of its score or
-   more, up to 20 s). The portion grows outward in blocks of 2048 frames while each
-   block matches: after its own least-squares gain, the residual is at most 0.2 of A's
-   energy in the block (−7 dB). A block where A is digitally silent or below −80 dBFS
-   neither confirms nor refutes the match; a block where A is silent and B is above
-   −60 dBFS refutes it. Each end is then placed to the frame by the maximum-scoring
-   prefix or suffix of the frames around it. Windows of the chain left outside the
-   portion are refined again, so a portion after a hole is kept. Short gaps are never
-   bridged.
+   quality and filtered with a first difference of coefficient 0.5 (*y*[*n*] =
+   *x*[*n*] − 0.5·*x*[*n* − 1]). A is cut into 5-second windows, without overlap; a
+   window with energy at most 10⁻⁴ of the mean window energy gives no evidence. For
+   each other window, the magnitude of its normalized cross-correlation with every
+   position of B that holds the whole window gives up to three candidates of at least
+   0.4, at least 0.5 s apart. Candidates of neighboring windows, with at most one
+   window skipped between them, whose offsets differ by at most 32 frames are chained.
+   An input shorter than one window gives no candidate.
+2. **Refinement at the common rate.** For each chain, strongest first:
+   - **Offset.** The chain's core is its strongest window and its neighbors scoring at
+     least 0.85 of it, up to 20 s. The offset is the integer within 32 frames of the
+     coarse one that maximizes |Σ*ab*| / √Σ*b*² over the core.
+   - **Blocks.** The audio is cut into blocks of 2048 frames. With *p* the mean power
+     of A's downmix in a block (Σ*a*² / *n*) and *g* the block's own least-squares
+     gain, a block where *p* is zero is neutral when B's mean power is at most 10⁻⁶
+     (−60 dBFS) and refutes the match otherwise. Any other block confirms the match
+     when its residual Σ(*a* − *g*·*b*)² is at most 0.2·Σ*a*² (−7 dB); otherwise it
+     refutes it, unless *p* is below −80 dBFS, where it is neutral: quiet audio can
+     confirm a match but never refute it.
+   - **Growth.** The core must have at least half of its non-neutral blocks
+     confirming. Its longest run without a refuting block grows outward, block by
+     block, until a block refutes the match. Short gaps are never bridged.
+   - **Ends.** Each end is placed to the frame within one block of the block edge, at
+     the end of the maximum-scoring prefix or suffix of the score
+     0.2·*a*[*n*]² − (*a*[*n*] − *g*·*b*[*n* + offset])².
+   - **Holes.** Windows of the chain left outside the portion are refined again, so a
+     portion after a hole is kept.
 3. **Acceptance.** A portion is kept when it is at least 1 s long and its residual
-   after the per-block gains, weighted by energy, is at most −10 dB.
-4. **Ranking.** Portions at the same offset that overlap or touch are merged. A
-   portion is an alternate, ranked after the others covering its range of A, when
-   portions at least 3 dB better cover 90 % or more of its range of A; residuals below
-   −60 dB count as equal. Every portion is reported, primaries first.
+   after the per-block gains, 10·log10(Σ*ₖ*Σ(*a* − *gₖ*·*b*)² / Σ*a*²) over its blocks
+   *k*, is at most −10 dB. When that residual is undefined because *a* − *gₖ*·*b* is
+   zero throughout, the portion is kept.
+4. **Ranking.** Portions whose offsets differ by at most 2 frames and whose ranges of
+   A overlap or touch are merged. A portion is an alternate, ranked after the others,
+   when portions whose residual after the per-block gains is at least 3 dB lower cover
+   90 % or more of its range of A. Residuals below −60 dB, and undefined ones, count as
+   −60 dB for this comparison, so exact repeats tie and are all primaries. Every
+   portion is reported, primaries first.
 5. **Measurements.** Each portion is measured as ADR 0003 measures an overlap
    (correlation, gain and residual on the downmix and for each channel, and the
    residual of each one-second window), with its ranges in A and in B, its offset, and
-   its residual after the per-block gains.
+   its residual after the per-block gains. A value the audio leaves undefined is absent
+   with its reason, as ADR 0003 decides.
 6. **Unmatched audio.** The ranges of A and of B that no primary portion covers are
-   reported, each with its level in dBFS and whether it is digitally silent. When no
-   portion is found, the Report says so instead of giving an offset.
+   reported, each with whether it is digitally silent (every sample of every channel
+   zero) and, when it is not, its level: the mean power of all its samples of all
+   channels, in dB relative to full scale. When no portion is found, the Report says
+   so instead of giving an offset.
 7. **Parameters in the Report.** Every value above is a fixed method parameter, stated
-   in the Report's `method`, since the result moves with them.
+   in the Report's `method`, since the result moves with them: decimation 16 at `HQ`,
+   first-difference coefficient 0.5, window 5 s with a hop of 5 s, silent-window ratio
+   10⁻⁴, candidate threshold 0.4, 3 candidates per window at least 0.5 s apart, 1
+   skipped window, chaining tolerance 32 frames, core ratio 0.85 and core length 20 s,
+   refinement radius 32 frames, block 2048 frames, matched-block residual 0.2, core
+   confirming ratio 0.5, evidence floor −80 dBFS, silence against signal −60 dBFS, end
+   range one block, acceptance residual −10 dB, minimum portion 1 s, merge tolerance
+   2 frames, alternate margin 3 dB, alternate coverage 90 %, and equal-residual floor
+   −60 dB.
 
 ## Rationale and alternatives
 
@@ -106,8 +133,8 @@ Report becomes `windowed_portions`.
 - **No bridging,** so a 0.3 s replacement or dropout shows as the gap it is. Bridging
   0.25 s would have merged ten portions of one track into three and hidden seven gaps.
 - **5-second windows:** they found every edit the spike made, at half the
-  coarse-search cost of 2-second windows; 10-second windows miss portions shorter than
-  about 5 s.
+  coarse-search cost of 2-second windows; 10-second windows missed more short
+  portions, a 5 s excerpt among them.
 - **All matches reported, ranked,** because a repeated section really does match
   several places. Keeping only the best one would hide that, and two exact repeats tie.
 - **Fixed parameters,** because thresholds decide what a portion is: on one track of
@@ -132,8 +159,9 @@ Alternatives considered:
 - Comparison Reports get a new format version, with portions and unmatched ranges in
   place of the offset and overlap. Reports of earlier versions keep their meaning and
   their schemas.
-- A portion shorter than about 2.5 s may be missed, and a speed or drift difference
-  gives no portion; the Report states both limits.
+- A portion shorter than about 2.5 s may be missed, an input shorter than 5 s gives
+  no portion, and a speed or drift difference gives no portion; the Report states
+  these limits.
 - A boundary inside audio below −80 dBFS is placed at the nearest frame with evidence,
   and the rest is reported as unmatched; lossy encoding moves boundaries only there.
 - The coarse search costs two FFTs of B's length per window of A, so its time grows
