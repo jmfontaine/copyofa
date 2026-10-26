@@ -220,9 +220,11 @@ pytest with coverage (`just test`). CI runs the suite:
 - against the built wheel, installed into a clean environment
 
 Local test data: the maintainer's albums, for by-hand checks and acceptance, are in
-`/Users/jmf/CopyOfA`, one directory per release, mostly MP3, FLAC, WAV and M4A files.
-List the directory before giving a command that uses its paths. Use it for by-hand
-checks only: never copy its files into the repository or the tests.
+`/Users/jmf/CopyOfA`: one directory per release (a few per format, and some split into
+per-disc subdirectories), mostly MP3, FLAC, WAV and M4A files with cover images. List
+the directory, then the release, before giving a command that uses its paths, and quote
+them: names contain spaces and punctuation. Use it for by-hand checks only: never copy
+its files into the repository or the tests.
 
 ### Distribution
 
