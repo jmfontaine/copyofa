@@ -279,7 +279,8 @@ def _acquired_disc(record: Any, manifest: dict[str, str]) -> AcquiredDisc:
     if (
         record.get("record_kind") != kind
         or record.get("format_version") != version
-        or isinstance(record.get("format_version"), bool)
+        # Not 1.0, nor true, which compare equal to 1.
+        or type(record.get("format_version")) is not int
     ):
         raise UnusableRecordError(
             f"{_RECORD} is not format version {version} of {kind}"
