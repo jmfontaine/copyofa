@@ -367,7 +367,8 @@ def _log(config: dict[str, Any], disc: SyntheticDisc, arguments: list[str]) -> s
         "done",
         "",
         "CUE [disc.cue]:",
-        *cue.splitlines(),
+        # As redumper copies it: CD-Text may hold a carriage return.
+        *cue.removesuffix("\n").split("\n"),
         "",
         "*** END (time check: 0s)",
     ]
