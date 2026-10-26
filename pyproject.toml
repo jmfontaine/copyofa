@@ -45,6 +45,7 @@ dev = [
   "pyright>=1.1.414",
   "ruff>=0.17",
   "rumdl>=0.3",
+  "twine>=7",
   "ty>=0.0.86",
   { include-group = "test" },
 ]

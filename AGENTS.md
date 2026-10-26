@@ -230,7 +230,8 @@ its files into the repository or the tests.
 ### Distribution
 
 - Wheel and sdist built once by CI and checked by `scripts/check_distributions.py`
-  and `twine check --strict`; the same files are published, never rebuilt
+  and `twine check --strict`, at the version `uv.lock` pins; the same files are
+  published, never rebuilt
 - Published to PyPI through trusted publishing from `.github/workflows/publish.yml`
   when a `vX.Y.Z` tag on `main` is pushed; `just release` creates it signed
 - Between releases `main` carries a development version, `X.Y.Z.devN`, which sorts
