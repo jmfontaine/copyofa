@@ -31,7 +31,8 @@ expected answer was known:
   replacement, a dropout and an inverted polarity at 16 bits and as 128 kbps MP3:
   with the 5-second windows decided below, 80 runs and none of 142 expected portions
   missed (240 runs and 426 portions over three window lengths), every offset exact,
-  boundaries within 0 to 20 frames on lossless inputs.
+  boundaries within 0 to 20 frames on lossless inputs, any frame inside a fade or a
+  crossfade counting as exact.
 - **The same audio cut differently** (each CD track inside its disc image, tracks
   joined into one stream, a 48 kHz download against its own tracks): 26 runs at
   5-second windows, 56 over three window lengths, all exact.
@@ -168,6 +169,9 @@ Alternatives considered:
   gives no portion; the Report states these limits.
 - A boundary inside audio below −80 dBFS is placed at the nearest frame with evidence,
   and the rest is reported as unmatched; lossy encoding moves boundaries only there.
+- A boundary at a fade or a crossfade falls inside it, where the per-block fit stops
+  confirming the match, not at a fixed level: in the spike, about 0.15 to 0.17 s inside
+  3 s and 8 s fades of a CD track, and 0.58 s and 1.73 s into a 3 s crossfade.
 - The coarse search costs two FFTs of B's length per window of A, so its time grows
   with the product of the two lengths: about 1 s for two 3½-minute tracks, 28 s and
   2.7 GB for two 27-minute releases. Memory and speed are not optimized yet.
