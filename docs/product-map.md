@@ -241,20 +241,22 @@ the collector already owns.
 
 ### Now
 
-- **[v0.6.0](https://github.com/jmfontaine/copyofa/milestone/6): Locate Matching
-  Portions Between Tracks** — Compare and Discover Relationships. S3's partial
-  matches and their affected ranges: compare reports which portions of one track
-  appear in the other, where and how alike, and which audio appears in only one, in
-  place of one global offset. Specified in
-  [brief 0005](briefs/0005-locate-matching-portions.md), with the method decided in
-  [ADR 0006](decisions/0006-locate-matching-portions-between-tracks.md).
+- **[v0.7.0](https://github.com/jmfontaine/copyofa/milestone/7): Acquire Scratched
+  CDs and Tighten the Edges** — Acquire Audio and Record Its Origins; Preserve
+  Evidence Throughout Its Lifetime; Share and Evaluate Findings. S1 and S5: acquire
+  re-reads sectors with errors, so a lightly scratched CD is preserved; view refuses a
+  comparison Report version it cannot render; inspect and export hash the disc image
+  once; and command line and documentation fixes. Specified by the milestone's
+  issues, with re-reading decided in
+  [ADR 0007](decisions/0007-re-read-sectors-with-errors-when-acquiring.md).
 
 ### Next
 
 - **Compare Editions** — Compare and Discover Relationships; Share and Evaluate
-  Findings. S4, built on track comparison and its portions: the tracks of two editions
-  can differ in length and content, as those of a CD and a download of *Add Violence*
-  do, and a spike located each CD track in the whole download.
+  Findings. S4, built on track comparison and the portions it locates since v0.6.0:
+  the tracks of two editions can differ in length and content, as those of a CD and a
+  download of *Add Violence* do, and a spike located each CD track in the whole
+  download.
 
 ### Later
 
