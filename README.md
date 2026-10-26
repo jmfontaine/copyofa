@@ -151,13 +151,13 @@ copyofa compare "/Volumes/Archive/Add Violence CD" \
 Track A: track 4 of /Volumes/Archive/Add Violence CD (flac, 44100 Hz, 16-bit, 2 channels, 3:06.733)
 Track B: /Volumes/Archive/Add Violence/data/01-04 Not Anymore.flac (flac, 48000 Hz, 24-bit, 2 channels, 3:11.600)
 Common sample rate: 44100 Hz
-Portion 1, primary: A 4.098-186.720 s, B 4.891-187.513 s, offset +34946 frames (+0.792 s), correlation 0.997, residual -22.0 dB
-Portion 2, primary: A 8.548-16.714 s, B 17.912-26.078 s, offset +412945 frames (+9.364 s), correlation 0.996, residual -21.3 dB
-Portion 3, primary: A 17.119-25.294 s, B 9.340-17.515 s, offset -343054 frames (-7.779 s), correlation 0.997, residual -22.5 dB
-Portion 4, alternate: A 22.365-24.129 s, B 40.300-42.064 s, offset +790945 frames (+17.935 s), correlation 0.983, residual -14.8 dB
-Portion 5, alternate: A 39.493-41.272 s, B 23.142-24.921 s, offset -721054 frames (-16.350 s), correlation 0.984, residual -15.0 dB
-Portion 6, alternate: A 66.289-67.779 s, B 112.819-114.309 s, offset +2051978 frames (+46.530 s), correlation 0.958, residual -10.8 dB
-Portion 7, alternate: A 111.994-113.517 s, B 67.049-68.572 s, offset -1982087 frames (-44.945 s), correlation 0.959, residual -11.0 dB
+Portion 1, primary: A 4.098-186.720 s, B 4.891-187.513 s, offset +34946 frames (+0.792 s), correlation 0.997, residual (one gain) -22.0 dB
+Portion 2, primary: A 8.548-16.714 s, B 17.912-26.078 s, offset +412945 frames (+9.364 s), correlation 0.996, residual (one gain) -21.3 dB
+Portion 3, primary: A 17.119-25.294 s, B 9.340-17.515 s, offset -343054 frames (-7.779 s), correlation 0.997, residual (one gain) -22.5 dB
+Portion 4, alternate: A 22.365-24.129 s, B 40.300-42.064 s, offset +790945 frames (+17.935 s), correlation 0.983, residual (one gain) -14.8 dB
+Portion 5, alternate: A 39.493-41.272 s, B 23.142-24.921 s, offset -721054 frames (-16.350 s), correlation 0.984, residual (one gain) -15.0 dB
+Portion 6, alternate: A 66.289-67.779 s, B 112.819-114.309 s, offset +2051978 frames (+46.530 s), correlation 0.958, residual (one gain) -10.8 dB
+Portion 7, alternate: A 111.994-113.517 s, B 67.049-68.572 s, offset -1982087 frames (-44.945 s), correlation 0.959, residual (one gain) -11.0 dB
 Unmatched in A: 0.000-4.098 s, -36.8 dBFS
 Unmatched in A: 186.720-186.733 s, -11.8 dBFS
 Unmatched in B: 0.000-4.891 s, -31.1 dBFS

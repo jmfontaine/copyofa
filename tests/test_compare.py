@@ -563,7 +563,7 @@ def test_compare_human_result(run: Run, make_set: MakeSet) -> None:
     assert lines[2] == "Common sample rate: 44100 Hz"
     assert lines[3].startswith(
         "Portion 1, primary: A 0.000-11.000 s, B 0.280-11.280 s, "
-        "offset +12345 frames (+0.280 s), correlation 1.000, residual -"
+        "offset +12345 frames (+0.280 s), correlation 1.000, residual (one gain) -"
     )
     assert lines[3].endswith(" dB")
     level = 10 * math.log10(np.mean(np.square(tail / 32768)))
@@ -593,7 +593,7 @@ def test_compare_human_result_names_identical_and_absent_values(
             "Portion 1, primary: A 0.000-1.000 s, B 0.000-1.000 s, "
             "offset +0 frames (+0.000 s), "
             "correlation absent (track A is constant over the portion), "
-            "residual absent (the audio is identical)"
+            "residual (one gain) absent (the audio is identical)"
         ),
     ]
 

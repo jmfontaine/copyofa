@@ -50,10 +50,10 @@ MERGE_TOLERANCE_FRAMES = 2
 ALTERNATE_MARGIN_DB = 3
 ALTERNATE_COVERAGE = 0.9
 EQUAL_RESIDUAL_FLOOR_DB = -60
-# Not a parameter of the method: a position of B is searched only when its energy
-# under the window exceeds this share of B's whole energy, which keeps the energy,
-# a difference of two running sums, well above their rounding error.
-_ROUNDING_GUARD = 1e-10
+B_POSITION_ENERGY_FLOOR = 1e-10
+"""A position of B whose energy under the window is at most this share of B's whole
+energy gives no candidate, so that rounding errors in that energy, a difference of two
+running sums, cannot pass for a match where B is next to silent."""
 
 PARAMETERS: dict[str, Any] = {
     "decimation_factor": DECIMATION,
@@ -62,6 +62,7 @@ PARAMETERS: dict[str, Any] = {
     "window_seconds": WINDOW_SECONDS,
     "hop_seconds": HOP_SECONDS,
     "silent_window_energy_ratio": SILENT_WINDOW_RATIO,
+    "b_position_energy_floor": B_POSITION_ENERGY_FLOOR,
     "candidate_threshold": CANDIDATE_THRESHOLD,
     "candidates_per_window": CANDIDATES_PER_WINDOW,
     "candidate_separation_seconds": CANDIDATE_SEPARATION_SECONDS,
@@ -218,7 +219,7 @@ def _candidates(
     # B holds next to nothing, rounding errors in that sum could pass for a match.
     running = np.concatenate(([0.0], np.cumsum(np.square(b))))
     under = running[length:] - running[:-length]
-    searched = under > _ROUNDING_GUARD * running[-1]
+    searched = under > B_POSITION_ENERGY_FLOOR * running[-1]
     scale = np.zeros(positions)
     scale[searched] = 1 / np.sqrt(under[searched])
     size = _fast_length(len(b))
