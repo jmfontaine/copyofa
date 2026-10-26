@@ -241,27 +241,23 @@ the collector already owns.
 
 ### Now
 
-- **[v0.5.0](https://github.com/jmfontaine/copyofa/milestone/5): Preserve an Audio
-  CD** — Acquire Audio and Record Its Origins; Preserve Evidence Throughout Its
-  Lifetime. S1, for plain audio CDs. A collector preserves a CD with redumper as an
-  Evidence Set that holds everything meaningful the reading produced, compressed, and
-  nothing large the rest reproduces, then verifies, inspects, compares and exports its
-  tracks without the disc. Specified in
-  [brief 0004](briefs/0004-preserve-an-audio-cd.md), with acquisition and storage
-  decided in [ADR 0005](decisions/0005-acquire-audio-cds-with-redumper.md).
+- **[v0.6.0](https://github.com/jmfontaine/copyofa/milestone/6): Locate Matching
+  Portions Between Tracks** — Compare and Discover Relationships. S3's partial
+  matches and their affected ranges: compare reports which portions of one track
+  appear in the other, where and how alike, and which audio appears in only one, in
+  place of one global offset. Specified in
+  [brief 0005](briefs/0005-locate-matching-portions.md), with the method decided in
+  [ADR 0006](decisions/0006-locate-matching-portions-between-tracks.md).
 
 ### Next
 
-- **Locate Matching Portions and Edits Between Tracks** — Compare and Discover
-  Relationships. S3's partial matches and their affected ranges, which one global
-  offset does not locate. Edition comparison may need it: the tracks of two editions
+- **Compare Editions** — Compare and Discover Relationships; Share and Evaluate
+  Findings. S4, built on track comparison and its portions: the tracks of two editions
   can differ in length and content, as those of a CD and a download of *Add Violence*
-  do.
+  do, and a spike located each CD track in the whole download.
 
 ### Later
 
-- **Compare Editions** — Compare and Discover Relationships; Share and Evaluate
-  Findings. S4, built on track comparison.
 - **Check a Received Report Against Your Own Copy** — Share and Evaluate Findings. The
   rest of S5: compare a received Report with the recipient's own copy, or reproduce its
   measurements, as checks distinct from validation. Views of inspection and

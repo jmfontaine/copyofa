@@ -1,7 +1,8 @@
 # Measure track comparisons on aligned decoded audio
 
 - **Date:** 2026-10-25
-- **Status:** Accepted
+- **Status:** Accepted; decisions 2 (Alignment) and 3 (Overlap) superseded by
+  [ADR 0006](0006-locate-matching-portions-between-tracks.md)
 - **Related artifacts:**
   [Issue #74: Compare two tracks across formats](https://github.com/jmfontaine/copyofa/issues/74);
   [ADR 0002](0002-define-audio-digest-from-canonical-pcm.md); Product Map capability
