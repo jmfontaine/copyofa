@@ -1,0 +1,154 @@
+{
+  "report_kind": "copyofa.comparison",
+  "format_version": 3,
+  "copyofa_version": "0.6.0.dev0",
+  "compared_at": "2026-10-26T03:12:24Z",
+  "omitted": [],
+  "inputs": {
+    "a": {
+      "evidence_set": "/Volumes/Archive/set-1",
+      "integrity_baseline": {
+        "manifest_sha256": "b97c9456ba095feb3942eb697332e8b1dc413ef0bf16adcf42dd76d041ad8b0b",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/a.flac",
+      "outcome": "interpreted",
+      "expected_digest": "3c1721260b98b7fcfb1c92bcc5cd75768f3f56292e6ecae7aa1747ca01f027c4",
+      "observed_digest": "3c1721260b98b7fcfb1c92bcc5cd75768f3f56292e6ecae7aa1747ca01f027c4",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 88200,
+      "audio_digest": "pcm1:44100:2:16:aff3e35077065468ff4f34fddc8d07e9a525ad904c599eebc481c46e49471fec",
+      "peak": [
+        32766,
+        32768
+      ],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 44100,
+      "flac_md5_signature": "matching"
+    },
+    "b": {
+      "evidence_set": "/Volumes/Archive/set-2",
+      "integrity_baseline": {
+        "manifest_sha256": "b7930a1f42a6fa8ba35e7af3bca0298316d81c1e98cc35b2fd02a7be97434e6f",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/b.flac",
+      "outcome": "interpreted",
+      "expected_digest": "deec422f5530e3f0d068fdafa78a372e8b89b6a9a835a6eec9be00d45accf097",
+      "observed_digest": "deec422f5530e3f0d068fdafa78a372e8b89b6a9a835a6eec9be00d45accf097",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 88200,
+      "audio_digest": "pcm1:44100:2:16:90b02df3ec95c40a6336c4470a932e7a6c45858bb0b4af20856d4ebf11508980",
+      "peak": [
+        32767,
+        32768
+      ],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0,
+      "flac_md5_signature": "matching"
+    }
+  },
+  "method": {
+    "decoder": "libsndfile",
+    "decoder_version": "1.2.2",
+    "resampler": "libsoxr",
+    "resampler_version": "0.1.3-14-ga66f3ee",
+    "resampler_quality": "VHQ",
+    "common_sample_rate": 44100,
+    "alignment": "downmix_cross_correlation"
+  },
+  "measurements": {
+    "offset": {
+      "frames": 0,
+      "seconds": 0.0
+    },
+    "overlap": {
+      "a": {
+        "start_frame": 0,
+        "frames": 88200,
+        "fraction": 1.0
+      },
+      "b": {
+        "start_frame": 0,
+        "frames": 88200,
+        "fraction": 1.0
+      }
+    },
+    "downmix": {
+      "correlation": 0.7075224173830538,
+      "gain_db": -6.010316585233476,
+      "residual_db": -3.0154477151561303,
+      "residual_windows": [
+        {
+          "start_frame": 0,
+          "frames": 44100,
+          "residual_db": -6.03089543031226
+        },
+        {
+          "start_frame": 44100,
+          "frames": 44100,
+          "absent": {
+            "residual_db": "track A is zero throughout the window"
+          }
+        }
+      ]
+    },
+    "channels": [
+      {
+        "correlation": 0.7073991766372083,
+        "gain_db": -6.013319711877606,
+        "residual_db": -3.0139431109023365,
+        "residual_windows": [
+          {
+            "start_frame": 0,
+            "frames": 44100,
+            "residual_db": -6.027886221804673
+          },
+          {
+            "start_frame": 44100,
+            "frames": 44100,
+            "absent": {
+              "residual_db": "track A is zero throughout the window"
+            }
+          }
+        ]
+      },
+      {
+        "correlation": 0.705448588100059,
+        "gain_db": -6.061382999429585,
+        "residual_db": -2.990003711234155,
+        "residual_windows": [
+          {
+            "start_frame": 0,
+            "frames": 44100,
+            "residual_db": -5.980007422468309
+          },
+          {
+            "start_frame": 44100,
+            "frames": 44100,
+            "absent": {
+              "residual_db": "track A is zero throughout the window"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "limitations": [
+    "No measurement says whether the tracks share a master, a mix or a source; the Report draws no such conclusion.",
+    "MP3 is lossy: the measurements of an MP3 depend on its decoder.",
+    "Tracks at different sample rates are compared at the lower rate, after resampling, so differences above that rate's band are not measured.",
+    "One global offset aligns the tracks: inserted or removed sections, drift and speed changes are not located; they lower the correlation and raise the residual.",
+    "Channels are paired in the order each file stores them."
+  ]
+}

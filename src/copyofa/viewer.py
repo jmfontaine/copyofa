@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
 SUPPORTED_KINDS = frozenset({comparator.REPORT_KIND})
 """The kinds of Report this module renders."""
+RENDERED_VERSIONS = frozenset({1, 2, 3})
+"""The format versions of a comparison Report this module renders."""
 
 _ABSENT = "absent"
 _LEFT_OUT = "left out"

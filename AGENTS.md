@@ -145,7 +145,8 @@ CopyOfA prints; any other change to a Report's fields is a new format version wi
 own schema file. The test suite validates every Report it produces against its schema.
 
 `copyofa view` validates a file the same way, then `copyofa.viewer` renders a valid
-comparison Report as one self-contained HTML page, with the standard library only.
+comparison Report of format version 1, 2 or 3 as one self-contained HTML page, with the
+standard library only; it refuses version 4 until a later release renders it.
 The page shows every value as the Report records it and the SHA-256 of the file; it
 holds no script, no link and no external resource, a Content Security Policy forbids
 both, and every text of the Report is escaped, a lone surrogate as `\udcXX`. Each
@@ -156,7 +157,8 @@ Report kind and format version `view` supports needs its own rendering.
 `inspect`, `compare` and `export` decode audio with soundfile, whose wheels bundle
 libsndfile with FLAC and mpg123, and NumPy; `export` also writes its FLAC files
 through soundfile. `compare` also resamples with soxr (python-soxr,
-bundling libsoxr). These three, with jsonschema (see Report schemas), are the only
+bundling libsoxr), which also decimates for its coarse search, at its `HQ` quality.
+These three, with jsonschema (see Report schemas), are the only
 runtime dependencies. The Audio Digest is defined on canonical PCM by
 [ADR 0002](docs/decisions/0002-define-audio-digest-from-canonical-pcm.md), so any
 exact decoder reproduces it. `pyproject.toml` sets a higher NumPy minimum for Python
@@ -165,8 +167,13 @@ NumPy instead of building it; soxr's minimum, 0.5, is its oldest release with wh
 for 3.15 (stable ABI). Inspect reads through libsndfile's sequential read
 functions rather than soundfile's `read()` (see the `KLUDGE` in
 `src/copyofa/inspector.py`), and compare and export decode through inspect's code. The
-comparison method (resampling, alignment, measurements) is decided in
-[ADR 0003](docs/decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md).
+comparison method is decided in
+[ADR 0003](docs/decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md)
+(decoding, resampling, measurements) and
+[ADR 0006](docs/decisions/0006-locate-matching-portions-between-tracks.md): compare
+locates matching portions with the windowed method of ADR 0006, which supersedes ADR
+0003's single global offset and overlap. `src/copyofa/locator.py` holds the method and
+its fixed parameters, which each comparison Report states.
 
 ### Disc acquisition
 

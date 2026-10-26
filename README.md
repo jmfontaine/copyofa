@@ -126,8 +126,8 @@ when a track of an acquired set could not be decoded or differs from its recorde
 Digest, 2 when the target is not an Evidence Set or the arguments are invalid, and 130
 when canceled. It writes nothing into the set.
 
-Measure how two preserved tracks relate, such as a FLAC track and the MP3 of the same
-song from another release:
+Find which portions of one preserved track appear in another, such as a FLAC track and
+the MP3 of the same song from another release:
 
 ```bash
 copyofa compare "/Volumes/Archive/With Teeth/data/04 The Hand That Feeds.flac" \
@@ -142,23 +142,51 @@ track of a disc you acquired, give the acquired set and the track number with
 
 ```bash
 copyofa compare "/Volumes/Archive/Add Violence CD" \
-  "/Volumes/Archive/Add Violence/data/01-01 Less Than.flac" --track-a 1
+  "/Volumes/Archive/Add Violence/data/01-04 Not Anymore.flac" --track-a 4
 ```
 
-Compare checks both against their Integrity Baselines and decodes them as inspect does.
-It then resamples the one at the higher sample rate to the lower rate, aligns the
-tracks, and reports the offset of track B from track A, their overlap, and how B
-relates to A: correlation, gain and the residual level left after that gain. When both
-are lossless and their Audio Digests are equal, it reports identical audio. It draws no
-conclusion such as "same master". `--json` prints a comparison Report, which
-[Comparison Report format][comparison-report] describes. To share a Report, add
-`--omit-locations`: it leaves out where each Evidence Set is stored, which names your
-disks and often your user account, and the Report says that it did.
+<!-- rumdl-disable MD013 -->
 
-Compare exits 0 when both tracks were measured, 1 when a track could not be inspected
-or decoded or is not a supported format, 2 when an input is not inside an Evidence Set
-or the arguments are invalid, and 130 when canceled. It writes nothing into either
-set.
+```text
+Track A: track 4 of /Volumes/Archive/Add Violence CD (flac, 44100 Hz, 16-bit, 2 channels, 3:06.733)
+Track B: /Volumes/Archive/Add Violence/data/01-04 Not Anymore.flac (flac, 48000 Hz, 24-bit, 2 channels, 3:11.600)
+Common sample rate: 44100 Hz
+Portion 1, primary: A 4.098-186.720 s, B 4.891-187.513 s, offset +34946 frames (+0.792 s), correlation 0.997, residual -22.0 dB
+Portion 2, primary: A 8.548-16.714 s, B 17.912-26.078 s, offset +412945 frames (+9.364 s), correlation 0.996, residual -21.3 dB
+Portion 3, primary: A 17.119-25.294 s, B 9.340-17.515 s, offset -343054 frames (-7.779 s), correlation 0.997, residual -22.5 dB
+Portion 4, alternate: A 22.365-24.129 s, B 40.300-42.064 s, offset +790945 frames (+17.935 s), correlation 0.983, residual -14.8 dB
+Portion 5, alternate: A 39.493-41.272 s, B 23.142-24.921 s, offset -721054 frames (-16.350 s), correlation 0.984, residual -15.0 dB
+Portion 6, alternate: A 66.289-67.779 s, B 112.819-114.309 s, offset +2051978 frames (+46.530 s), correlation 0.958, residual -10.8 dB
+Portion 7, alternate: A 111.994-113.517 s, B 67.049-68.572 s, offset -1982087 frames (-44.945 s), correlation 0.959, residual -11.0 dB
+Unmatched in A: 0.000-4.098 s, -36.8 dBFS
+Unmatched in A: 186.720-186.733 s, -11.8 dBFS
+Unmatched in B: 0.000-4.891 s, -31.1 dBFS
+Unmatched in B: 187.513-191.600 s, -20.8 dBFS
+```
+
+<!-- rumdl-enable MD013 -->
+
+Compare checks both against their Integrity Baselines and decodes them as inspect does.
+It then resamples the one at the higher sample rate to the lower rate and searches for
+the portions of track A that appear in track B, each at its own offset. For each
+portion it reports its range in both tracks, its offset, and how B relates to A over
+it: correlation, gain and the residual level left after that gain. It also reports the
+audio that no primary portion covers, with its level. In the example, portion 1 covers
+nearly all of the CD track, and B starts 0.792 s later. Portions 2 and 3 match other
+places of B for sections of A that portion 1 also covers; the alternates match
+sections that better portions already cover, less well. The first 4.1 s of A, and the
+first 4.9 s and the last 4.1 s of B, match nothing. When both tracks are lossless and
+their Audio Digests are equal, compare reports identical audio. It draws no conclusion
+such as "same master". `--json` prints a comparison Report, which
+[Comparison Report format][comparison-report] describes, with the method's parameters.
+To share a Report, add `--omit-locations`: it leaves out where each Evidence Set is
+stored, which names your disks and often your user account, and the Report says that it
+did.
+
+Compare exits 0 when both tracks were compared, whether or not it found a portion, 1
+when a track could not be inspected or decoded or is not a supported format, 2 when an
+input is not inside an Evidence Set or the arguments are invalid, and 130 when
+canceled. It writes nothing into either set.
 
 Play a disc you acquired, or tag its tracks with other tools, from FLAC files that
 export writes:
@@ -211,7 +239,9 @@ the Report with labels and units, each absent value with its reason, and each
 limitation. It gives the SHA-256 of the Report file it was generated from, so a
 recipient can check the page against the Report. The page runs no script and loads
 nothing, so it opens in any browser, offline. It draws no conclusion from the
-measurements. [Comparison Report format][comparison-report] describes it.
+measurements. [Comparison Report format][comparison-report] describes it. View renders
+Reports of format versions 1 to 3 and does not render version 4, which compare prints,
+yet.
 
 View exits 0 when it printed the page, 1 when the Report is invalid, unsupported, not a
 comparison Report, or cannot be read, 2 when the arguments are invalid, and 130 when

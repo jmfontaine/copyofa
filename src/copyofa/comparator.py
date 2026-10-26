@@ -1,4 +1,4 @@
-"""Compare the audio of two tracks preserved in Evidence Sets (see ADR 0003)."""
+"""Compare the audio of two tracks preserved in Evidence Sets (see ADRs 0003, 0006)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import soundfile
 import soxr
 
 import copyofa
-from copyofa import evidence_set, inspector, verifier
+from copyofa import evidence_set, inspector, locator, verifier
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -21,11 +21,13 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
 REPORT_KIND = "copyofa.comparison"
-REPORT_FORMAT_VERSION = 3
+REPORT_FORMAT_VERSION = 4
 
 RESAMPLER_QUALITY = "VHQ"
 """The soxr quality preset: libsoxr's very high quality."""
-ALIGNMENT = "downmix_cross_correlation"
+ALIGNMENT = "windowed_portions"
+PRIMARY = "primary"
+ALTERNATE = "alternate"
 
 LIMITATIONS = (
     (
@@ -38,9 +40,18 @@ LIMITATIONS = (
         "resampling, so differences above that rate's band are not measured."
     ),
     (
-        "One global offset aligns the tracks: inserted or removed sections, drift "
-        "and speed changes are not located; they lower the correlation and raise the "
-        "residual."
+        "Portions shorter than about 2.5 s may be missed, and the search finds no "
+        "portion in a track shorter than 5 s; identical audio still gets its "
+        "portion."
+    ),
+    "Speed, pitch and drift differences give no portion.",
+    (
+        "A boundary inside audio below -80 dBFS is placed at the nearest frame "
+        "with evidence, and the rest is reported as unmatched."
+    ),
+    (
+        "In music that repeats a section, one range of a track can match several "
+        "places in the other; each is reported as a portion."
     ),
     "Channels are paired in the order each file stores them.",
 )
@@ -52,7 +63,6 @@ _NOT_ACQUIRED = (
     f"list {evidence_set.ACQUISITION_RECORD}"
 )
 _IDENTICAL = "the audio is identical"
-_MEASURED = ("correlation", "gain_db", "residual_db", "residual_windows")
 
 
 @dataclass(frozen=True)
@@ -63,15 +73,6 @@ class _Audio:
     """Shaped (frames, channels), where 1.0 is full scale."""
     rate: int
     digest: str | None
-
-
-@dataclass(frozen=True)
-class _Overlap:
-    """The aligned frames, at the common rate: start in each track and length."""
-
-    start_a: int
-    start_b: int
-    frames: int
 
 
 def compare(
@@ -135,6 +136,7 @@ def compare(
         method["common_sample_rate"] = rate
         report["measurements"] = _measure(decoded[0], decoded[1], rate)
     method["alignment"] = ALIGNMENT
+    method["parameters"] = dict(locator.PARAMETERS)
     report["limitations"] = list(LIMITATIONS)
     return report
 
@@ -284,37 +286,75 @@ def _measure(a: _Audio, b: _Audio, rate: int) -> dict[str, Any]:
     downmix_b = samples_b.mean(axis=1, dtype=np.float64)
 
     measurements: dict[str, Any] = {}
-    absent: dict[str, str] = {}
+    portions: list[locator.Portion] = []
     if identical:
         measurements["identical_audio"] = True
-        # Identical tracks align at 0 without a search, unless there is no frame.
+        # Identical tracks match at 0 without a search, unless there is no frame.
         missing = _no_frames(downmix_a, "A")
+        if missing is None:
+            portions.append(locator.Portion(0, len(downmix_a), 0, None))
     else:
-        missing = _no_alignment(downmix_a, "A") or _no_alignment(downmix_b, "B")
-    overlap: _Overlap | str
+        missing = _unsearchable(downmix_a, downmix_b, rate)
+        if missing is None:
+            portions = locator.locate(downmix_a, downmix_b, rate)
+            if not portions:
+                missing = "no portion was found"
+    measurements["portions"] = [
+        _portion(
+            portion, (samples_a, samples_b), (downmix_a, downmix_b), rate, identical
+        )
+        for portion in portions
+    ]
+    primaries = [portion for portion in portions if not portion.alternate]
+    measurements["unmatched"] = {
+        "a": _unmatched(
+            samples_a, [(portion.start_a, portion.end_a) for portion in primaries]
+        ),
+        "b": _unmatched(
+            samples_b,
+            [
+                (portion.start_b, portion.start_b + portion.frames)
+                for portion in primaries
+            ],
+        ),
+    }
     if missing is not None:
-        overlap = f"no offset was found: {missing}"
-        absent["offset"] = absent["overlap"] = overlap
+        measurements["absent"] = {"portions": missing}
+    return measurements
+
+
+def _portion(
+    portion: locator.Portion,
+    samples: tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]],
+    downmixes: tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]],
+    rate: int,
+    identical: bool,
+) -> dict[str, Any]:
+    """Describe and measure one portion."""
+    entry: dict[str, Any] = {
+        "rank": ALTERNATE if portion.alternate else PRIMARY,
+        "a": {"start_frame": portion.start_a, "frames": portion.frames},
+        "b": {"start_frame": portion.start_b, "frames": portion.frames},
+        "offset": {"frames": portion.offset, "seconds": portion.offset / rate},
+    }
+    absent: dict[str, str] = {}
+    if identical:
+        absent["block_gain_residual_db"] = _IDENTICAL
+    elif portion.residual_db is None:
+        absent["block_gain_residual_db"] = (
+            "A minus B after the per-block gains is zero throughout the portion"
+        )
     else:
-        offset = 0 if identical else _align(downmix_a, downmix_b)
-        start_a, start_b = max(0, -offset), max(0, offset)
-        frames = min(len(downmix_a) - start_a, len(downmix_b) - start_b)
-        overlap = _Overlap(start_a, start_b, frames)
-        measurements["offset"] = {"frames": offset, "seconds": offset / rate}
-        measurements["overlap"] = {
-            "a": _extent(start_a, frames, len(downmix_a)),
-            "b": _extent(start_b, frames, len(downmix_b)),
-        }
-    measurements["downmix"] = _measure_pair(
-        downmix_a, downmix_b, overlap, rate, identical=identical
-    )
+        entry["block_gain_residual_db"] = portion.residual_db
+    entry["downmix"] = _measure_pair(*downmixes, portion, rate, identical=identical)
+    samples_a, samples_b = samples
     channels = samples_a.shape[1]
     if channels == samples_b.shape[1]:
-        measurements["channels"] = [
+        entry["channels"] = [
             _measure_pair(
                 samples_a[:, index],
                 samples_b[:, index],
-                overlap,
+                portion,
                 rate,
                 identical=identical,
             )
@@ -326,8 +366,24 @@ def _measure(a: _Audio, b: _Audio, rate: int) -> dict[str, Any]:
             f"{samples_b.shape[1]}"
         )
     if absent:
-        measurements["absent"] = absent
-    return measurements
+        entry["absent"] = absent
+    return entry
+
+
+def _unmatched(
+    samples: npt.NDArray[np.float32], covered: list[tuple[int, int]]
+) -> list[dict[str, Any]]:
+    """Describe each range of a track that no primary portion covers."""
+    ranges = []
+    for start, stop in locator.uncovered(covered, len(samples)):
+        entry: dict[str, Any] = {"start_frame": start, "frames": stop - start}
+        part = samples[start:stop]
+        entry["digitally_silent"] = not part.any()
+        if part.any():
+            power = float(np.mean(np.square(part, dtype=np.float64)))
+            entry["level_dbfs"] = 10 * math.log10(power)
+        ranges.append(entry)
+    return ranges
 
 
 def _resample(audio: _Audio, rate: int) -> npt.NDArray[np.float32]:
@@ -336,12 +392,22 @@ def _resample(audio: _Audio, rate: int) -> npt.NDArray[np.float32]:
     return soxr.resample(audio.samples, audio.rate, rate, quality=RESAMPLER_QUALITY)
 
 
-def _no_alignment(downmix: npt.NDArray[np.float64], name: str) -> str | None:
-    """Say why a downmix leaves the cross-correlation without a maximum, if it does."""
-    if not downmix.any():
-        return _no_frames(downmix, name) or (
-            f"the downmix of track {name} is zero throughout"
-        )
+def _unsearchable(
+    a: npt.NDArray[np.float64], b: npt.NDArray[np.float64], rate: int
+) -> str | None:
+    """Say why the downmixes leave the search without a candidate, if they do."""
+    downmixes = (("A", a), ("B", b))
+    for name, downmix in downmixes:
+        if (missing := _no_frames(downmix, name)) is not None:
+            return missing
+    for name, downmix in downmixes:
+        if len(downmix) < locator.WINDOW_SECONDS * rate:
+            return (
+                f"track {name} is shorter than one window of {locator.WINDOW_SECONDS} s"
+            )
+    for name, downmix in downmixes:
+        if not downmix.any():
+            return f"the downmix of track {name} is zero throughout"
     return None
 
 
@@ -349,80 +415,26 @@ def _no_frames(downmix: npt.NDArray[np.float64], name: str) -> str | None:
     return None if len(downmix) else f"track {name} has no frames"
 
 
-def _align(a: npt.NDArray[np.float64], b: npt.NDArray[np.float64]) -> int:
-    """Return the offset of b from a that maximizes the cross-correlation's magnitude.
-
-    A positive offset means b starts that many frames later than a: frame n of a
-    lines up with frame n + offset of b. The magnitude, so that a copy with its
-    polarity inverted still aligns, and shows as a negative correlation.
-    """
-    size = _fast_length(len(a) + len(b) - 1)
-    spectrum = np.fft.rfft(b, size)
-    conjugate = np.fft.rfft(a, size)
-    np.conjugate(conjugate, out=conjugate)
-    spectrum *= conjugate
-    del conjugate
-    correlation = np.fft.irfft(spectrum, size)
-    del spectrum
-    np.abs(correlation, out=correlation)
-    # Circular, but the padding keeps every lag apart: index k holds the lag k for
-    # 0 <= k < len(b), and the lag k - size for size - len(a) < k < size.
-    best = int(np.argmax(correlation[: len(b)]))
-    if len(a) > 1:
-        start = size - len(a) + 1
-        earlier = start + int(np.argmax(correlation[start:]))
-        if correlation[earlier] > correlation[best]:
-            best = earlier - size
-    return best
-
-
-def _fast_length(minimum: int) -> int:
-    """Return the smallest product of powers of 2, 3 and 5 that is at least minimum.
-
-    NumPy's FFT is fast on such lengths and can be much slower on others.
-    """
-    best = 1 << (minimum - 1).bit_length()
-    odd = 1
-    while odd < best:
-        factor = odd
-        while factor < best:
-            quotient = -(-minimum // factor)
-            best = min(best, factor << (quotient - 1).bit_length())
-            factor *= 3
-        odd *= 5
-    return best
-
-
-def _extent(start: int, frames: int, total: int) -> dict[str, Any]:
-    return {"start_frame": start, "frames": frames, "fraction": frames / total}
-
-
 def _measure_pair(
     a: npt.NDArray[Any],
     b: npt.NDArray[Any],
-    overlap: _Overlap | str,
+    portion: locator.Portion,
     rate: int,
     *,
     identical: bool,
 ) -> dict[str, Any]:
-    """Measure B against A over the overlap: correlation, gain and residual.
-
-    When overlap is a string, it is why there is none, and every value is absent.
-    """
-    if isinstance(overlap, str):
-        return {"absent": dict.fromkeys(_MEASURED, overlap)}
-    end_a = overlap.start_a + overlap.frames
-    end_b = overlap.start_b + overlap.frames
+    """Measure B against A over a portion: correlation, gain and residual."""
+    end_b = portion.start_b + portion.frames
     # Views when the samples are already float64, as a downmix is.
-    x = a[overlap.start_a : end_a].astype(np.float64, copy=False)
-    y = b[overlap.start_b : end_b].astype(np.float64, copy=False)
+    x = a[portion.start_a : portion.end_a].astype(np.float64, copy=False)
+    y = b[portion.start_b : end_b].astype(np.float64, copy=False)
     values: dict[str, Any] = {}
     absent: dict[str, str] = {}
 
     if np.min(x) == np.max(x):
-        absent["correlation"] = "track A is constant over the overlap"
+        absent["correlation"] = "track A is constant over the portion"
     elif np.min(y) == np.max(y):
-        absent["correlation"] = "track B is constant over the overlap"
+        absent["correlation"] = "track B is constant over the portion"
     else:
         dx = x - x.mean()
         dy = y - y.mean()
@@ -434,7 +446,7 @@ def _measure_pair(
     energy_b = float(y @ y)
     gain = None
     if energy_b == 0:
-        absent["gain_db"] = "track B is zero throughout the overlap"
+        absent["gain_db"] = "track B is zero throughout the portion"
     else:
         gain = float(x @ y) / energy_b
         if gain == 0:
@@ -446,23 +458,23 @@ def _measure_pair(
         absent["residual_db"] = absent["residual_windows"] = (
             _IDENTICAL
             if identical
-            else "the gain is undefined: track B is zero throughout the overlap"
+            else "the gain is undefined: track B is zero throughout the portion"
         )
     else:
         error = y * -gain
         error += x
         np.square(error, out=error)
         energy = np.square(x)
-        level = _residual(float(error.sum()), float(energy.sum()), "overlap")
+        level = _residual(float(error.sum()), float(energy.sum()), "portion")
         if isinstance(level, str):
             absent["residual_db"] = level
         else:
             values["residual_db"] = level
-        starts = np.arange(0, overlap.frames, rate)
+        starts = np.arange(0, portion.frames, rate)
         values["residual_windows"] = [
             {
                 "start_frame": int(start),
-                "frames": min(rate, overlap.frames - int(start)),
+                "frames": min(rate, portion.frames - int(start)),
                 **_window_residual(float(window_error), float(window_energy)),
             }
             for start, window_error, window_energy in zip(

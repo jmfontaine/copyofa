@@ -3,10 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 from importlib import resources
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import jsonschema
+import numpy as np
 import pytest
 from conftest import RATE, requires_permissions, signal, snapshot, write_audio
 
@@ -14,7 +17,6 @@ from copyofa import comparator, inspector, validator, verifier
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from conftest import Outcome, Run
 
@@ -30,10 +32,20 @@ SCHEMA_FILES = sorted(
     for entry in resources.files("copyofa").joinpath("schemas").iterdir()
     if entry.name.endswith(".schema.json")
 )
+# Version 3 comparison Reports that compare 0.6.0.dev0 printed, kept as they were so
+# validate keeps accepting what that version printed: the Report of 2.5 s tracks that
+# align at an offset, the same with the locations left out, and one whose input A is
+# a track of an acquired set.
+STORED = Path(__file__).parent / "reports" / "comparison-3"
+STORED_REPORTS = {
+    "comparison_v3": "measured",
+    "comparison_omitted": "locations_omitted",
+    "comparison_track": "acquired_track",
+}
 
 
 def as_version_1(document: dict[str, Any]) -> dict[str, Any]:
-    """Return a version 2 comparison Report that holds its locations as version 1."""
+    """Return a version 3 comparison Report that holds its locations as version 1."""
     assert document["omitted"] == []
     return {
         key: 1 if key == "format_version" else value
@@ -44,15 +56,20 @@ def as_version_1(document: dict[str, Any]) -> dict[str, Any]:
 
 @pytest.fixture
 def reports(run: Run, make_set: MakeSet, tmp_path: Path) -> dict[str, Path]:
-    """Save a verification, an inspection and a comparison Report of real sets."""
-    a = make_set(
-        lambda source: write_audio(source / "a.flac", signal(RATE, 2, 16), 16, "FLAC")
+    """Save a verification, an inspection and a comparison Report of real sets.
+
+    The comparison Report is the current version's: B is the first 5 s of A's noise, 2 s
+    later, in 24 bits and with a little noise added. It holds one portion, the silence
+    before B as an unmatched range of B and the last second of A as one of A. Version 1
+    to 3 comparison Reports come from the stored Reports compare printed in version 3.
+    """
+    noise = signal(6 * RATE, 2, 16)
+    dither = signal(5 * RATE, 2, 12, seed=2)
+    delayed = np.vstack(
+        [np.zeros((2 * RATE, 2), np.int32), (noise[: 5 * RATE] << 8) + dither]
     )
-    b = make_set(
-        lambda source: write_audio(
-            source / "b.wav", signal(RATE, 2, 24, seed=2), 24, "WAV"
-        )
-    )
+    a = make_set(lambda source: write_audio(source / "a.flac", noise, 16, "FLAC"))
+    b = make_set(lambda source: write_audio(source / "b.wav", delayed, 24, "WAV"))
     commands = {
         "verification": ("verify", a),
         "inspection": ("inspect", a),
@@ -64,14 +81,12 @@ def reports(run: Run, make_set: MakeSet, tmp_path: Path) -> dict[str, Path]:
         assert outcome.code == 0, outcome.err
         saved[kind] = tmp_path / f"{kind}.json"
         saved[kind].write_text(outcome.out)
-    outcome = run(*commands["comparison"], "--json", "--omit-locations")
-    assert outcome.code == 0, outcome.err
-    saved["comparison_omitted"] = tmp_path / "comparison_omitted.json"
-    saved["comparison_omitted"].write_text(outcome.out)
+    for key, name in STORED_REPORTS.items():
+        saved[key] = tmp_path / f"{key}.json"
+        shutil.copyfile(STORED / f"{name}.json", saved[key])
     saved["comparison_v1"] = tmp_path / "comparison_v1.json"
-    saved["comparison_v1"].write_text(
-        json.dumps(as_version_1(json.loads(saved["comparison"].read_text())))
-    )
+    version_3 = json.loads(saved["comparison_v3"].read_text())
+    saved["comparison_v1"].write_text(json.dumps(as_version_1(version_3)))
     return saved
 
 
@@ -154,7 +169,7 @@ def test_validate_prints_a_short_result(run: Run, reports: dict[str, Path]) -> N
     assert lines[0] == "Result: valid"
     assert f"SHA-256: {hashlib.sha256(path.read_bytes()).hexdigest()}" in lines
     assert "Report kind: copyofa.comparison" in lines
-    assert "Format version: 3" in lines
+    assert "Format version: 4" in lines
     assert "Limitations:" in lines
     assert "Traceback" not in outcome.out + outcome.err
 
@@ -276,13 +291,76 @@ EDITS: dict[str, tuple[str, Callable[[Any], None], str]] = {
     ),
     "a correlation above 1": (
         "comparison",
-        lambda report: report["measurements"]["downmix"].update(correlation=1.5),
-        "/measurements/downmix/correlation",
+        lambda report: report["measurements"]["portions"][0]["downmix"].update(
+            correlation=1.5
+        ),
+        "/measurements/portions/0/downmix/correlation",
     ),
     "a measurement that is neither present nor absent": (
         "comparison",
+        lambda report: report["measurements"]["portions"][0]["downmix"].pop("gain_db"),
+        "/measurements/portions/0/downmix",
+    ),
+    "a correlation above 1 in version 3": (
+        "comparison_v3",
+        lambda report: report["measurements"]["downmix"].update(correlation=1.5),
+        "/measurements/downmix/correlation",
+    ),
+    "a measurement that is neither present nor absent in version 3": (
+        "comparison_v3",
         lambda report: report["measurements"]["downmix"].pop("gain_db"),
         "/measurements/downmix",
+    ),
+    "a non-silent unmatched range without its level": (
+        "comparison",
+        lambda report: report["measurements"]["unmatched"]["a"][0].pop("level_dbfs"),
+        "/measurements/unmatched/a/0",
+    ),
+    "a digitally silent unmatched range with a level": (
+        "comparison",
+        lambda report: report["measurements"]["unmatched"]["b"][0].update(
+            level_dbfs=-90.0
+        ),
+        "/measurements/unmatched/b/0",
+    ),
+    "portions that are listed and absent": (
+        "comparison",
+        lambda report: report["measurements"].update(
+            absent={"portions": "no portion was found"}
+        ),
+        "/measurements/portions",
+    ),
+    "no portion without a reason": (
+        "comparison",
+        lambda report: report["measurements"].update(portions=[]),
+        "/measurements/portions",
+    ),
+    "a method parameter that is missing": (
+        "comparison",
+        lambda report: report["method"]["parameters"].pop("block_frames"),
+        "/method/parameters",
+    ),
+    "a method parameter that has another value": (
+        "comparison",
+        lambda report: report["method"]["parameters"].update(window_seconds=6),
+        "/method/parameters/window_seconds",
+    ),
+    "a portion rank that is neither primary nor alternate": (
+        "comparison",
+        lambda report: report["measurements"]["portions"][0].update(rank="secondary"),
+        "/measurements/portions/0/rank",
+    ),
+    "a portion without its block-gain residual or a reason": (
+        "comparison",
+        lambda report: report["measurements"]["portions"][0].pop(
+            "block_gain_residual_db"
+        ),
+        "/measurements/portions/0",
+    ),
+    "an evidence_set that is neither present nor omitted in version 4": (
+        "comparison",
+        lambda report: report["inputs"]["a"].pop("evidence_set"),
+        "/inputs/a",
     ),
     "an interpreted file without its findings": (
         "inspection",
@@ -312,8 +390,8 @@ def test_validate_finds_each_problem_of_a_schema_at_its_pointer(
     assert outcome.code == 1
     assert outcome.err == ""
     assert result["outcome"] == "invalid"
-    assert result["report_kind"] == KINDS[kind][0]
-    assert result["format_version"] == KINDS[kind][1]
+    assert result["report_kind"] == document["report_kind"]
+    assert result["format_version"] == document["format_version"]
     assert location in {problem["location"] for problem in result["problems"]}
     assert all(problem["message"] for problem in result["problems"])
 
@@ -330,6 +408,79 @@ def test_validate_accepts_a_comparison_report_of_format_version_1(
     assert result["report_kind"] == "copyofa.comparison"
     assert result["format_version"] == 1
     assert result["problems"] == []
+
+
+def test_validate_accepts_a_comparison_report_of_format_version_2(
+    run: Run, reports: dict[str, Path], tmp_path: Path
+) -> None:
+    document = edited(
+        reports["comparison_v3"], lambda report: report.update(format_version=2)
+    )
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 0, outcome.err
+    assert result["outcome"] == "valid"
+    assert result["format_version"] == 2
+    assert result["problems"] == []
+
+
+@pytest.mark.parametrize("name", STORED_REPORTS)
+def test_validate_accepts_a_comparison_report_of_format_version_3(
+    run: Run, reports: dict[str, Path], name: str
+) -> None:
+    outcome, result = validate(run, reports[name])
+
+    assert outcome.code == 0, outcome.err
+    assert result["outcome"] == "valid"
+    assert result["format_version"] == 3
+    assert result["problems"] == []
+
+
+def test_validate_accepts_a_comparison_report_of_format_version_4(
+    run: Run, reports: dict[str, Path]
+) -> None:
+    document = json.loads(reports["comparison"].read_text())
+    assert document["measurements"]["portions"]
+    assert document["measurements"]["unmatched"]["a"]
+    assert document["measurements"]["unmatched"]["b"]
+
+    outcome, result = validate(run, reports["comparison"])
+
+    assert outcome.code == 0, outcome.err
+    assert result["outcome"] == "valid"
+    assert result["format_version"] == 4
+    assert result["problems"] == []
+
+
+def test_validate_accepts_a_comparison_report_of_format_version_4_without_a_portion(
+    run: Run, make_set: MakeSet, tmp_path: Path
+) -> None:
+    # Tracks shorter than one 5 s window have no portion, and say why.
+    sets = [
+        make_set(
+            lambda source, seed=seed: write_audio(
+                source / "a.flac", signal(RATE, 2, 16, seed=seed), 16, "FLAC"
+            )
+        )
+        for seed in (1, 2)
+    ]
+    comparison = run(
+        "compare",
+        sets[0] / "data/Album/a.flac",
+        sets[1] / "data/Album/a.flac",
+        "--json",
+    )
+    assert comparison.code == 0, comparison.err
+    document = json.loads(comparison.out)
+    assert document["measurements"]["portions"] == []
+    assert document["measurements"]["absent"]["portions"]
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 0, outcome.err
+    assert result["outcome"] == "valid"
+    assert result["format_version"] == 4
 
 
 def test_validate_requires_evidence_set_in_a_comparison_report_of_version_1(
@@ -374,16 +525,16 @@ def test_validate_accepts_a_comparison_report_that_leaves_locations_out(
     assert result["format_version"] == 3
 
 
-# Edits to a version 2 comparison Report that break the rule that each input's
+# Edits to a version 3 comparison Report that break the rule that each input's
 # `evidence_set` is present exactly when `omitted` does not list it.
 LOCATION_EDITS: dict[str, tuple[str, Callable[[Any], None], str]] = {
     "an evidence_set that is neither present nor omitted": (
-        "comparison",
+        "comparison_v3",
         lambda report: report["inputs"]["a"].pop("evidence_set"),
         "/inputs/a",
     ),
     "an evidence_set that is present and omitted": (
-        "comparison",
+        "comparison_v3",
         lambda report: report.update(omitted=["/inputs/b/evidence_set"]),
         "/inputs/b",
     ),
@@ -398,7 +549,7 @@ LOCATION_EDITS: dict[str, tuple[str, Callable[[Any], None], str]] = {
         "/inputs/b",
     ),
     "a Report without omitted": (
-        "comparison",
+        "comparison_v3",
         lambda report: report.pop("omitted"),
         "",
     ),
@@ -876,21 +1027,29 @@ TRACK_EDITS: dict[str, tuple[Callable[[dict[str, Any]], None], str]] = {
 }
 
 
+@pytest.mark.parametrize("version", [3, 4])
 @pytest.mark.parametrize("name", TRACK_EDITS)
 def test_validate_checks_the_track_input_of_a_comparison_report(
-    run: Run, acquired_set: Path, tmp_path: Path, name: str
+    run: Run, acquired_set: Path, tmp_path: Path, name: str, version: int
 ) -> None:
     change, location = TRACK_EDITS[name]
-    report = run(
-        "compare",
-        acquired_set,
-        acquired_set / "data/disc.scram.flac",
-        "--track-a",
-        "1",
-        "--json",
-    )
-    assert report.code == 0, report.err
-    document = json.loads(report.out)
+    if version == 3:
+        document = json.loads((STORED / "acquired_track.json").read_text())
+    else:
+        report = run(
+            "compare",
+            acquired_set,
+            acquired_set / "data/disc.scram.flac",
+            "--track-a",
+            "1",
+            "--json",
+        )
+        assert report.code == 0, report.err
+        document = json.loads(report.out)
+    assert document["format_version"] == version
+    intact, unedited = validate(run, save(tmp_path, document, "intact.json"))
+    assert intact.code == 0, intact.err
+    assert unedited["outcome"] == "valid"
     change(document)
 
     outcome, result = validate(run, save(tmp_path, document))

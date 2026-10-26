@@ -101,6 +101,7 @@
     "resampler",
     "retagging",
     "rfft",
+    "rfftfreq",
     "rint",
     "rpds",
     "rumdl",

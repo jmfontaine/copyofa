@@ -1,0 +1,126 @@
+{
+  "report_kind": "copyofa.comparison",
+  "format_version": 3,
+  "copyofa_version": "0.6.0.dev0",
+  "compared_at": "2026-10-26T03:12:25Z",
+  "omitted": [],
+  "inputs": {
+    "a": {
+      "evidence_set": "/Volumes/Archive/acquired-1",
+      "integrity_baseline": {
+        "manifest_sha256": "c493d5e1c3a20cfb6ab1d96f1ef3f3c93fb0019779b940d18c3d96c51938532a",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/disc.scram.flac",
+      "track": {
+        "number": 2,
+        "first_frame": 5304,
+        "frame_count": 2940
+      },
+      "outcome": "interpreted",
+      "expected_digest": "ad9a8881d64aa76c2946860d7897cd29e6f37be0e304dd56eb393871fdbd045e",
+      "observed_digest": "ad9a8881d64aa76c2946860d7897cd29e6f37be0e304dd56eb393871fdbd045e",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 2940,
+      "audio_digest": "pcm1:44100:2:16:6480b34f7a4217d8275ea488c105de4bb15b4ecb62b8cfd5c3bfd6b39757d12d",
+      "peak": [
+        32766,
+        32768
+      ],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0
+    },
+    "b": {
+      "evidence_set": "/Volumes/Archive/set-1",
+      "integrity_baseline": {
+        "manifest_sha256": "3fb27656756f655c3252ed26c390793f25ec1a430388080979cc4bd79b6dd4da",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/02.flac",
+      "outcome": "interpreted",
+      "expected_digest": "b6faa032e7e032de75467eeba815aaa8a9e62d3d4654b3bda65a7ef3f77046c4",
+      "observed_digest": "b6faa032e7e032de75467eeba815aaa8a9e62d3d4654b3bda65a7ef3f77046c4",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 2940,
+      "audio_digest": "pcm1:44100:2:16:6480b34f7a4217d8275ea488c105de4bb15b4ecb62b8cfd5c3bfd6b39757d12d",
+      "peak": [
+        32766,
+        32768
+      ],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0,
+      "flac_md5_signature": "matching"
+    }
+  },
+  "method": {
+    "decoder": "libsndfile",
+    "decoder_version": "1.2.2",
+    "resampler": "libsoxr",
+    "resampler_version": "0.1.3-14-ga66f3ee",
+    "resampler_quality": "VHQ",
+    "common_sample_rate": 44100,
+    "alignment": "downmix_cross_correlation"
+  },
+  "measurements": {
+    "identical_audio": true,
+    "offset": {
+      "frames": 0,
+      "seconds": 0.0
+    },
+    "overlap": {
+      "a": {
+        "start_frame": 0,
+        "frames": 2940,
+        "fraction": 1.0
+      },
+      "b": {
+        "start_frame": 0,
+        "frames": 2940,
+        "fraction": 1.0
+      }
+    },
+    "downmix": {
+      "correlation": 1.0,
+      "gain_db": 0.0,
+      "absent": {
+        "residual_db": "the audio is identical",
+        "residual_windows": "the audio is identical"
+      }
+    },
+    "channels": [
+      {
+        "correlation": 1.0,
+        "gain_db": 0.0,
+        "absent": {
+          "residual_db": "the audio is identical",
+          "residual_windows": "the audio is identical"
+        }
+      },
+      {
+        "correlation": 1.0,
+        "gain_db": 0.0,
+        "absent": {
+          "residual_db": "the audio is identical",
+          "residual_windows": "the audio is identical"
+        }
+      }
+    ]
+  },
+  "limitations": [
+    "No measurement says whether the tracks share a master, a mix or a source; the Report draws no such conclusion.",
+    "MP3 is lossy: the measurements of an MP3 depend on its decoder.",
+    "Tracks at different sample rates are compared at the lower rate, after resampling, so differences above that rate's band are not measured.",
+    "One global offset aligns the tracks: inserted or removed sections, drift and speed changes are not located; they lower the correlation and raise the residual.",
+    "Channels are paired in the order each file stores them."
+  ]
+}

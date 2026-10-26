@@ -613,37 +613,50 @@ def _print_comparison(report: dict[str, Any]) -> None:
     if measurements is None:
         print("Not compared: an input was not interpreted")
         return
+    rate = report["method"]["common_sample_rate"]
+    print(f"Common sample rate: {rate} Hz")
     if measurements.get("identical_audio"):
         print("Identical audio: the Audio Digests are equal")
-    absent = measurements.get("absent", {})
-    if "offset" in measurements:
-        offset = measurements["offset"]
-        rate = report["method"]["common_sample_rate"]
+    for number, portion in enumerate(measurements["portions"], start=1):
+        offset = portion["offset"]
+        downmix = portion["downmix"]
         print(
-            f"Offset: {offset['frames']:+} frames ({offset['seconds']:+.3f} s) "
-            f"at {rate} Hz"
+            f"Portion {number}, {portion['rank']}: "
+            f"A {_seconds(portion['a'], rate)}, B {_seconds(portion['b'], rate)}, "
+            f"offset {offset['frames']:+} frames ({offset['seconds']:+.3f} s), "
+            f"{_value(downmix, 'correlation', 'correlation', 3, '')}, "
+            f"{_value(downmix, 'residual_db', 'residual', 1, ' dB')}"
         )
-        overlap = measurements["overlap"]
-        print(
-            f"Overlap: {overlap['a']['fraction']:.1%} of track A, "
-            f"{overlap['b']['fraction']:.1%} of track B"
-        )
-    else:
-        print(f"Offset: absent ({absent['offset']})")
-        print(f"Overlap: absent ({absent['overlap']})")
-    downmix = measurements["downmix"]
-    for label, field, digits, unit in (
-        ("Correlation", "correlation", 3, ""),
-        ("Gain", "gain_db", 2, " dB"),
-        ("Residual", "residual_db", 1, " dB"),
-    ):
-        if field in downmix:
-            # Adding 0.0 turns a value that rounds to -0.0 into 0.0.
-            value = round(downmix[field], digits) + 0.0
-            sign = "+" if field == "gain_db" else ""
-            print(f"{label}: {value:{sign}.{digits}f}{unit}")
-        else:
-            print(f"{label}: absent ({downmix['absent'][field]})")
+    if "portions" in measurements.get("absent", {}):
+        print(f"No portion found: {measurements['absent']['portions']}")
+    for name in ("a", "b"):
+        for unmatched in measurements["unmatched"][name]:
+            level = (
+                "digital silence"
+                if unmatched["digitally_silent"]
+                else f"{_rounded(unmatched['level_dbfs'], 1):.1f} dBFS"
+            )
+            print(f"Unmatched in {name.upper()}: {_seconds(unmatched, rate)}, {level}")
+
+
+def _seconds(extent: dict[str, Any], rate: int) -> str:
+    """Format a range of frames at rate as seconds, such as `4.098-186.720 s`."""
+    start = extent["start_frame"]
+    return f"{start / rate:.3f}-{(start + extent['frames']) / rate:.3f} s"
+
+
+def _value(
+    values: dict[str, Any], field: str, label: str, digits: int, unit: str
+) -> str:
+    """Format a measured value with its label, or its absence with the reason."""
+    if field not in values:
+        return f"{label} absent ({values['absent'][field]})"
+    return f"{label} {_rounded(values[field], digits):.{digits}f}{unit}"
+
+
+def _rounded(value: float, digits: int) -> float:
+    # Adding 0.0 turns a value that rounds to -0.0 into 0.0.
+    return round(value, digits) + 0.0
 
 
 def _validate(args: argparse.Namespace) -> int:
@@ -695,6 +708,14 @@ def _view(args: argparse.Namespace) -> int:
         print(
             f"copyofa: {report} is not a comparison Report; view supports "
             "comparison Reports only",
+            file=sys.stderr,
+        )
+        return EXIT_PROBLEM
+    if result["format_version"] not in viewer.RENDERED_VERSIONS:
+        print(
+            f"copyofa: {report} is a comparison Report of format version "
+            f"{result['format_version']}, which this version of view does not "
+            "render yet",
             file=sys.stderr,
         )
         return EXIT_PROBLEM
