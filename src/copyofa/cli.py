@@ -10,7 +10,15 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 import copyofa
-from copyofa import acquirer, comparator, inspector, validator, verifier, viewer
+from copyofa import (
+    acquirer,
+    comparator,
+    evidence_set,
+    inspector,
+    validator,
+    verifier,
+    viewer,
+)
 from copyofa.errors import CopyOfAError
 from copyofa.importer import import_evidence
 
@@ -305,11 +313,10 @@ def _print_acquisition(result: AcquisitionResult) -> None:
     )
     print(f"Tracks: {len(record['tracks'])}")
     for track in record["tracks"]:
-        line = (
-            f"  {track['number']}: "
-            f"{viewer.format_duration(track['frame_count'], acquirer.SAMPLE_RATE)}, "
-            f"{track['audio_digest']}"
+        duration = viewer.format_duration(
+            track["frame_count"], evidence_set.CD_SAMPLE_RATE
         )
+        line = f"  {track['number']}: {duration}, {track['audio_digest']}"
         if track["error_frames"]:
             line = (
                 f"{line}, {_count(track['error_frames'], 'frame')} not read "
@@ -400,7 +407,8 @@ def _print_items(title: str, items: list[dict[str, str]]) -> None:
 def _inspect(args: argparse.Namespace) -> int:
     def progress(entry: dict[str, Any]) -> None:
         outcome = entry["outcome"].replace("_", " ")
-        print(f"Inspected {_printable(entry['path'])}: {outcome}", file=sys.stderr)
+        name = f"track {entry['number']}" if "number" in entry else entry["path"]
+        print(f"Inspected {_printable(name)}: {outcome}", file=sys.stderr)
 
     try:
         report = inspector.inspect(args.evidence_set, progress=progress)
@@ -435,8 +443,43 @@ def _print_inspection(report: dict[str, Any]) -> None:
         if entry["outcome"] != inspector.INTERPRETED:
             outcome = entry["outcome"].replace("_", " ")
             print(_printable(f"  {outcome}: {entry['path']} ({entry['reason']})"))
+    if "disc" in report:
+        _print_disc(report["disc"])
     result = "problems found" if inspector.found_problems(report) else "no problems"
     print(f"Result: {result}")
+
+
+def _print_disc(disc: dict[str, Any]) -> None:
+    if "reason" in disc:
+        print(_printable(f"Disc: not inspected ({disc['reason']})"))
+        return
+    tracks = disc["tracks"]
+    counts = Counter(track["outcome"] for track in tracks)
+    summary = ", ".join(
+        f"{counts[outcome]} {outcome.replace('_', ' ')}"
+        for outcome in inspector.OUTCOMES
+        if counts[outcome]
+    )
+    print(f"Disc: {_count(len(tracks), 'track')}, {summary}")
+    for track in tracks:
+        if track["outcome"] != inspector.INTERPRETED:
+            continue
+        agreement = (
+            "matches the recorded one"
+            if track["audio_digest"] == track["recorded_audio_digest"]
+            else "differs from the recorded one"
+        )
+        duration = viewer.format_duration(track["frames"], evidence_set.CD_SAMPLE_RATE)
+        print(
+            f"  track {track['number']}: {duration}, {track['audio_digest']}, "
+            f"Audio Digest {agreement}"
+        )
+    for track in tracks:
+        if track["outcome"] != inspector.INTERPRETED:
+            outcome = track["outcome"].replace("_", " ")
+            print(
+                _printable(f"  {outcome}: track {track['number']} ({track['reason']})")
+            )
 
 
 def _describe_audio(entry: dict[str, Any]) -> str:

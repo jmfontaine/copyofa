@@ -113,10 +113,15 @@ depend on the decoder. The Report also gives each track's peak per channel and i
 digital silence at each end, and for FLAC whether the audio matches the MD5 signature
 its encoder stored.
 
-Inspect exits 0 when every file was decoded or is not a supported format, 1 when a
-file could not be inspected or decoded or its audio differs from its FLAC MD5
-signature, 2 when the target is not an Evidence Set or the arguments are invalid, and
-130 when canceled. It writes nothing into the set.
+For a set made by acquire, inspect also decodes each track of the disc from the image,
+over the range the Acquisition Record gives, and reports whether its Audio Digest is
+the one recorded at acquisition.
+
+Inspect exits 0 when every file was decoded or is not a supported format, 1 when a file
+could not be inspected or decoded or its audio differs from its FLAC MD5 signature, or
+when a track of an acquired set could not be decoded or differs from its recorded Audio
+Digest, 2 when the target is not an Evidence Set or the arguments are invalid, and 130
+when canceled. It writes nothing into the set.
 
 Measure how two preserved tracks relate, such as a FLAC track and the MP3 of the same
 song from another release:
