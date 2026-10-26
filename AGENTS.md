@@ -119,16 +119,17 @@ under `data/` and CopyOfA's records in the `copyofa/` tag directory, as
 [ADR 0001](docs/decisions/0001-store-evidence-sets-as-bagit-bags.md) decides.
 [docs/formats/evidence-set.md](docs/formats/evidence-set.md) documents the layout, the
 Import Record and the Acquisition Record; change it with any change to what import or
-acquire writes. Import and acquire create their destination through the staging
-directory `src/copyofa/staging.py` manages.
+acquire writes. Import, acquire and export create their destination through the
+staging directory `src/copyofa/staging.py` manages.
 [docs/formats/verification-report.md](docs/formats/verification-report.md) documents
 the Report verify prints,
 [docs/formats/inspection-report.md](docs/formats/inspection-report.md) the Report
 inspect prints,
 [docs/formats/comparison-report.md](docs/formats/comparison-report.md) the Report
-compare prints and the page view makes of it, and
+compare prints and the page view makes of it,
 [docs/formats/validation-result.md](docs/formats/validation-result.md) the result
-validate prints; change each with any change to what its command prints.
+validate prints, and [docs/formats/export-result.md](docs/formats/export-result.md)
+the result export prints; change each with any change to what its command prints.
 
 ### Report schemas
 
@@ -152,8 +153,9 @@ Report kind and format version `view` supports needs its own rendering.
 
 ### Audio decoding
 
-`inspect` and `compare` decode audio with soundfile, whose wheels bundle libsndfile
-with FLAC and mpg123, and NumPy. `compare` also resamples with soxr (python-soxr,
+`inspect`, `compare` and `export` decode audio with soundfile, whose wheels bundle
+libsndfile with FLAC and mpg123, and NumPy; `export` also writes its FLAC files
+through soundfile. `compare` also resamples with soxr (python-soxr,
 bundling libsoxr). These three, with jsonschema (see Report schemas), are the only
 runtime dependencies. The Audio Digest is defined on canonical PCM by
 [ADR 0002](docs/decisions/0002-define-audio-digest-from-canonical-pcm.md), so any
@@ -162,7 +164,7 @@ exact decoder reproduces it. `pyproject.toml` sets a higher NumPy minimum for Py
 NumPy instead of building it; soxr's minimum, 0.5, is its oldest release with wheels
 for 3.15 (stable ABI). Inspect reads through libsndfile's sequential read
 functions rather than soundfile's `read()` (see the `KLUDGE` in
-`src/copyofa/inspector.py`), and compare decodes through inspect's code. The
+`src/copyofa/inspector.py`), and compare and export decode through inspect's code. The
 comparison method (resampling, alignment, measurements) is decided in
 [ADR 0003](docs/decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md).
 
@@ -191,13 +193,13 @@ Every command follows the conventions `import` and `verify` set in v0.1.0, as
   instead, as UTF-8 whatever the locale, with lone surrogates (path bytes that
   are not valid UTF-8) escaped as `\uXXXX` so the output stays valid UTF-8. Progress,
   warnings and errors go to stderr
-- Exit 0 on success, 1 when the command refused, failed or found a problem (a result
-  is still printed when there is one), 2 for invalid arguments or, for a command that
-  reads an Evidence Set, a target that is not one, and 130 when canceled with Ctrl-C.
-  Import and acquire exit 1 for a source or destination they refuse, acquire also for
-  a set it accepted from a disc read with errors, validate and view for a file
-  they cannot read, and view for a Report it refuses. View prints an HTML page, not
-  JSON, and has no `--json`
+- Exit 0 on success, 1 when the command refused, failed or found a problem (a result is
+  still printed when there is one), 2 for invalid arguments or, for a command that reads
+  an Evidence Set, a target that is not one, and 130 when canceled with Ctrl-C. Import,
+  acquire and export exit 1 for a source or destination they refuse, acquire also for a
+  set it accepted from a disc read with errors, validate and view for a file they cannot
+  read, and view for a Report it refuses. View prints an HTML page, not JSON, and has no
+  `--json`
 - Stdout stays empty whenever no result is produced
 - No interactive prompts
 

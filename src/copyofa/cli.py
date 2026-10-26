@@ -14,6 +14,7 @@ from copyofa import (
     acquirer,
     comparator,
     evidence_set,
+    exporter,
     inspector,
     validator,
     verifier,
@@ -163,6 +164,28 @@ def _parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="print the inspection Report as JSON"
     )
     inspecting.set_defaults(handler=_inspect)
+
+    exporting = commands.add_parser(
+        "export",
+        help="write the tracks of an acquired set as FLAC files",
+        description=(
+            "Check an acquired set as inspect does, then write each track of its disc "
+            "as a 16-bit stereo FLAC file at 44.1 kHz, 01.flac, 02.flac and so on, "
+            "with no tag, in a new directory. Exits 0 when every track was exported, "
+            "and 1 when the export was refused or failed."
+        ),
+    )
+    exporting.add_argument("evidence_set", metavar="evidence-set")
+    exporting.add_argument(
+        "--to",
+        required=True,
+        metavar="directory",
+        help="the directory to create; it must not exist, its parent must",
+    )
+    exporting.add_argument(
+        "--json", action="store_true", help="print the result as JSON"
+    )
+    exporting.set_defaults(handler=_export)
 
     comparing = commands.add_parser(
         "compare",
@@ -502,6 +525,38 @@ def _describe_audio(entry: dict[str, Any]) -> str:
     if entry.get("flac_md5_signature") == inspector.MD5_DIFFERS:
         parts.append("decoded audio differs from its FLAC MD5 signature")
     return ", ".join(parts)
+
+
+def _export(args: argparse.Namespace) -> int:
+    def progress(message: str) -> None:
+        print(_printable(message), file=sys.stderr)
+
+    try:
+        result = exporter.export(args.evidence_set, args.to, progress=progress)
+    except verifier.NotAnEvidenceSetError as error:
+        print(f"copyofa: {error}", file=sys.stderr)
+        return EXIT_USAGE
+    except (CopyOfAError, OSError) as error:
+        print(f"copyofa: {error}", file=sys.stderr)
+        return EXIT_PROBLEM
+    for warning in result.warnings:
+        print(f"copyofa: warning: {warning}", file=sys.stderr)
+    if args.json:
+        _print_json(result.to_json())
+        return EXIT_OK
+    print(
+        _printable(
+            f"Exported {_count(len(result.files), 'track')} to {result.directory}"
+        )
+    )
+    for exported in result.files:
+        print(f"  {exported.path}: track {exported.track}, {exported.audio_digest}")
+    print(_printable(f"From Evidence Set {result.evidence_set}"))
+    print(f"Manifest SHA-256: {result.manifest_sha256}")
+    print("Left out:")
+    for sentence in exporter.LEFT_OUT:
+        print(f"  {sentence}")
+    return EXIT_OK
 
 
 def _track_number(value: str) -> int:
