@@ -15,7 +15,7 @@ import pytest
 from conftest import requires_permissions, snapshot
 
 import copyofa
-from copyofa import importer
+from copyofa import importer, staging
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -92,7 +92,7 @@ def sha256(data: bytes) -> str:
 
 
 def staging_of(destination: Path) -> Path:
-    return destination.with_name(destination.name + importer.STAGING_SUFFIX)
+    return destination.with_name(destination.name + staging.STAGING_SUFFIX)
 
 
 def test_import_creates_bag_with_identical_payload(
@@ -495,7 +495,7 @@ def test_import_cleans_up_when_ctrl_c_arrives_right_after_creating(
 
     def interrupted(self: Path, *args: object, **kwargs: object) -> object:
         result = original(self, *args, **kwargs)
-        if self.name.endswith(importer.STAGING_SUFFIX):
+        if self.name.endswith(staging.STAGING_SUFFIX):
             signal.raise_signal(signal.SIGINT)
         return result
 

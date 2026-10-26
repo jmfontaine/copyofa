@@ -309,7 +309,7 @@ def _decode_pcm(
     frames = 0
     shift = 32 - bits
     try:
-        for block in _read_blocks(sound, "int32"):
+        for block in read_blocks(sound, "int32"):
             # libsndfile scales integer samples to the full 32-bit range.
             samples = np.right_shift(block, shift)
             data = _canonical_bytes(samples, bits)
@@ -395,7 +395,7 @@ def _decode_mp3(sound: soundfile.SoundFile, sink: Sink | None) -> dict[str, Any]
     measures = _Measures(sound.channels, integer=False)
     frames = 0
     try:
-        for block in _read_blocks(sound, "float32"):
+        for block in read_blocks(sound, "float32"):
             measures.add(block)
             if sink is not None:
                 sink(block)
@@ -412,7 +412,7 @@ def _decode_mp3(sound: soundfile.SoundFile, sink: Sink | None) -> dict[str, Any]
 _CTYPES = {"int32": "int", "float32": "float"}
 
 
-def _read_blocks(sound: soundfile.SoundFile, dtype: str) -> Iterator[np.ndarray]:
+def read_blocks(sound: soundfile.SoundFile, dtype: str) -> Iterator[np.ndarray]:
     """Yield the decoded frames in order, until libsndfile has no more.
 
     Each block is shaped (frames, channels). Raises soundfile.LibsndfileError when

@@ -176,7 +176,7 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.18" },
     { name = "numpy", marker = "python_full_version < '3.15'", specifier = ">=2" },
     { name = "numpy", marker = "python_full_version >= '3.15'", specifier = ">=2.5.2" },
-    { name = "soundfile", specifier = ">=0.12" },
+    { name = "soundfile", specifier = ">=0.13" },
     { name = "soxr", specifier = ">=0.5" },
 ]
 

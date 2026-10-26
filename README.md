@@ -51,6 +51,33 @@ The command exits 0 when the set is accepted, 1 when the import is refused or fa
 [Evidence Set format][evidence-set] describes the set and how to check
 it without CopyOfA.
 
+Preserve a plain audio CD by reading it with
+[redumper](https://github.com/superg/redumper), build b768 or later, installed
+separately:
+
+```bash
+copyofa acquire --to /Volumes/Archive/add-violence-cd --note "Bought new"
+copyofa acquire --to /Volumes/Archive/add-violence-cd --drive disk6 --json \
+  > acquisition.json
+```
+
+- Acquire runs `redumper disc` once and keeps everything it wrote but the track files,
+  which the disc image reproduces: the image as FLAC, the read status and the
+  subchannel as xz, and the small files as written. Each compressed file is decoded
+  and checked against redumper's original before the set is accepted.
+- The set's Acquisition Record gives the drive, the redumper build, the offsets, the
+  read errors, and each track's range in the image and Audio Digest.
+- `--drive` names the drive as redumper does, such as `disk6`; without it, redumper
+  reads the first drive holding a disc. `--note`, `--ref` and `--json` work as for
+  import.
+- A disc with more than one session or with a data track is refused.
+
+Acquire exits 0 when the set is accepted from a disc read without error, 1 when it is
+accepted from a disc read with errors (the set is kept, as evidence of what the drive
+read) or the acquisition is refused or fails, 2 for invalid arguments, and 130 when
+canceled. [Evidence Set format][evidence-set] describes acquired sets and how to
+restore redumper's files with `flac` and `xz`.
+
 Later, after moving the set or just to check it, verify it against its Integrity
 Baseline:
 

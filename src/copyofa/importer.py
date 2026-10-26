@@ -4,29 +4,23 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
-import json
 import os
-import shutil
-import signal
 import stat
-import threading
 import unicodedata
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import copyofa
-from copyofa import evidence_set
+from copyofa import evidence_set, staging
 from copyofa.errors import CopyOfAError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Sequence
+    from collections.abc import Callable, Sequence
 
 IMPORT_RECORD_KIND = "copyofa.import"
 IMPORT_RECORD_FORMAT_VERSION = 1
-STAGING_SUFFIX = ".copyofa-staging"
 
 _CHUNK_SIZE = 1024 * 1024
 
@@ -87,19 +81,21 @@ def import_evidence(
     Every refusal that does not depend on reading file contents happens before
     anything is copied. Files are copied into a staging directory beside the
     destination, checked, and renamed to the destination only once every check
-    passes. Raises EvidenceImportError, after removing the staging directory, when the
+    passes. Raises CopyOfAError, after removing the staging directory, when the
     import is refused or fails.
     """
     imported_at = datetime.now(UTC)
     if note is not None:
-        _require_utf8(note, "the --note text", "the Import Record requires")
+        staging.require_utf8(note, "the --note text", "the Import Record requires")
     for reference in references or ():
-        _require_utf8(reference, "a --ref value", "the Import Record requires")
+        staging.require_utf8(reference, "a --ref value", "the Import Record requires")
     for pattern in excludes:
-        _require_utf8(pattern, "an --exclude pattern", "the Import Record requires")
+        staging.require_utf8(
+            pattern, "an --exclude pattern", "the Import Record requires"
+        )
     resolved_sources = [_resolve_source(given) for given in sources]
     _refuse_overlapping_sources(resolved_sources)
-    target, staging = _check_destination(destination, resolved_sources)
+    checked = _check_destination(destination, resolved_sources)
     selection = _select(resolved_sources, excludes)
     if not selection.files:
         raise EvidenceImportError("Refused: the selection leaves no file to preserve.")
@@ -124,66 +120,14 @@ def import_evidence(
         record["external_references"] = list(references)
     record["exclusions"] = selection.exclusions
 
-    try:
-        parent_fd = os.open(target.parent, os.O_RDONLY)
-    except OSError as error:
-        raise EvidenceImportError(
-            f"Refused: cannot open the parent of destination {destination}: "
-            f"{error.strerror}."
-        ) from None
-    # What this import created and removes when it fails or is canceled; never
-    # a staging directory it did not create.
-    created: Path | None = None
-    warnings: list[str] = []
-    try:
-        with _interrupt_deferred():
-            try:
-                staging.mkdir()
-            except FileExistsError:
-                raise EvidenceImportError(
-                    f"Refused: a staging directory already exists at {staging}."
-                ) from None
-            created = staging
-        total = _build_bag(staging, selection, record, imported_at, progress)
-        if os.path.lexists(target):
-            raise EvidenceImportError(f"Failed: {target} appeared during the import.")
-        with _interrupt_deferred():
-            staging.rename(target)
-            created = target
-        try:
-            os.fsync(parent_fd)
-        except OSError as error:
-            # The set is complete and accepted; only the rename's durability is
-            # in doubt, which deleting the set would not improve.
-            warnings.append(
-                f"could not sync {target.parent} after creating {target}: "
-                f"{error.strerror}. The Evidence Set is complete."
-            )
-    except BaseException:
-        if created is not None:
-            shutil.rmtree(created, ignore_errors=True)
-        raise
-    finally:
-        os.close(parent_fd)
-    return ImportResult(target, record, len(selection.files), total, tuple(warnings))
+    def build(root: Path) -> int:
+        payload = _store_selection(root, selection, progress)
+        return staging.build_bag(
+            root, payload, evidence_set.IMPORT_RECORD, record, imported_at
+        )
 
-
-@contextmanager
-def _interrupt_deferred() -> Generator[None]:
-    """Hold Ctrl-C until the block ends, so an ownership change completes."""
-    if threading.current_thread() is not threading.main_thread():
-        yield
-        return
-    received: list[int] = []
-    previous = signal.signal(
-        signal.SIGINT, lambda number, _frame: received.append(number)
-    )
-    try:
-        yield
-    finally:
-        signal.signal(signal.SIGINT, previous)
-        if received:
-            signal.raise_signal(signal.SIGINT)
+    total, warnings = staging.accept(checked, "import", build)
+    return ImportResult(checked.target, record, len(selection.files), total, warnings)
 
 
 def _resolve_source(given: str) -> _Source:
@@ -191,7 +135,7 @@ def _resolve_source(given: str) -> _Source:
     name = path.name
     if not name:
         raise EvidenceImportError(f"Refused: source {given} has no base name.")
-    _require_utf8(str(path), f"source {given}")
+    staging.require_utf8(str(path), f"source {given}")
     try:
         mode = path.lstat().st_mode
     except FileNotFoundError:
@@ -259,32 +203,15 @@ def _refuse_overlapping_sources(sources: Sequence[_Source]) -> None:
 
 def _check_destination(
     destination: str, sources: Sequence[_Source]
-) -> tuple[Path, Path]:
-    path = Path(destination).absolute()
-    if path.name in {"", ".", ".."}:
-        raise EvidenceImportError(f"Refused: destination {destination} already exists.")
-    if os.path.lexists(path):
-        raise EvidenceImportError(f"Refused: destination {destination} already exists.")
-    parent = path.parent.resolve()
-    if not parent.is_dir():
-        raise EvidenceImportError(
-            f"Refused: the parent of destination {destination} does not exist."
-        )
-    target = parent / path.name
-    _require_utf8(str(target), f"destination {destination}")
-    inside = _ancestors(target)
+) -> staging.Destination:
+    checked = staging.check_destination(destination)
+    inside = _ancestors(checked.target)
     for source in sources:
         if source.is_dir and _identity(source.resolved) in inside:
             raise EvidenceImportError(
                 f"Refused: destination {destination} lies inside source {source.given}."
             )
-    staging = parent / f"{path.name}{STAGING_SUFFIX}"
-    if os.path.lexists(staging):
-        raise EvidenceImportError(
-            f"Refused: a staging directory left by an earlier import exists at "
-            f"{staging}. Check it, then remove it."
-        )
-    return target, staging
+    return checked
 
 
 def _select(sources: Sequence[_Source], excludes: Sequence[str]) -> _Selection:
@@ -326,7 +253,7 @@ def _select(sources: Sequence[_Source], excludes: Sequence[str]) -> _Selection:
             if not names:
                 selection.exclude(relative, "empty_directory")
             for child in reversed(names):
-                _require_utf8(child, f"the name of an entry in {path}")
+                staging.require_utf8(child, f"the name of an entry in {path}")
                 pending.append((path / child, f"{relative}/{child}"))
         elif not stat.S_ISREG(mode):
             selection.exclude(relative, "special_file")
@@ -338,59 +265,25 @@ def _select(sources: Sequence[_Source], excludes: Sequence[str]) -> _Selection:
     return selection
 
 
-def _require_utf8(
-    text: str, what: str, requirement: str = "BagIt manifests require"
-) -> None:
-    try:
-        text.encode()
-    except UnicodeEncodeError:
-        raise EvidenceImportError(
-            f"Refused: {what} is not valid UTF-8, which {requirement}."
-        ) from None
-
-
-def _build_bag(
+def _store_selection(
     root: Path,
     selection: _Selection,
-    record: dict[str, Any],
-    imported_at: datetime,
     progress: Callable[[str, int], None] | None,
-) -> int:
-    """Write and check the payload and tag files; return the payload size."""
-    manifest: list[str] = []
-    total = 0
+) -> list[tuple[str, str, int]]:
+    """Copy and check the selected files; return their (path, SHA-256, size)."""
+    payload = []
     for source, relative in selection.files:
         stored = f"{evidence_set.PAYLOAD_DIR}/{relative}"
         target = root / stored
         digest, size = _store(source, target)
-        if _digest_file(target) != digest:
+        if staging.digest_file(target) != digest:
             raise EvidenceImportError(
                 f"Failed: the stored copy of {source} does not match its source."
             )
-        manifest.append(evidence_set.manifest_line(digest, stored))
-        total += size
+        payload.append((stored, digest, size))
         if progress is not None:
             progress(stored, size)
-
-    tag_files = {
-        evidence_set.BAGIT_TXT: evidence_set.BAGIT_TXT_CONTENT,
-        evidence_set.BAG_INFO_TXT: (
-            f"Bagging-Date: {imported_at.date().isoformat()}\n"
-            f"Payload-Oxum: {total}.{len(selection.files)}\n"
-            f"Bag-Software-Agent: copyofa {copyofa.__version__}\n"
-        ),
-        evidence_set.MANIFEST: "".join(manifest),
-        evidence_set.IMPORT_RECORD: json.dumps(record, indent=2, ensure_ascii=False)
-        + "\n",
-    }
-    tag_manifest = []
-    for name, text in tag_files.items():
-        data = text.encode()
-        _write_file(root / name, data)
-        digest = hashlib.sha256(data).hexdigest()
-        tag_manifest.append(evidence_set.manifest_line(digest, name))
-    _write_file(root / evidence_set.TAG_MANIFEST, "".join(tag_manifest).encode())
-    return total
+    return payload
 
 
 def _store(source: Path, target: Path) -> tuple[str, int]:
@@ -454,16 +347,3 @@ def _unreadable(source: Path, error: OSError) -> EvidenceImportError:
         f"Failed: cannot read {source}: {error.strerror}. Exclude it to import "
         "the rest."
     )
-
-
-def _digest_file(path: Path) -> str:
-    with path.open("rb") as file:
-        return hashlib.file_digest(file, "sha256").hexdigest()
-
-
-def _write_file(path: Path, data: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("xb") as file:
-        file.write(data)
-        file.flush()
-        os.fsync(file.fileno())
