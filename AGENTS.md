@@ -244,6 +244,9 @@ its files into the repository or the tests.
   every pre-commit hook and `--verifytypes`, then the tests, then
   builds and install-tests the distributions. Actions are pinned to commit
   SHAs, and no checkout keeps its token
+- `CI passed`, the `ci-passed` job in `ci.yml`, is the only required status check. It
+  needs every other job in that workflow, so a job added there joins its `needs`, and
+  the ruleset never changes
 - Dependabot opens weekly grouped updates for GitHub Actions and `uv.lock`, with
   `build:` commit messages and the `dependencies` and `build` labels; it moves the
   lock only, never the minimum versions in `pyproject.toml`

@@ -105,6 +105,9 @@ Pull requests are squash-merged, so the pull request title becomes the commit on
 (with the pull request number appended), and git-cliff builds the release notes from it:
 write it as a Conventional Commit, with `!` before the colon for a breaking change.
 
+The `CI passed` check summarizes every CI job and must be green before a pull request
+merges.
+
 ## Releasing
 
 Maintainers only. `main` changes only through pull requests; the only direct push is
