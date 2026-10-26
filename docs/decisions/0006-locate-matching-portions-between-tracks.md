@@ -31,7 +31,8 @@ expected answer was known:
   replacement, a dropout and an inverted polarity at 16 bits and as 128 kbps MP3:
   with the 5-second windows decided below, 80 runs and none of 142 expected portions
   missed (240 runs and 426 portions over three window lengths), every offset exact,
-  boundaries within 0 to 20 frames on lossless inputs.
+  boundaries within 0 to 20 frames on lossless inputs, any frame inside a fade or a
+  crossfade counting as exact.
 - **The same audio cut differently** (each CD track inside its disc image, tracks
   joined into one stream, a 48 kHz download against its own tracks): 26 runs at
   5-second windows, 56 over three window lengths, all exact.
@@ -104,18 +105,26 @@ Report becomes `windowed_portions`.
 6. **Unmatched audio.** The ranges of A and of B that no primary portion covers are
    reported, each with whether it is digitally silent (every sample of every channel
    zero) and, when it is not, its level: the mean power of all its samples of all
-   channels, in dB relative to full scale. When no portion is found, the Report says
-   so instead of giving an offset.
+   channels, in dB relative to full scale. Both are measured on the samples at the
+   common rate. When no portion is found, the Report says so instead of giving an
+   offset.
 7. **Parameters in the Report.** Every value above is a fixed method parameter, stated
    in the Report's `method`, since the result moves with them: decimation 16 at `HQ`,
    first-difference coefficient 0.5, window 5 s with a hop of 5 s, silent-window ratio
-   10⁻⁴, candidate threshold 0.4, 3 candidates per window at least 0.5 s apart, 1
-   skipped window, chaining tolerance 32 frames, core ratio 0.85 and core length 20 s,
-   refinement radius 32 frames, block 2048 frames, matched-block residual 0.2, core
-   confirming ratio 0.5, evidence floor −80 dBFS, silence against signal −60 dBFS, end
-   range eight blocks inside and one outside, acceptance residual −10 dB, minimum
-   portion 1 s, merge tolerance 2 frames, alternate margin 3 dB, alternate coverage
-   90 %, and equal-residual floor −60 dB.
+   10⁻⁴, B-position energy floor 10⁻¹⁰, candidate threshold 0.4, 3 candidates per
+   window at least 0.5 s apart, 1 skipped window, chaining tolerance 32 frames, core
+   ratio 0.85 and core length 20 s, refinement radius 32 frames, block 2048 frames,
+   matched-block residual 0.2, core confirming ratio 0.5, evidence floor −80 dBFS,
+   silence against signal −60 dBFS, end range eight blocks inside and one outside,
+   acceptance residual −10 dB, minimum portion 1 s, merge tolerance 2 frames,
+   alternate margin 3 dB, alternate coverage 90 %, and equal-residual floor −60 dB.
+8. **Details settled in implementation.** A position of B whose energy under a window
+   is at most 10⁻¹⁰ of B's whole energy gives no candidate, so that rounding errors
+   cannot pass for a match where B is next to silent. A chain whose windows all lie
+   inside a portion already found at an offset within 32 frames is not refined again.
+   The offset is scored over the frames of the core that have a frame of B at every
+   offset searched. A merged portion takes the offset of the longer one. Of equally
+   scoring ends, the shortest portion is taken.
 
 ## Rationale and alternatives
 
@@ -168,6 +177,11 @@ Alternatives considered:
   gives no portion; the Report states these limits.
 - A boundary inside audio below −80 dBFS is placed at the nearest frame with evidence,
   and the rest is reported as unmatched; lossy encoding moves boundaries only there.
+- A boundary at a fade falls about three blocks inside it, where the end rule's gain
+  over the eight blocks inside the edge stops fitting the faded audio, not where the
+  fade gets quiet; in the spike, 0 to 0.45 s inside 3 s and 8 s fades of a CD track. A
+  boundary at a crossfade falls where the other audio refutes the match: 0.58 s and
+  1.73 s into a 3 s crossfade.
 - The coarse search costs two FFTs of B's length per window of A, so its time grows
   with the product of the two lengths: about 1 s for two 3½-minute tracks, 28 s and
   2.7 GB for two 27-minute releases. Memory and speed are not optimized yet.

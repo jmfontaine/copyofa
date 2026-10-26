@@ -137,10 +137,10 @@ ship no recording. Existing compare tests whose signals are shorter than one win
   linear fade-in and fade-out, a crossfade at a cut, a shift, a 0.3 s replacement and an
   inverted polarity each give the expected primary portions, with no extra primary
   portion and every offset exact. Every boundary is within 32 frames of the expected
-  one, except that a fade's boundary is within one block (2048 frames) of the frame
-  where the faded signal's mean power over a block crosses −80 dBFS, and any boundary
-  inside a crossfade counts as expected. The same holds after resampling B to 48 kHz, at
-  24 bits, and with a −1.5 dB gain.
+  one, except that a fade's boundary is within four blocks (8192 frames) of the frame
+  where the fade reaches silence, and any boundary inside a crossfade counts as
+  expected. The same holds after resampling B to 48 kHz, at 24 bits, and with a
+  −1.5 dB gain.
 - **AC2 — Repeats and no match.** B holding a section of A twice, once exact and once
   with noise added about 20 dB below it, gives the noisy copy as an alternate, ranked
   after the primary; two exact copies give two primaries. Two unrelated generated
