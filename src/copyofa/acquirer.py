@@ -36,6 +36,8 @@ DEFAULT_RETRIES = 20
 
 The Redump project's guidance for audio CDs; redumper's own default is 0.
 """
+MAX_RETRIES = 2**31 - 1
+"""The largest retry count redumper reads as given, into a signed 32-bit integer."""
 
 FRAME_BYTES = evidence_set.CD_CHANNELS * evidence_set.CD_BITS_PER_SAMPLE // 8
 
@@ -99,7 +101,8 @@ def acquire(
     """Read the disc in a drive with redumper into a new Evidence Set at destination.
 
     Every refusal that does not depend on the disc happens before redumper reads it.
-    redumper re-reads each sector it read with a SCSI or C2 error up to retries times.
+    redumper re-reads each sector it read with a SCSI or C2 error up to retries times,
+    from 0 to MAX_RETRIES; raises ValueError for another count.
     redumper writes into a staging directory beside the destination, where its files
     are stored and checked; the staging directory is renamed to the destination only
     once every check passes. Raises CopyOfAError, after removing the staging
@@ -107,6 +110,8 @@ def acquire(
     accepted: has_read_errors tells.
     """
     acquired_at = datetime.now(UTC)
+    if not 0 <= retries <= MAX_RETRIES:
+        raise ValueError(f"retries must be from 0 to {MAX_RETRIES}, not {retries}")
     if note is not None:
         staging.require_utf8(note, "the --note text", "the Acquisition Record requires")
     for reference in references or ():
@@ -326,11 +331,12 @@ _ERRORS = re.compile(
     r"^media errors: *\n +SCSI: (\d+) samples\n +C2: (\d+) samples\n +Q: (\d+)$",
     re.MULTILINE,
 )
-# What redumper's refine stage, which runs when --retries re-reads sectors in error,
-# corrected of the errors its dump stage logged.
+# What redumper's refine stage, which re-reads sectors in error when --retries asks,
+# corrected of the SCSI and C2 errors its dump stage logged. Its Q count also holds
+# sectors whose subchannel the dump never counted, so it is not subtracted.
 _CORRECTED = re.compile(
     r"^correction statistics: *\n +SCSI: (\d+) samples\n +C2: (\d+) samples\n"
-    r" +Q: (\d+) sectors$",
+    r" +Q: \d+ sectors$",
     re.MULTILINE,
 )
 
@@ -380,12 +386,10 @@ def _read_log(path: Path) -> _Log:
     scsi, c2, q = (int(count) for count in errors.groups())
     corrected = _CORRECTED.search(text)
     if corrected is not None:
-        fixed_scsi, fixed_c2, fixed_q = (int(count) for count in corrected.groups())
-        scsi, c2, q = (
-            max(scsi - fixed_scsi, 0),
-            max(c2 - fixed_c2, 0),
-            max(q - fixed_q, 0),
-        )
+        fixed_scsi, fixed_c2 = (int(count) for count in corrected.groups())
+        if fixed_scsi > scsi or fixed_c2 > c2:
+            raise _unreadable_log("it corrects more errors than its read had")
+        scsi, c2 = scsi - fixed_scsi, c2 - fixed_c2
     write_offset = _WRITE_OFFSET.search(text)
     return _Log(
         drive=drive,

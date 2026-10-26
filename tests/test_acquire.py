@@ -259,8 +259,13 @@ def test_acquire_gives_redumper_the_retry_count_and_records_it(
 
 @pytest.mark.parametrize(
     "retries",
-    [["--retries", "-1"], ["--retries", "x"], ["--retries", "1", "--retries", "2"]],
-    ids=["negative", "not a number", "repeated"],
+    [
+        ["--retries", "-1"],
+        ["--retries", "x"],
+        ["--retries", str(2**31)],
+        ["--retries", "1", "--retries", "2"],
+    ],
+    ids=["negative", "not a number", "too large", "repeated"],
 )
 def test_acquire_exits_2_on_an_invalid_retry_count(
     run: Run, redumper: StandIn, tmp_path: Path, retries: list[str]
@@ -417,6 +422,13 @@ FAILURES: dict[str, tuple[dict[str, Any], str]] = {
         {"unreadable_log": True},
         "Failed: redumper's log cannot be read: it does not identify the drive.",
     ),
+    "more errors corrected than read": (
+        {"corrected": {"scsi": 0, "c2": 1, "q": 0}},
+        (
+            "Failed: redumper's log cannot be read: it corrects more errors than "
+            "its read had."
+        ),
+    ),
 }
 
 
@@ -473,8 +485,8 @@ def test_acquire_counts_scsi_and_c2_errors_as_read_errors(
 @pytest.mark.parametrize(
     ("corrected", "left", "code"),
     [
-        ({"scsi": 2352, "c2": 1176, "q": 0}, {"scsi": 0, "c2": 0, "q": 5}, 0),
-        ({"scsi": 2352, "c2": 588, "q": 0}, {"scsi": 0, "c2": 588, "q": 5}, 1),
+        ({"scsi": 2352, "c2": 1176, "q": 3}, {"scsi": 0, "c2": 0}, 0),
+        ({"scsi": 2352, "c2": 588, "q": 3}, {"scsi": 0, "c2": 588}, 1),
     ],
     ids=["all corrected", "some left"],
 )
@@ -486,6 +498,7 @@ def test_acquire_counts_only_the_errors_left_after_re_reading(
     left: dict[str, int],
     code: int,
 ) -> None:
+    # Q stays as the dump gives it: the re-reads also count sectors it did not.
     redumper.configure(
         media_errors={"scsi": 2352, "c2": 1176, "q": 5}, corrected=corrected
     )
@@ -497,7 +510,7 @@ def test_acquire_counts_only_the_errors_left_after_re_reading(
     assert record_of(destination)["read_errors"] == {
         "scsi_samples": left["scsi"],
         "c2_samples": left["c2"],
-        "subchannel_q_sectors": left["q"],
+        "subchannel_q_sectors": 5,
     }
 
 

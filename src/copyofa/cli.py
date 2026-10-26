@@ -582,9 +582,11 @@ def _track_number(value: str) -> int:
 
 
 def _retry_count(value: str) -> int:
-    """Parse a retry count, a whole number from 0."""
-    if not value.isdecimal():
-        raise argparse.ArgumentTypeError(f"not a retry count: {value!r}")
+    """Parse a retry count, a whole number from 0 to acquirer.MAX_RETRIES."""
+    if not value.isdecimal() or int(value) > acquirer.MAX_RETRIES:
+        raise argparse.ArgumentTypeError(
+            f"not a retry count from 0 to {acquirer.MAX_RETRIES}: {value!r}"
+        )
     return int(value)
 
 

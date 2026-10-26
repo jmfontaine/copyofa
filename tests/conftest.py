@@ -375,19 +375,18 @@ def _log(config: dict[str, Any], disc: SyntheticDisc, arguments: list[str]) -> s
 
 
 def _refine_lines(config: dict[str, Any]) -> list[str]:
-    """Return the refine stage, which redumper logs only when it re-read sectors."""
-    if "corrected" not in config:
-        return []
-    corrected = config["corrected"]
-    return [
-        "*** REFINE (time check: 0s)",
-        "",
-        "correction statistics: ",
-        f"  SCSI: {corrected['scsi']} samples",
-        f"  C2: {corrected['c2']} samples",
-        f"  Q: {corrected['q']} sectors",
-        "",
-    ]
+    """Return the refine stage, with its statistics only when it re-read sectors."""
+    lines = ["*** REFINE (time check: 0s)", ""]
+    if "corrected" in config:
+        corrected = config["corrected"]
+        lines += [
+            "correction statistics: ",
+            f"  SCSI: {corrected['scsi']} samples",
+            f"  C2: {corrected['c2']} samples",
+            f"  Q: {corrected['q']} sectors",
+            "",
+        ]
+    return lines
 
 
 def stand_in_redumper(arguments: list[str]) -> int:

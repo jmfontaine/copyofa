@@ -33,11 +33,13 @@ and its refine stage touches no other sector.
    redumper's own default.
 2. **The record states it.** The argument is one of the `reader.arguments` the
    Acquisition Record already lists, so its format does not change.
-3. **The record counts the errors left.** redumper logs the errors of its first read
-   as `media errors`, and what its re-reads corrected as `correction statistics`.
-   The record's `read_errors` is the first less the second, so a disc whose errors
-   were all corrected is accepted and acquire exits 0. Before this decision, no
-   re-read ran and the two were the same.
+3. **The record counts the errors not corrected.** redumper logs the errors of its
+   first read as `media errors`, and, when it re-read sectors, what the re-reads
+   corrected as `correction statistics`. The record's SCSI and C2 counts in
+   `read_errors` are the first less the second, so a disc whose errors the re-reads
+   corrected is usually accepted with exit 0; its Q count stays the first, since the
+   second also counts sectors whose subchannel the first never counted. Without
+   re-reads, redumper logs no correction statistics and the counts are as before.
 4. **Remaining errors are handled as before.** A disc whose errors remain after the
    re-reads fails or is accepted exactly as ADR 0005 and the Evidence Set format
    describe.
@@ -65,6 +67,11 @@ Alternatives considered:
 ## Consequences
 
 - Acquiring a damaged disc takes longer: up to 20 more reads of each sector in error.
-- The stand-in `redumper` of the tests logs a refine stage when told what it
+- The stand-in `redumper` of the tests logs correction statistics when told what it
   corrected, so tests cover the counts; a damaged disc is acquired by hand to confirm
   the re-reads themselves.
+- The counts come from two log blocks that cover slightly different sectors: the dump
+  stage also counts C2 errors in the lead-out it reads past the disc's end, and the
+  drive's lead-in read can replace sectors in error before the re-reads. Such errors
+  stay counted though the image no longer holds them, as they were before this
+  decision.
