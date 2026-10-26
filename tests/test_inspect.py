@@ -820,6 +820,36 @@ def test_inspect_does_not_inspect_tracks_of_an_image_that_is_not_accepted(
     assert all("audio_digest" not in track for track in report["disc"]["tracks"])
 
 
+def test_inspect_does_not_inspect_tracks_after_the_image_changes(
+    run: Run, acquired_set: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image = acquired_set / "data/disc.scram.flac"
+    original = inspector._decode_range
+    calls = []
+
+    def touch_after_first(*args, **kwargs):
+        result = original(*args, **kwargs)
+        calls.append(args)
+        if len(calls) == 1:
+            info = image.stat()
+            os.utime(image, ns=(info.st_atime_ns, info.st_mtime_ns + 10**9))
+        return result
+
+    monkeypatch.setattr(inspector, "_decode_range", touch_after_first)
+
+    outcome, report = inspect(run, acquired_set)
+
+    assert outcome.code == 1
+    assert outcomes(report)["data/disc.scram.flac"] == ("interpreted", None)
+    reason = (
+        "the disc image data/disc.scram.flac was not inspected: the file changed "
+        "while it was inspected"
+    )
+    assert [
+        (track["outcome"], track["reason"]) for track in report["disc"]["tracks"]
+    ] == [("not_inspected", reason)] * 3
+
+
 def test_inspect_reports_a_track_the_image_cannot_be_decoded_over_as_failed(
     run: Run, acquired_set: Path
 ) -> None:

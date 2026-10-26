@@ -270,7 +270,8 @@ def _inspect_track(
         "frame_count": track.frame_count,
     }
     blocks: list[npt.NDArray[np.float32]] = []
-    findings = inspector.decode_track(root, disc, track, blocks.append)
+    with inspector.open_accepted(root, disc.image, disc.image_digest) as image:
+        findings = inspector.decode_track(image, track, blocks.append)
     entry["outcome"] = findings.pop("outcome")
     entry["expected_digest"] = disc.image_digest
     if "observed_digest" in findings:

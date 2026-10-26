@@ -29,10 +29,11 @@ version.
    it is unusable, no file is decoded: each entry of `manifest-sha256.txt`, when it
    can still be parsed, is reported `not_inspected`.
 2. **Only accepted bytes.** Each file the manifest lists is read completely, in the
-   manifest's order, and its SHA-256 compared with the manifest's before it is decoded.
-   Inspect follows no symbolic link inside the set and never blocks on a special file.
-   A file whose size or modification time changes while it is inspected is reported
-   `not_inspected`.
+   manifest's order, and its SHA-256 compared with the manifest's before it is decoded;
+   the disc image of an acquired set is read first (see below). Inspect follows no
+   symbolic link inside the set and never blocks on a special file. A file whose size
+   or modification time changes between that check and the end of its decoding is
+   reported `not_inspected`.
 3. **Interpretation.** For content that starts as FLAC, after any ID3v2 tag, inspect
    reads the STREAMINFO block first. It then decodes, with libsndfile:
    - FLAC at 8, 16 or 24 bits whose STREAMINFO gives a length;
@@ -50,9 +51,13 @@ version.
    the bytes read have the SHA-256 the tag manifest records, parse as JSON, and give
    format version 1 of `copyofa.acquisition`, a disc image that `manifest-sha256.txt`
    lists, 16-bit stereo at 44.1 kHz, and a number, a range and an Audio Digest for
-   each track. For each track in the record's order, inspect then reads the image
-   completely, compares its SHA-256 with the manifest's as for a file, and decodes the
-   image over the track's range, from its first frame for its frame count.
+   each track. Inspect then reads the disc image completely once, before any file is
+   decoded, and compares its SHA-256 with the manifest's as for a file. It decodes the
+   image's own entry, then each track in the record's order, from that one opening of
+   the image: a track is decoded over its range, from its first frame for its frame
+   count. A track is `not_inspected` when the image is not the accepted bytes, or when
+   the image's size or modification time changed between that check and the end of
+   the track's decoding, with the reason a file gets when it changes while inspected.
 
 Files that `manifest-sha256.txt` does not list are not inspected; `verify` reports
 them. Inspect writes nothing into the set.

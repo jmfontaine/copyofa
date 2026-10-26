@@ -8,6 +8,7 @@ import os
 import re
 import stat
 from collections import Counter
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
@@ -20,7 +21,8 @@ import copyofa
 from copyofa import evidence_set, verifier
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator, Iterator
+    from io import FileIO
     from pathlib import Path
 
     import numpy.typing as npt
@@ -141,16 +143,34 @@ def inspect(
     root = verifier.locate(target)
     inspected_at = datetime.now(UTC)
     baseline = verifier.read_baseline(root)
-    files = []
-    for digest, path in baseline.entries:
-        if baseline.usable:
-            entry = inspect_file(root, path, digest)
-        else:
-            entry = _entry(path, digest, NOT_INSPECTED, reason=_UNUSABLE)
-        if progress is not None:
-            progress(entry)
-        files.append(entry)
-    disc = _inspect_disc(root, baseline, progress)
+    disc: dict[str, Any] | None = None
+    try:
+        acquired = read_acquired_disc(root, baseline)
+    except UnusableRecordError as error:
+        acquired = None
+        disc = {"reason": str(error)}
+    with ExitStack() as stack:
+        # Read and checked once, for its own entry and for every track.
+        image = (
+            None
+            if acquired is None
+            else stack.enter_context(
+                open_accepted(root, acquired.image, acquired.image_digest)
+            )
+        )
+        files = []
+        for digest, path in baseline.entries:
+            if not baseline.usable:
+                entry = _entry(path, digest, NOT_INSPECTED, reason=_UNUSABLE)
+            elif image is not None and path == image.path:
+                entry = inspect_accepted(image)
+            else:
+                entry = inspect_file(root, path, digest)
+            if progress is not None:
+                progress(entry)
+            files.append(entry)
+        if acquired is not None and image is not None:
+            disc = _inspect_disc(acquired, image, progress)
     counts = Counter(entry["outcome"] for entry in files)
     return {
         "report_kind": REPORT_KIND,
@@ -190,20 +210,14 @@ def found_problems(report: dict[str, Any]) -> bool:
 
 
 def _inspect_disc(
-    root: Path,
-    baseline: verifier.Baseline,
+    disc: AcquiredDisc,
+    image: AcceptedFile,
     progress: Callable[[dict[str, Any]], None] | None,
-) -> dict[str, Any] | None:
-    """Describe each track of an acquired set; None for a set that is not one."""
-    try:
-        disc = read_acquired_disc(root, baseline)
-    except UnusableRecordError as error:
-        return {"reason": str(error)}
-    if disc is None:
-        return None
+) -> dict[str, Any]:
+    """Describe each track of an acquired set, decoded from its opened image."""
     tracks = []
     for track in disc.tracks:
-        findings = decode_track(root, disc, track)
+        findings = decode_track(image, track)
         entry: dict[str, Any] = {
             "number": track.number,
             "first_frame": track.first_frame,
@@ -364,17 +378,15 @@ def _read_streaminfo(file: BinaryIO) -> _StreamInfo | None:
 
 def _entry(
     path: str,
-    expected: str,
+    expected: str | None,
     outcome: str,
     *,
     observed: str | None = None,
     reason: str | None = None,
 ) -> dict[str, Any]:
-    entry: dict[str, Any] = {
-        "path": path,
-        "outcome": outcome,
-        "expected_digest": expected,
-    }
+    entry: dict[str, Any] = {"path": path, "outcome": outcome}
+    if expected is not None:
+        entry["expected_digest"] = expected
     if observed is not None:
         entry["observed_digest"] = observed
     if reason is not None:
@@ -382,10 +394,102 @@ def _entry(
     return entry
 
 
+@dataclass(frozen=True)
+class AcceptedFile:
+    """A listed file, opened once by open_accepted, and what checking it found."""
+
+    path: str
+    """The file's path, relative to the directory it was opened in."""
+    expected: str | None
+    """The SHA-256 the manifest records; None when it is not checked."""
+    problem: dict[str, Any] | None = None
+    """Why the file is not inspected, as findings; None when it is open."""
+    file: BinaryIO | None = None
+    """The open file, when there is no problem."""
+    before: os.stat_result | None = None
+    """The file's status when it was opened, before it was read."""
+    observed: str | None = None
+    """The SHA-256 of the file's content, when it was read completely."""
+
+    def read(self, interpret: Callable[[BinaryIO], dict[str, Any]]) -> dict[str, Any]:
+        """Interpret the file, which holds the checked bytes while it is unchanged.
+
+        Returns interpret's findings, with `outcome` `interpreted` unless they give
+        another, or `not_inspected` with a reason: the file's problem, or a change
+        to its size or modification time since it was opened, before interpret
+        ended. Adds `observed_digest` once the file was read completely.
+        """
+        if self.problem is not None:
+            return dict(self.problem)
+        file, before = self.file, self.before
+        assert file is not None
+        assert before is not None
+        try:
+            findings = {
+                "outcome": INTERPRETED,
+                **({} if self.observed is None else {"observed_digest": self.observed}),
+                **interpret(file),
+            }
+            after = os.fstat(file.fileno())
+        except OSError as error:
+            return _not_inspected(f"cannot be read: {error.strerror}")
+        if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+            return _not_inspected(
+                "the file changed while it was inspected", self.observed
+            )
+        return findings
+
+
+@contextmanager
+def open_accepted(
+    root: Path, path: str, expected: str | None
+) -> Generator[AcceptedFile]:
+    """Open a listed file, read it completely and check its SHA-256 against expected.
+
+    Yields the file, open until the block ends, or, when it cannot be opened, is not
+    a regular file, cannot be read or does not match expected, its problem. With
+    expected None, the file is not read and its SHA-256 is not checked.
+    """
+    problem = verifier.find_file(root, path)
+    if problem is not None:
+        yield AcceptedFile(path, expected, _not_inspected(problem[1]))
+        return
+    try:
+        # Non-blocking, so a named pipe swapped in cannot hang inspect.
+        fd = os.open(root / path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as error:
+        reason = f"cannot be read: {error.strerror}"
+        yield AcceptedFile(path, expected, _not_inspected(reason))
+        return
+    # Unbuffered: libsndfile moves the offset of the descriptor it shares, which a
+    # buffer kept between two reads would not see.
+    with os.fdopen(fd, "rb", buffering=0) as file:
+        yield _check(file, path, expected)
+
+
+def _check(file: FileIO, path: str, expected: str | None) -> AcceptedFile:
+    """Check an open file is regular and, when expected is given, its SHA-256."""
+    try:
+        before = os.fstat(file.fileno())
+        if not stat.S_ISREG(before.st_mode):
+            problem = _not_inspected("a special file, not a regular file")
+            return AcceptedFile(path, expected, problem)
+        if expected is None:
+            return AcceptedFile(path, expected, file=file, before=before)
+        observed = hashlib.file_digest(file, "sha256").hexdigest()
+    except OSError as error:
+        problem = _not_inspected(f"cannot be read: {error.strerror}")
+        return AcceptedFile(path, expected, problem)
+    if observed != expected:
+        problem = _not_inspected("its digest differs from the manifest's", observed)
+        return AcceptedFile(path, expected, problem)
+    return AcceptedFile(path, expected, None, file, before, observed)
+
+
 def inspect_file(
     root: Path,
     path: str,
-    expected: str,
+    expected: str | None,
     sink: Callable[[npt.NDArray[np.float32]], None] | None = None,
 ) -> dict[str, Any]:
     """Check one listed file against the baseline, then interpret it.
@@ -393,15 +497,23 @@ def inspect_file(
     Returns the file's Report entry. When sink is given, it receives the decoded
     frames block by block, shaped (frames, channels), as float32 where 1.0 is full
     scale; 32-bit PCM is rounded to float32's 24-bit precision. They are the file's
-    audio only when the entry's outcome is `interpreted`.
+    audio only when the entry's outcome is `interpreted`. With expected None, the
+    file's SHA-256 is neither computed nor checked, and the entry has no digest.
     """
-    suffix = PurePosixPath(path).suffix.lower()
-    findings = _read_accepted(
-        root, path, expected, lambda file: _interpret(file, suffix, sink)
-    )
+    with open_accepted(root, path, expected) as accepted:
+        return inspect_accepted(accepted, sink)
+
+
+def inspect_accepted(
+    accepted: AcceptedFile,
+    sink: Callable[[npt.NDArray[np.float32]], None] | None = None,
+) -> dict[str, Any]:
+    """Interpret a file open_accepted opened; return its entry, as inspect_file."""
+    suffix = PurePosixPath(accepted.path).suffix.lower()
+    findings = accepted.read(lambda file: _interpret(file, suffix, sink))
     entry = _entry(
-        path,
-        expected,
+        accepted.path,
+        accepted.expected,
         findings.pop("outcome"),
         observed=findings.pop("observed_digest", None),
     )
@@ -410,71 +522,22 @@ def inspect_file(
 
 
 def decode_track(
-    root: Path,
-    disc: AcquiredDisc,
+    image: AcceptedFile,
     track: RecordedTrack,
     sink: Callable[[npt.NDArray[np.float32]], None] | None = None,
 ) -> dict[str, Any]:
-    """Check the disc image against the baseline, then decode one track's range.
+    """Decode one track's range of the disc image open_accepted opened.
 
     Returns the track's outcome, with a reason when it is not `interpreted`, the
     image's File Digest when the image was read completely, and, when interpreted,
     the track's audio properties, frames, Audio Digest, peak and silences. sink
     receives the track's frames as inspect_file's does.
     """
-    findings = _read_accepted(
-        root,
-        disc.image,
-        disc.image_digest,
-        lambda file: _decode_range(file, track, sink),
-    )
+    findings = image.read(lambda file: _decode_range(file, track, sink))
     if findings["outcome"] == NOT_INSPECTED:
         findings["reason"] = (
-            f"the disc image {disc.image} was not inspected: {findings['reason']}"
+            f"the disc image {image.path} was not inspected: {findings['reason']}"
         )
-    return findings
-
-
-def _read_accepted(
-    root: Path,
-    path: str,
-    expected: str,
-    interpret: Callable[[BinaryIO], dict[str, Any]],
-) -> dict[str, Any]:
-    """Read a listed file completely, check its SHA-256, then interpret it.
-
-    Returns interpret's findings, with `outcome` `interpreted` unless they give
-    another, or `not_inspected` with a reason; with `observed_digest` once the file
-    was read completely.
-    """
-    problem = verifier.find_file(root, path)
-    if problem is not None:
-        return _not_inspected(problem[1])
-    try:
-        # Non-blocking, so a named pipe swapped in cannot hang inspect.
-        fd = os.open(root / path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError as error:
-        return _not_inspected(f"cannot be read: {error.strerror}")
-    try:
-        with os.fdopen(fd, "rb") as file:
-            before = os.fstat(fd)
-            if not stat.S_ISREG(before.st_mode):
-                return _not_inspected("a special file, not a regular file")
-            observed = hashlib.file_digest(file, "sha256").hexdigest()
-            if observed != expected:
-                return _not_inspected(
-                    "its digest differs from the manifest's", observed
-                )
-            findings = {
-                "outcome": INTERPRETED,
-                "observed_digest": observed,
-                **interpret(file),
-            }
-            after = os.fstat(fd)
-    except OSError as error:
-        return _not_inspected(f"cannot be read: {error.strerror}")
-    if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
-        return _not_inspected("the file changed while it was inspected", observed)
     return findings
 
 
