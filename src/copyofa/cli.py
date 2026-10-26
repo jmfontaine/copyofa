@@ -316,6 +316,11 @@ def _acquire(args: argparse.Namespace) -> int:
             progress=progress,
         )
     except (CopyOfAError, OSError) as error:
+        if isinstance(error, acquirer.AcquisitionError) and error.reader_log:
+            print(f"copyofa: {acquirer.READER}'s log:", file=sys.stderr)
+            # Split on line feeds only, so _printable escapes any other line break.
+            for line in error.reader_log.removesuffix("\n").split("\n"):
+                print(_printable(line), file=sys.stderr)
         print(f"copyofa: {error}", file=sys.stderr)
         return EXIT_PROBLEM
     for warning in result.warnings:
