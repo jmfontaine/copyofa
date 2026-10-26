@@ -714,7 +714,8 @@ and the common sample rate. It gives:
   - for each portion, the correlation, gain and residual of the downmix and of each
     channel, with one table of residual windows for each of them;
   - for each track, its unmatched ranges: start frame, frames, whether the range is
-    digitally silent, and its level, or that the track has no unmatched range;
+    digitally silent, and its level, or "no level (digitally silent)" for a silent
+    range, which has none; or that the track has no unmatched range;
 - each absent value, marked absent with its reason; when the Report holds no
   measurements, the page says that the tracks were not measured;
 - the Report's limitations, word for word.

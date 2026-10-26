@@ -365,7 +365,14 @@ def _unmatched_table(ranges: Sequence[dict[str, Any]], rate: int | None) -> str:
                 _show(extent, "frames"),
                 _seconds(extent, rate),
                 _show(extent, "digitally_silent"),
-                _show(extent, "level_dbfs"),
+                # The Report gives a level only to a range that is not silent.
+                _show(
+                    extent,
+                    "level_dbfs",
+                    "no level (digitally silent)"
+                    if extent.get("digitally_silent") is True
+                    else _ABSENT,
+                ),
             )
             for extent in ranges
         ],

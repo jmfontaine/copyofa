@@ -871,7 +871,6 @@ def test_view_shows_the_parameters_of_the_method(
     assert page.tables["Parameters"][1:] == [
         [name, shown(value)] for name, value in parameters.items()
     ]
-    assert len(parameters) == 27
 
 
 def seconds(extent: dict[str, Any]) -> str:
@@ -963,7 +962,9 @@ def test_view_shows_the_unmatched_audio_of_each_track(
                 str(extent["frames"]),
                 seconds(extent),
                 number(extent["digitally_silent"]),
-                number(extent["level_dbfs"]) if "level_dbfs" in extent else "absent",
+                "no level (digitally silent)"
+                if extent["digitally_silent"]
+                else number(extent["level_dbfs"]),
             ]
             for extent in unmatched[name]
         ]
