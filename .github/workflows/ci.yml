@@ -156,3 +156,16 @@ jobs:
           /tmp/sdist-env/bin/python -m pip check
       - name: Check the installed package
         run: /tmp/sdist-env/bin/python scripts/check_installed_package.py
+
+  # The one status check `main` requires. It needs every job above, so adding,
+  # renaming or resizing a job (or a matrix) never touches the ruleset. Keep its
+  # `needs` in step with the jobs.
+  ci-passed:
+    name: CI passed
+    needs: [build, lint, sdist, test, wheel]
+    if: always()
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Fail unless every job passed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
