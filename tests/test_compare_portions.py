@@ -27,6 +27,8 @@ if TYPE_CHECKING:
 SECOND = RATE
 BOUNDARY_FRAMES = 32
 """How far a boundary may be from the expected frame (AC1)."""
+FADE_FRAMES = 4 * 2048
+"""How far a fade's boundary may be from where the fade reaches silence (AC1)."""
 
 
 def noise(seconds: float, seed: int) -> np.ndarray:
@@ -58,7 +60,8 @@ X = quantized(noise(20, seed=2), 16) / 32768
 class Expected:
     """An expected primary portion: its range of A and its offset.
 
-    A boundary may fall anywhere in its zone, given as a range of A's frames.
+    A boundary may fall anywhere in its zone, given as a range of A's frames, or else
+    within a tolerance of the expected frame.
     """
 
     start: int
@@ -66,11 +69,15 @@ class Expected:
     offset: int
     start_zone: tuple[int, int] | None = None
     end_zone: tuple[int, int] | None = None
+    tolerance: int = BOUNDARY_FRAMES
 
     def zone(self, edge: str) -> tuple[int, int]:
         frame = self.start if edge == "start" else self.end
-        given = self.start_zone if edge == "start" else self.end_zone
-        return given if given is not None else (frame, frame)
+        low, high = (self.start_zone if edge == "start" else self.end_zone) or (
+            frame,
+            frame,
+        )
+        return low - self.tolerance, high + self.tolerance
 
 
 def fade(samples: np.ndarray, frames: int, *, out: bool) -> np.ndarray:
@@ -108,16 +115,9 @@ def _fades() -> tuple[np.ndarray, list[Expected]]:
             fade(A[20 * SECOND :], 8 * SECOND, out=True),
         ]
     )
-    # Any boundary inside a fade counts as expected (AC1).
-    return b, [
-        Expected(
-            0,
-            len(A),
-            0,
-            start_zone=(0, 3 * SECOND),
-            end_zone=(len(A) - 8 * SECOND, len(A)),
-        )
-    ]
+    # The fade-in starts from silence at A's first frame, and the fade-out reaches it
+    # at A's last: each boundary lies within four blocks of that frame (AC1).
+    return b, [Expected(0, len(A), 0, tolerance=FADE_FRAMES)]
 
 
 def _silence() -> tuple[np.ndarray, list[Expected]]:
@@ -212,11 +212,7 @@ def assert_found(report: dict[str, Any], expected: list[Expected]) -> None:
         end = start + portion["a"]["frames"]
         for edge, frame in (("start", start), ("end", end)):
             low, high = wanted.zone(edge)
-            assert low - BOUNDARY_FRAMES <= frame <= high + BOUNDARY_FRAMES, (
-                edge,
-                frame,
-                (low, high),
-            )
+            assert low <= frame <= high, (edge, frame, (low, high))
         assert portion["b"] == {
             "start_frame": start + wanted.offset,
             "frames": end - start,
