@@ -192,8 +192,10 @@ def _parser() -> argparse.ArgumentParser:
         help="measure how the audio of two preserved tracks relates",
         description=(
             "Check two tracks preserved in Evidence Sets against their Integrity "
-            "Baselines, decode them, align them, and measure how track B relates to "
-            "track A. Exits 0 when both were compared and 1 otherwise."
+            "Baselines, decode them, find the portions of track A that track B "
+            "holds, each with its offset and measurements, and the audio of each "
+            "track that no portion covers. Exits 0 when both were compared and 1 "
+            "otherwise."
         ),
     )
     for name in ("input-a", "input-b"):
@@ -625,7 +627,7 @@ def _print_comparison(report: dict[str, Any]) -> None:
             f"A {_seconds(portion['a'], rate)}, B {_seconds(portion['b'], rate)}, "
             f"offset {offset['frames']:+} frames ({offset['seconds']:+.3f} s), "
             f"{_value(downmix, 'correlation', 'correlation', 3, '')}, "
-            f"{_value(downmix, 'residual_db', 'residual', 1, ' dB')}"
+            f"{_value(downmix, 'residual_db', 'residual (one gain)', 1, ' dB')}"
         )
     if "portions" in measurements.get("absent", {}):
         print(f"No portion found: {measurements['absent']['portions']}")

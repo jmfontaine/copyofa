@@ -224,6 +224,7 @@ Each name ends in its unit when it has one. Frames are counted at
 | `window_seconds` | `5` | s | Length of each window of A. |
 | `hop_seconds` | `5` | s | Distance between the starts of two windows of A. |
 | `silent_window_energy_ratio` | `0.0001` | ratio | A window of A whose energy is at most this fraction of the mean window energy gives no evidence. |
+| `b_position_energy_floor` | `1e-10` | ratio | A position of B whose energy under the window is at most this fraction of B's whole energy gives no candidate. |
 | `candidate_threshold` | `0.4` | correlation | Least magnitude of the normalized cross-correlation of a candidate. |
 | `candidates_per_window` | `3` | candidates | Most candidates per window. |
 | `candidate_separation_seconds` | `0.5` | s | Least distance between two candidates of a window. |
@@ -465,6 +466,7 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
       "window_seconds": 5,
       "hop_seconds": 5,
       "silent_window_energy_ratio": 0.0001,
+      "b_position_energy_floor": 1e-10,
       "candidate_threshold": 0.4,
       "candidates_per_window": 3,
       "candidate_separation_seconds": 0.5,
