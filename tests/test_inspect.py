@@ -745,6 +745,12 @@ def nest_record(evidence_set: Path, depth: int) -> None:
         ),
         (
             lambda bag: edit_record(
+                bag, lambda record: record.update(format_version=1.0), reseal=True
+            ),
+            "the Acquisition Record is not format version 1 of copyofa.acquisition",
+        ),
+        (
+            lambda bag: edit_record(
                 bag, lambda record: record["tracks"][0].pop("frame_count"), reseal=True
             ),
             "the Acquisition Record cannot be used: track 1 has no valid frame_count",
@@ -758,6 +764,7 @@ def nest_record(evidence_set: Path, depth: int) -> None:
         "edited",
         "missing",
         "other version",
+        "version as a float",
         "no range",
         "unusable baseline",
     ],

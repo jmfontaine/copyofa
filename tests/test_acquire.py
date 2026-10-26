@@ -342,7 +342,28 @@ FAILURES: dict[str, tuple[dict[str, Any], str]] = {
         {"corrupt_track_file": 3},
         (
             "Failed: the bytes of disc (Track 3).bin, track 3, are found nowhere in "
-            "the image"
+            "the image, or are a single repeated byte that no other track places in "
+            "it.\n"
+        ),
+    ),
+    "track found nowhere where it was not read": (
+        {"corrupt_track_file": 2, "error_frames": {"2": [0, 588]}},
+        (
+            "Failed: the bytes of disc (Track 2).bin, track 2, are found nowhere in "
+            "the image, or are a single repeated byte that no other track places in "
+            "it. The state marks 588 frames where it would lie as not read, and "
+            "redumper replaces unread sectors with generated ones when it splits the "
+            "disc into track files.\n"
+        ),
+    ),
+    "first track found nowhere where it was not read": (
+        {"corrupt_track_file": 1, "error_frames": {"1": [1000, 5]}},
+        (
+            "Failed: the bytes of disc (Track 1).bin, track 1, are found nowhere in "
+            "the image, or are a single repeated byte that no other track places in "
+            "it. The state marks 5 frames where it would lie as not read, and "
+            "redumper replaces unread sectors with generated ones when it splits the "
+            "disc into track files.\n"
         ),
     ),
     "every track silent": (

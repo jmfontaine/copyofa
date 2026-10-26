@@ -142,12 +142,11 @@ copyofa compare "/Volumes/Archive/Add Violence CD" \
   "/Volumes/Archive/Add Violence/data/01-01 Less Than.flac" --track-a 1
 ```
 
-Compare checks both against their Integrity Baselines and decodes them as inspect
-does. It then
-resamples the one at the higher sample rate to the lower rate, aligns the tracks, and
-reports the offset of track B from track A, their overlap, and how B relates to A:
-correlation, gain and the residual level left after that gain. When both are
-lossless and their Audio Digests are equal, it reports identical audio. It draws no
+Compare checks both against their Integrity Baselines and decodes them as inspect does.
+It then resamples the one at the higher sample rate to the lower rate, aligns the
+tracks, and reports the offset of track B from track A, their overlap, and how B
+relates to A: correlation, gain and the residual level left after that gain. When both
+are lossless and their Audio Digests are equal, it reports identical audio. It draws no
 conclusion such as "same master". `--json` prints a comparison Report, which
 [Comparison Report format][comparison-report] describes. To share a Report, add
 `--omit-locations`: it leaves out where each Evidence Set is stored, which names your
