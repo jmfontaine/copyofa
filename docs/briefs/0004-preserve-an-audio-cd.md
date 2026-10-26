@@ -317,3 +317,52 @@ them at the release review.
    its view. A collector exports and imports the tracks to compare them.
 2. Peak and silence for tracks in inspect; Audio Digests stay.
 3. CD-Text in the Acquisition Record; the files that hold it stay preserved.
+
+## Delivery notes
+
+Recorded at the v0.5.0 release review.
+
+- **Delivered within the appetite**, with no scope cut, as a stack of pull requests from
+  one unattended agent: `copyofa acquire` in
+  [#96](https://github.com/jmfontaine/copyofa/pull/96), inspection Report format version
+  2 in [#97](https://github.com/jmfontaine/copyofa/pull/97), compare on a track with
+  comparison Report format version 3 and its view in
+  [#98](https://github.com/jmfontaine/copyofa/pull/98), and `copyofa export` in
+  [#99](https://github.com/jmfontaine/copyofa/pull/99). AC1–AC10 have tests against a
+  stand-in `redumper`; AC4 passes against the stand-in only, since with redumper's
+  defaults no accepted set has a track with unread frames (see Found in review). The
+  stack's agent review checked AC11. AC12, on the maintainer's drive: *Add Violence*
+  was acquired into 148,047,406 bytes in 159 seconds, with the five Audio Digests of
+  the spike; verify, inspect, compare (−4240 frames, −37.5 dB) and export gave the
+  expected results; `flac -d` and `xz -d` restored the image, the state and the
+  subchannel, so that all eight stored files match the SHA-256s of redumper's
+  originals, and `redumper split` on them rewrote the track files; the maintainer
+  played the exported files in Music. A second acquisition and export with the stack's
+  code gave the same five Audio Digests.
+- **Clarified during delivery:**
+  - Subchannel Q errors are recorded but are not read errors: they do not make acquire
+    exit 1, since the audio comes from the main channel. *Add Violence* reads with
+    134 to 145 of them, depending on the read.
+  - Export also refuses a destination inside the Evidence Set, so it never adds files
+    to the set.
+  - An exported file's "no tag" is a Vorbis comment block holding only libFLAC's
+    vendor string, which libsndfile always writes.
+  - `redumper split` needs `--overwrite` to rewrite the track files from restored
+    files.
+- **Found in review:** with redumper's defaults, the Read errors requirement is mostly
+  unreachable. A C2 or skipped sector inside a track, or a C2 sector in the lead-in or
+  lead-out, makes redumper b768 refuse to split a pressed CD, and on a CD-R it fills
+  sectors with C2 errors at a track's edges, so the track is found nowhere in the
+  image. Only skipped sectors confined to the lead-in or lead-out, and on a CD-R C2
+  errors confined to them, give a set accepted with exit 1. The maintainer kept
+  redumper's defaults (no `--leave-unchanged`, no `--force-split`);
+  `docs/formats/evidence-set.md` states which discs fail, and damaged discs move to
+  the Later outcome Acquire More Kinds of Disc. The stack review's optional follow-up,
+  saying so when export writes a track with unread frames, is dropped for the same
+  reason: no accepted set has one.
+- **Learning:** checking the stand-in against redumper's source found what the
+  synthetic tests could not: the stand-in writes track files equal to the image even
+  where the state marks frames unread, which real redumper never does. It keeps that
+  behavior for AC4 and gained a case where the track file is filled where it was not
+  read. A stand-in for an external program should be checked against that program's
+  source or output for each behavior a test relies on.
