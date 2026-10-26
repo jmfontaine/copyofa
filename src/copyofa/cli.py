@@ -126,6 +126,16 @@ def _parser() -> argparse.ArgumentParser:
         "--note", action=_StoreOnce, help="a free-form note about the provenance"
     )
     acquiring.add_argument(
+        "--retries",
+        action=_StoreOnce,
+        type=_retry_count,
+        metavar="count",
+        help=(
+            "how many times redumper re-reads a sector it read with a SCSI or C2 "
+            f"error (default: {acquirer.DEFAULT_RETRIES})"
+        ),
+    )
+    acquiring.add_argument(
         "--ref",
         action="append",
         metavar="reference",
@@ -298,6 +308,9 @@ def _acquire(args: argparse.Namespace) -> int:
         result = acquirer.acquire(
             args.to,
             drive=args.drive,
+            retries=(
+                acquirer.DEFAULT_RETRIES if args.retries is None else args.retries
+            ),
             note=args.note,
             references=args.ref,
             progress=progress,
@@ -565,6 +578,15 @@ def _track_number(value: str) -> int:
     """Parse a track number, a whole number from 1."""
     if not value.isdecimal() or int(value) < 1:
         raise argparse.ArgumentTypeError(f"not a track number: {value!r}")
+    return int(value)
+
+
+def _retry_count(value: str) -> int:
+    """Parse a retry count, a whole number from 0 to acquirer.MAX_RETRIES."""
+    if not value.isdecimal() or int(value) > acquirer.MAX_RETRIES:
+        raise argparse.ArgumentTypeError(
+            f"not a retry count from 0 to {acquirer.MAX_RETRIES}: {value!r}"
+        )
     return int(value)
 
 

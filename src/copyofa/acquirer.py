@@ -31,6 +31,14 @@ MINIMUM_BUILD = 768
 IMAGE_NAME = "disc"
 """The `--image-name` acquire gives redumper, and so the stem of every file it keeps."""
 
+DEFAULT_RETRIES = 20
+"""How many times redumper re-reads a sector with a SCSI or C2 error, unless told.
+
+The Redump project's guidance for audio CDs; redumper's own default is 0.
+"""
+MAX_RETRIES = 2**31 - 1
+"""The largest retry count redumper reads as given, into a signed 32-bit integer."""
+
 FRAME_BYTES = evidence_set.CD_CHANNELS * evidence_set.CD_BITS_PER_SAMPLE // 8
 
 FLAC = "flac"
@@ -85,6 +93,7 @@ def acquire(
     destination: str,
     *,
     drive: str | None = None,
+    retries: int = DEFAULT_RETRIES,
     note: str | None = None,
     references: Sequence[str] | None = None,
     progress: Callable[[str], None] | None = None,
@@ -92,6 +101,8 @@ def acquire(
     """Read the disc in a drive with redumper into a new Evidence Set at destination.
 
     Every refusal that does not depend on the disc happens before redumper reads it.
+    redumper re-reads each sector it read with a SCSI or C2 error up to retries times,
+    from 0 to MAX_RETRIES; raises ValueError for another count.
     redumper writes into a staging directory beside the destination, where its files
     are stored and checked; the staging directory is renamed to the destination only
     once every check passes. Raises CopyOfAError, after removing the staging
@@ -99,6 +110,8 @@ def acquire(
     accepted: has_read_errors tells.
     """
     acquired_at = datetime.now(UTC)
+    if not 0 <= retries <= MAX_RETRIES:
+        raise ValueError(f"retries must be from 0 to {MAX_RETRIES}, not {retries}")
     if note is not None:
         staging.require_utf8(note, "the --note text", "the Acquisition Record requires")
     for reference in references or ():
@@ -123,6 +136,7 @@ def acquire(
     arguments = ["disc", f"--image-name={IMAGE_NAME}"]
     if drive is not None:
         arguments.append(f"--drive={drive}")
+    arguments.append(f"--retries={retries}")
 
     record: dict[str, Any] = {
         "record_kind": evidence_set.ACQUISITION_RECORD_KIND,
@@ -317,6 +331,14 @@ _ERRORS = re.compile(
     r"^media errors: *\n +SCSI: (\d+) samples\n +C2: (\d+) samples\n +Q: (\d+)$",
     re.MULTILINE,
 )
+# What redumper's refine stage, which re-reads sectors in error when --retries asks,
+# corrected of the SCSI and C2 errors its dump stage logged. Its Q count also holds
+# sectors whose subchannel the dump never counted, so it is not subtracted.
+_CORRECTED = re.compile(
+    r"^correction statistics: *\n +SCSI: (\d+) samples\n +C2: (\d+) samples\n"
+    r" +Q: \d+ sectors$",
+    re.MULTILINE,
+)
 
 
 def _read_log(path: Path) -> _Log:
@@ -362,6 +384,13 @@ def _read_log(path: Path) -> _Log:
     if errors is None:
         raise _unreadable_log("it gives no media error counts")
     scsi, c2, q = (int(count) for count in errors.groups())
+    corrected = _CORRECTED.search(text)
+    if corrected is not None:
+        fixed_scsi, fixed_c2 = (int(count) for count in corrected.groups())
+        # redumper counts in 32-bit unsigned integers: a re-read that turns a SCSI
+        # error into C2 errors leaves more C2 samples than its dump counted, and the
+        # corrected C2 count it logs wraps below zero.
+        scsi, c2 = (scsi - fixed_scsi) % 2**32, (c2 - fixed_c2) % 2**32
     write_offset = _WRITE_OFFSET.search(text)
     return _Log(
         drive=drive,

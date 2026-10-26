@@ -86,7 +86,9 @@ def test_acquire_preserves_the_disc_without_track_files(
     )
 
     assert outcome.code == 0, outcome.err
-    assert disc_runs(redumper) == [["disc", "--image-name=disc", "--drive=disk7"]]
+    assert disc_runs(redumper) == [
+        ["disc", "--image-name=disc", "--drive=disk7", "--retries=20"]
+    ]
     assert sorted(path.name for path in destination.iterdir()) == [
         "bag-info.txt",
         "bagit.txt",
@@ -140,7 +142,12 @@ def test_acquire_preserves_the_disc_without_track_files(
         "reader": {
             "name": "redumper",
             "build": "b768",
-            "arguments": ["disc", "--image-name=disc", "--drive=disk7"],
+            "arguments": [
+                "disc",
+                "--image-name=disc",
+                "--drive=disk7",
+                "--retries=20",
+            ],
         },
         "drive": {
             "vendor": "PLEXTOR",
@@ -234,7 +241,44 @@ def test_acquire_prints_the_acquisition_result_as_json(
         "evidence_set": str(destination),
         "acquisition_record": record_of(destination),
     }
-    assert disc_runs(redumper) == [["disc", "--image-name=disc"]]
+    assert disc_runs(redumper) == [["disc", "--image-name=disc", "--retries=20"]]
+
+
+def test_acquire_gives_redumper_the_retry_count_and_records_it(
+    run: Run, redumper: StandIn, tmp_path: Path
+) -> None:
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination, "--retries", "0")
+
+    assert outcome.code == 0, outcome.err
+    arguments = ["disc", "--image-name=disc", "--retries=0"]
+    assert disc_runs(redumper) == [arguments]
+    assert record_of(destination)["reader"]["arguments"] == arguments
+
+
+@pytest.mark.parametrize(
+    "retries",
+    [
+        ["--retries", "-1"],
+        ["--retries", "x"],
+        ["--retries", str(2**31)],
+        ["--retries", "1", "--retries", "2"],
+    ],
+    ids=["negative", "not a number", "too large", "repeated"],
+)
+def test_acquire_exits_2_on_an_invalid_retry_count(
+    run: Run, redumper: StandIn, tmp_path: Path, retries: list[str]
+) -> None:
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination, *retries)
+
+    assert outcome.code == 2
+    assert outcome.out == ""
+    assert "--retries" in outcome.err
+    assert disc_runs(redumper) == []
+    assert left_behind(destination) == []
 
 
 def test_acquire_reads_a_single_track_disc_and_absent_values(
@@ -429,6 +473,41 @@ def test_acquire_counts_scsi_and_c2_errors_as_read_errors(
 
     assert outcome.code == 1
     assert "Read errors: found (SCSI 0 samples, C2 12 samples;" in outcome.out
+
+
+@pytest.mark.parametrize(
+    ("corrected", "left", "code"),
+    [
+        ({"scsi": 2352, "c2": 1176, "q": 3}, {"scsi": 0, "c2": 0}, 0),
+        ({"scsi": 2352, "c2": 588, "q": 3}, {"scsi": 0, "c2": 588}, 1),
+        # A re-read turned skipped sectors into 10 more C2 samples than the dump had:
+        # redumper logs the corrected C2 count wrapped as a 32-bit unsigned integer.
+        ({"scsi": 2352, "c2": 2**32 - 10, "q": 3}, {"scsi": 0, "c2": 1186}, 1),
+    ],
+    ids=["all corrected", "some left", "more c2 than read"],
+)
+def test_acquire_counts_only_the_errors_left_after_re_reading(
+    run: Run,
+    redumper: StandIn,
+    tmp_path: Path,
+    corrected: dict[str, int],
+    left: dict[str, int],
+    code: int,
+) -> None:
+    # Q stays as the dump gives it: the re-reads also count sectors it did not.
+    redumper.configure(
+        media_errors={"scsi": 2352, "c2": 1176, "q": 5}, corrected=corrected
+    )
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination)
+
+    assert outcome.code == code, outcome.err
+    assert record_of(destination)["read_errors"] == {
+        "scsi_samples": left["scsi"],
+        "c2_samples": left["c2"],
+        "subchannel_q_sectors": 5,
+    }
 
 
 def test_acquire_stops_redumper_and_cleans_up_when_canceled_while_reading(

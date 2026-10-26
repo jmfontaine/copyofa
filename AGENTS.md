@@ -179,9 +179,10 @@ its fixed parameters, which each comparison Report states.
 
 `acquire` reads a plain audio CD with [redumper](https://github.com/superg/redumper),
 an external program needed only by acquire, never a Python dependency: build b768 or
-later on `PATH`, run once as `redumper disc`, as
-[ADR 0005](docs/decisions/0005-acquire-audio-cds-with-redumper.md) decides. Acquire
-reads the drive, the table of contents, the offsets and the error counts from
+later on `PATH`, run once as `redumper disc` with a retry count, 20 by default, as
+[ADR 0005](docs/decisions/0005-acquire-audio-cds-with-redumper.md) and
+[ADR 0007](docs/decisions/0007-re-read-sectors-with-errors-when-acquiring.md) decide.
+Acquire reads the drive, the table of contents, the offsets and the error counts from
 redumper's log, and the tracks' files, ISRCs and CD-Text from its cue sheet. An
 acquired set stores redumper's image as 16-bit stereo FLAC, written by libsndfile at
 its highest compression level, its state and subchannel as xz, written by Python's

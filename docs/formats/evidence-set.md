@@ -214,7 +214,7 @@ redumper does not report are absent, never invented.
 | `reader` | The program that read the disc: `name`, always `redumper`; `build`, as `redumper --version` gives it, such as `b768`; `arguments`, the arguments CopyOfA gave it, in order. redumper ran in a directory inside the staging directory, so its image path is its default, `.`. |
 | `drive` | The drive as redumper's log identifies it: `vendor`, `product`, `firmware_revision` (the revision level the drive reports), and `read_offset`, the read offset in samples redumper applied. |
 | `disc` | What the disc says about itself and its image: `write_offset`, the disc's write offset in samples redumper found; `catalog`, its catalog number; `title` and `performer`, the album's CD-Text; and `image`, with `path` (`data/disc.scram.flac`), `frames`, `sample_rate` (44100), `channels` (2) and `bits_per_sample` (16). |
-| `read_errors` | redumper's error counts for the whole disc, from its log: `scsi_samples`, the samples of sectors the drive failed to read; `c2_samples`, the samples the drive flagged with C2 errors; and `subchannel_q_sectors`, the sectors whose subchannel Q redumper found in error. |
+| `read_errors` | redumper's error counts for the whole disc, from its log: `scsi_samples`, the samples of sectors the drive failed to read; `c2_samples`, the samples the drive flagged with C2 errors; and `subchannel_q_sectors`, the sectors whose subchannel Q redumper found in error. Each is the count of the `media errors` redumper's dump stage logs; when its refine stage re-read sectors, the SCSI and C2 counts are less what its `correction statistics` give as corrected. Q is not reduced: the refine stage's Q count also holds sectors whose subchannel the dump stage never counted. The stored log keeps every count. |
 | `tracks` | One object per track, in disc order (see below). |
 | `stored_files` | One object per stored file, sorted by path (see below). |
 
@@ -263,7 +263,8 @@ The record of the *Add Violence* CD:
     "arguments": [
       "disc",
       "--image-name=disc",
-      "--drive=disk6"
+      "--drive=disk6",
+      "--retries=20"
     ]
   },
   "drive": {
@@ -419,8 +420,11 @@ Before reading the disc, acquire refuses, exiting 1 and creating nothing, when:
   the Acquisition Record requires.
 
 It then runs `redumper disc` once, in a directory inside the staging directory
-`<destination>.copyofa-staging`. redumper's console output is not relayed: stderr
-names each redumper stage, such as `redumper stage: dump`, and acquire's own steps.
+`<destination>.copyofa-staging`, with `--retries=20`, or the count `--retries` gives,
+so that redumper re-reads each sector it read with a SCSI or C2 error up to that many
+times ([ADR 0007](../decisions/0007-re-read-sectors-with-errors-when-acquiring.md)).
+redumper's console output is not relayed: stderr names each redumper stage, such as
+`redumper stage: dump`, and acquire's own steps.
 After reading, acquire refuses or fails, exiting 1 and deleting the staging directory,
 when:
 
@@ -456,9 +460,10 @@ but acquire exits 1: when `read_errors` gives SCSI or C2 errors, or a track has
 `error_frames`. Subchannel errors alone do not count: the audio is read from the main
 channel.
 
-With redumper's defaults, which acquire uses, few discs read with errors reach that
-point. redumper b768 checks the read status when it splits the image into track files
-(`cd/cd_split.ixx`):
+Re-reading recovers many sectors that dust or a light scratch made unreadable. Few
+discs whose errors remain after the re-reads reach that point with redumper's other
+defaults, which acquire uses. redumper b768 checks the read status when it splits the
+image into track files (`cd/cd_split.ixx`):
 
 - a pressed CD with a sector read with a C2 error, or skipped, inside a track, or with
   a C2 error in the lead-in or the lead-out: redumper refuses to split it ("data errors
