@@ -145,9 +145,17 @@ re-reads the stored copy and compares digests, and fails if they differ or if th
 source file's size or modification time changed during the copy. Only when every file
 and tag file is written does it rename the staging directory to the destination. A
 set at the destination is therefore complete. If syncing the destination's parent
-directory fails after that rename, the set is kept and import warns on stderr. A
-staging directory left behind by a crash is never reused or deleted by CopyOfA: the
-next import, acquire or export to that destination refuses and names it.
+directory fails after that rename, the set is kept and import warns on stderr.
+
+Import canceled with Ctrl-C before it has accepted the set leaves nothing at its
+destination, even when the cancellation arrives after the rename: a Ctrl-C during the
+rename or while the destination's parent directory is synced deletes the set it just
+renamed, and import exits 130 with nothing on stdout. Accepting the set, which ends
+with that sync, is import's last step before it prints any warning and its result. A
+Ctrl-C after it, such as one while the result is printed, keeps the set, and import
+still exits 130. A staging directory left behind by a crash is never reused or deleted
+by CopyOfA: the next import, acquire or export to that destination refuses and names
+it.
 
 ## Acquired sets
 
@@ -460,8 +468,12 @@ track file, so a disc whose every track is a single repeated byte fails: nothing
 places its tracks in the image. Once every
 file is stored and checked, acquire deletes the track files and redumper's
 uncompressed originals, writes the tag files, and renames the staging directory to the
-destination, as import does. When acquire is canceled, it stops redumper and deletes
-the staging directory.
+destination, as import does. When acquire is canceled with Ctrl-C, it stops redumper
+and deletes the staging directory. As with import, acquire canceled before it has
+accepted the set leaves nothing at its destination, even when the cancellation arrives
+after the rename: it deletes the set it just renamed and exits 130 with nothing on
+stdout. A Ctrl-C once the set is accepted, such as one while the result is printed,
+keeps the set, and acquire still exits 130.
 
 A disc read with errors is accepted, since the set is evidence of what the drive read,
 but acquire exits 1: when `read_errors` gives SCSI or C2 errors, or a track has
