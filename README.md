@@ -75,6 +75,9 @@ copyofa acquire --to /Volumes/Archive/add-violence-cd --drive disk6 --json \
 - `--drive` names the drive as redumper does, such as `disk6`; without it, redumper
   reads the first drive holding a disc. `--note`, `--ref` and `--json` work as for
   import.
+- `--retries` sets how many times redumper re-reads a sector it read with an error,
+  20 by default. When a scratched disc fails with redumper's "data errors detected",
+  try a higher count, such as 100, or another drive.
 - A disc with more than one session or with a data track is refused.
 
 Acquire exits 0 when the set is accepted from a disc read without error, 1 when it is

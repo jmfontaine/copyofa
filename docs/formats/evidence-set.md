@@ -263,7 +263,8 @@ The record of the *Add Violence* CD:
     "arguments": [
       "disc",
       "--image-name=disc",
-      "--drive=disk6"
+      "--drive=disk6",
+      "--retries=20"
     ]
   },
   "drive": {
@@ -419,8 +420,11 @@ Before reading the disc, acquire refuses, exiting 1 and creating nothing, when:
   the Acquisition Record requires.
 
 It then runs `redumper disc` once, in a directory inside the staging directory
-`<destination>.copyofa-staging`. redumper's console output is not relayed: stderr
-names each redumper stage, such as `redumper stage: dump`, and acquire's own steps.
+`<destination>.copyofa-staging`, with `--retries=20`, or the count `--retries` gives,
+so that redumper re-reads each sector it read with a SCSI or C2 error up to that many
+times ([ADR 0007](../decisions/0007-re-read-sectors-with-errors-when-acquiring.md)).
+redumper's console output is not relayed: stderr names each redumper stage, such as
+`redumper stage: dump`, and acquire's own steps.
 After reading, acquire refuses or fails, exiting 1 and deleting the staging directory,
 when:
 
@@ -456,9 +460,10 @@ but acquire exits 1: when `read_errors` gives SCSI or C2 errors, or a track has
 `error_frames`. Subchannel errors alone do not count: the audio is read from the main
 channel.
 
-With redumper's defaults, which acquire uses, few discs read with errors reach that
-point. redumper b768 checks the read status when it splits the image into track files
-(`cd/cd_split.ixx`):
+Re-reading recovers many sectors that dust or a light scratch made unreadable. Few
+discs whose errors remain after the re-reads reach that point with redumper's other
+defaults, which acquire uses. redumper b768 checks the read status when it splits the
+image into track files (`cd/cd_split.ixx`):
 
 - a pressed CD with a sector read with a C2 error, or skipped, inside a track, or with
   a C2 error in the lead-in or the lead-out: redumper refuses to split it ("data errors

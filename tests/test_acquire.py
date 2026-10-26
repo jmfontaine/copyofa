@@ -86,7 +86,9 @@ def test_acquire_preserves_the_disc_without_track_files(
     )
 
     assert outcome.code == 0, outcome.err
-    assert disc_runs(redumper) == [["disc", "--image-name=disc", "--drive=disk7"]]
+    assert disc_runs(redumper) == [
+        ["disc", "--image-name=disc", "--drive=disk7", "--retries=20"]
+    ]
     assert sorted(path.name for path in destination.iterdir()) == [
         "bag-info.txt",
         "bagit.txt",
@@ -140,7 +142,12 @@ def test_acquire_preserves_the_disc_without_track_files(
         "reader": {
             "name": "redumper",
             "build": "b768",
-            "arguments": ["disc", "--image-name=disc", "--drive=disk7"],
+            "arguments": [
+                "disc",
+                "--image-name=disc",
+                "--drive=disk7",
+                "--retries=20",
+            ],
         },
         "drive": {
             "vendor": "PLEXTOR",
@@ -234,7 +241,39 @@ def test_acquire_prints_the_acquisition_result_as_json(
         "evidence_set": str(destination),
         "acquisition_record": record_of(destination),
     }
-    assert disc_runs(redumper) == [["disc", "--image-name=disc"]]
+    assert disc_runs(redumper) == [["disc", "--image-name=disc", "--retries=20"]]
+
+
+def test_acquire_gives_redumper_the_retry_count_and_records_it(
+    run: Run, redumper: StandIn, tmp_path: Path
+) -> None:
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination, "--retries", "0")
+
+    assert outcome.code == 0, outcome.err
+    arguments = ["disc", "--image-name=disc", "--retries=0"]
+    assert disc_runs(redumper) == [arguments]
+    assert record_of(destination)["reader"]["arguments"] == arguments
+
+
+@pytest.mark.parametrize(
+    "retries",
+    [["--retries", "-1"], ["--retries", "x"], ["--retries", "1", "--retries", "2"]],
+    ids=["negative", "not a number", "repeated"],
+)
+def test_acquire_exits_2_on_an_invalid_retry_count(
+    run: Run, redumper: StandIn, tmp_path: Path, retries: list[str]
+) -> None:
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination, *retries)
+
+    assert outcome.code == 2
+    assert outcome.out == ""
+    assert "--retries" in outcome.err
+    assert disc_runs(redumper) == []
+    assert left_behind(destination) == []
 
 
 def test_acquire_reads_a_single_track_disc_and_absent_values(

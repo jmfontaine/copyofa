@@ -31,6 +31,12 @@ MINIMUM_BUILD = 768
 IMAGE_NAME = "disc"
 """The `--image-name` acquire gives redumper, and so the stem of every file it keeps."""
 
+DEFAULT_RETRIES = 20
+"""How many times redumper re-reads a sector with a SCSI or C2 error, unless told.
+
+The Redump project's guidance for audio CDs; redumper's own default is 0.
+"""
+
 FRAME_BYTES = evidence_set.CD_CHANNELS * evidence_set.CD_BITS_PER_SAMPLE // 8
 
 FLAC = "flac"
@@ -85,6 +91,7 @@ def acquire(
     destination: str,
     *,
     drive: str | None = None,
+    retries: int = DEFAULT_RETRIES,
     note: str | None = None,
     references: Sequence[str] | None = None,
     progress: Callable[[str], None] | None = None,
@@ -92,6 +99,7 @@ def acquire(
     """Read the disc in a drive with redumper into a new Evidence Set at destination.
 
     Every refusal that does not depend on the disc happens before redumper reads it.
+    redumper re-reads each sector it read with a SCSI or C2 error up to retries times.
     redumper writes into a staging directory beside the destination, where its files
     are stored and checked; the staging directory is renamed to the destination only
     once every check passes. Raises CopyOfAError, after removing the staging
@@ -123,6 +131,7 @@ def acquire(
     arguments = ["disc", f"--image-name={IMAGE_NAME}"]
     if drive is not None:
         arguments.append(f"--drive={drive}")
+    arguments.append(f"--retries={retries}")
 
     record: dict[str, Any] = {
         "record_kind": evidence_set.ACQUISITION_RECORD_KIND,

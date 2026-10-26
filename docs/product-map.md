@@ -264,8 +264,8 @@ the collector already owns.
   verification Reports may come with it.
 - **Acquire More Kinds of Disc** — Acquire Audio and Record Its Origins. S1 beyond
   plain audio CDs: CD-Extra and mixed-mode discs, audio before the first track, and
-  damaged discs that need retries. With redumper's defaults, v0.5.0 keeps no disc with
-  a read error inside a track, nor a pressed CD with a C2 error in its lead-in or
+  damaged discs. Acquire re-reads sectors with errors, but keeps no disc with a read
+  error left inside a track, nor a pressed CD with a C2 error left in its lead-in or
   lead-out; keeping them means deciding what a track holds where the drive read
   nothing, and whether to keep a disc redumper will not split.
 - **Export Imported Audio** — Preserve Evidence Throughout Its Lifetime. Lossless

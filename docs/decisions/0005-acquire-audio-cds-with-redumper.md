@@ -1,7 +1,8 @@
 # Acquire audio CDs with redumper and store the disc image compressed
 
 - **Date:** 2026-10-25
-- **Status:** Accepted
+- **Status:** Accepted; in decision 1, redumper's default retry count superseded by
+  [ADR 0007](0007-re-read-sectors-with-errors-when-acquiring.md)
 - **Related artifacts:**
   [Brief 0004: Preserve an Audio CD](../briefs/0004-preserve-an-audio-cd.md);
   [ADR 0001](0001-store-evidence-sets-as-bagit-bags.md) and
