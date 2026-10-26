@@ -50,6 +50,10 @@ LIMITATIONS = (
         "with evidence, and the rest is reported as unmatched."
     ),
     (
+        "A boundary at a fade or a crossfade falls inside it, where the per-block "
+        "fit stops confirming the match, not at a fixed level."
+    ),
+    (
         "In music that repeats a section, one range of a track can match several "
         "places in the other; each is reported as a portion."
     ),

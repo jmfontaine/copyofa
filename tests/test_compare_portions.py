@@ -27,8 +27,6 @@ if TYPE_CHECKING:
 SECOND = RATE
 BOUNDARY_FRAMES = 32
 """How far a boundary may be from the expected frame (AC1)."""
-BLOCK_FRAMES = 2048
-FLOOR_DBFS = -80
 
 
 def noise(seconds: float, seed: int) -> np.ndarray:
@@ -85,21 +83,6 @@ def fade(samples: np.ndarray, frames: int, *, out: bool) -> np.ndarray:
     return faded
 
 
-def block_powers(samples: np.ndarray, start: int, stop: int) -> np.ndarray:
-    """Return the mean power over the block starting at each frame of [start, stop)
-    that holds a whole block."""
-    power = np.square(samples[start:stop]).mean(axis=1)
-    running = np.concatenate(([0.0], np.cumsum(power)))
-    return (running[BLOCK_FRAMES:] - running[:-BLOCK_FRAMES]) / BLOCK_FRAMES
-
-
-def floor_crossings(faded: np.ndarray, start: int, stop: int) -> tuple[int, int]:
-    """Return where a block's mean power first reaches -80 dBFS in [start, stop),
-    and where the last block that reaches it ends."""
-    loud = np.flatnonzero(block_powers(faded, start, stop) >= 10 ** (FLOOR_DBFS / 10))
-    return start + int(loud[0]), start + int(loud[-1]) + BLOCK_FRAMES
-
-
 def _crossfade() -> tuple[np.ndarray, list[Expected]]:
     frames = 3 * SECOND
     ramp = np.linspace(0, np.pi / 2, frames)[:, None]
@@ -125,16 +108,14 @@ def _fades() -> tuple[np.ndarray, list[Expected]]:
             fade(A[20 * SECOND :], 8 * SECOND, out=True),
         ]
     )
-    # A fade's boundary is where the faded audio crosses the evidence floor.
-    start, _ = floor_crossings(b, 0, 3 * SECOND)
-    _, end = floor_crossings(b, len(b) - 8 * SECOND, len(b))
+    # Any boundary inside a fade counts as expected (AC1).
     return b, [
         Expected(
             0,
             len(A),
             0,
-            start_zone=(start - BLOCK_FRAMES, start + BLOCK_FRAMES),
-            end_zone=(end - BLOCK_FRAMES, end + BLOCK_FRAMES),
+            start_zone=(0, 3 * SECOND),
+            end_zone=(len(A) - 8 * SECOND, len(A)),
         )
     ]
 
@@ -242,24 +223,8 @@ def assert_found(report: dict[str, Any], expected: list[Expected]) -> None:
         }
 
 
-# KLUDGE: the brief's AC1 places a fade's boundary within one block of where the
-# faded audio crosses -80 dBFS, but ADR 0006's ends (a gain fitted over the eight
-# blocks inside the edge) put a linear fade's boundary about 6,500 frames inside
-# the fade, where the faded audio is still about 26 dB above that floor. Remove
-# the mark when the brief's criterion or the method changes so that they agree.
-FADES_DISAGREE = pytest.mark.xfail(
-    strict=True, reason="AC1's fade criterion disagrees with ADR 0006's ends"
-)
-
-
 @pytest.mark.parametrize("transform", TRANSFORMS)
-@pytest.mark.parametrize(
-    "edit",
-    [
-        pytest.param(edit, marks=FADES_DISAGREE) if edit == "fades" else edit
-        for edit in EDITS
-    ],
-)
+@pytest.mark.parametrize("edit", EDITS)
 def test_compare_finds_the_portions_of_an_edit(
     run: Run, make_set: MakeSet, edit: str, transform: str
 ) -> None:
@@ -272,26 +237,6 @@ def test_compare_finds_the_portions_of_an_edit(
     assert code == 0
     assert "absent" not in report["measurements"]
     assert_found(report, expected)
-
-
-@pytest.mark.parametrize("transform", TRANSFORMS)
-def test_compare_keeps_a_fade_inside_one_portion(
-    run: Run, make_set: MakeSet, transform: str
-) -> None:
-    b, _ = _fades()
-
-    code, report = compare_signals(
-        run, make_set, A, lambda source: write_b(source, b, transform)
-    )
-
-    # What ADR 0006 gives today: one portion, at the exact offset, whose ends lie
-    # inside the fades.
-    assert code == 0
-    [portion] = report["measurements"]["portions"]
-    assert portion["offset"]["frames"] == 0
-    start = portion["a"]["start_frame"]
-    assert 0 <= start < 3 * SECOND
-    assert len(A) - 8 * SECOND < start + portion["a"]["frames"] <= len(A)
 
 
 def repeated(section: np.ndarray, second: np.ndarray) -> np.ndarray:
