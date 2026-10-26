@@ -329,13 +329,16 @@ Recorded at the v0.5.0 release review.
   comparison Report format version 3 and its view in
   [#98](https://github.com/jmfontaine/copyofa/pull/98), and `copyofa export` in
   [#99](https://github.com/jmfontaine/copyofa/pull/99). AC1–AC10 have tests against a
-  stand-in `redumper`; the stack's agent review checked AC11. AC12, on the maintainer's
-  drive: *Add Violence* was acquired into 148,047,406 bytes in 159 seconds, with the
-  five Audio Digests of the spike; verify, inspect, compare (−4240 frames, −37.5 dB) and
-  export gave the expected results; `flac -d` and `xz -d` restored redumper's files
-  exactly, and `redumper split` on them rewrote the track files; the maintainer played
-  the exported files in Music. A second acquisition from the merged code gave the same
-  five Audio Digests.
+  stand-in `redumper`; AC4 passes against the stand-in only, since with redumper's
+  defaults no accepted set has a track with unread frames (see Found in review). The
+  stack's agent review checked AC11. AC12, on the maintainer's drive: *Add Violence*
+  was acquired into 148,047,406 bytes in 159 seconds, with the five Audio Digests of
+  the spike; verify, inspect, compare (−4240 frames, −37.5 dB) and export gave the
+  expected results; `flac -d` and `xz -d` restored the image, the state and the
+  subchannel, so that all eight stored files match the SHA-256s of redumper's
+  originals, and `redumper split` on them rewrote the track files; the maintainer
+  played the exported files in Music. A second acquisition and export with the stack's
+  code gave the same five Audio Digests.
 - **Clarified during delivery:**
   - Subchannel Q errors are recorded but are not read errors: they do not make acquire
     exit 1, since the audio comes from the main channel. *Add Violence* reads with
@@ -354,9 +357,12 @@ Recorded at the v0.5.0 release review.
   errors confined to them, give a set accepted with exit 1. The maintainer kept
   redumper's defaults (no `--leave-unchanged`, no `--force-split`);
   `docs/formats/evidence-set.md` states which discs fail, and damaged discs move to
-  the Later outcome Acquire More Kinds of Disc.
+  the Later outcome Acquire More Kinds of Disc. The stack review's optional follow-up,
+  saying so when export writes a track with unread frames, is dropped for the same
+  reason: no accepted set has one.
 - **Learning:** checking the stand-in against redumper's source found what the
-  synthetic tests could not: the stand-in wrote track files equal to the image even
-  where the state marked frames unread, which real redumper never does. A stand-in for
-  an external program should be checked against that program's source or output for
-  each behavior a test relies on.
+  synthetic tests could not: the stand-in writes track files equal to the image even
+  where the state marks frames unread, which real redumper never does. It keeps that
+  behavior for AC4 and gained a case where the track file is filled where it was not
+  read. A stand-in for an external program should be checked against that program's
+  source or output for each behavior a test relies on.

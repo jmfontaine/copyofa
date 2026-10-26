@@ -14,8 +14,8 @@ tracks relate, across formats and sample rates. The fourth, v0.4.0, shares a
 comparison: a Report can leave out where the Evidence Sets are stored, `view` turns it
 into a self-contained HTML page, and `validate` checks any Report against its
 published JSON Schema. The fifth, v0.5.0, preserves a plain audio CD: `acquire` reads
-it with redumper into an Evidence Set that stores the disc image compressed, inspect
-and compare read its tracks from the image, and `export` writes them as FLAC files.
+it with redumper into an Evidence Set that stores the disc image compressed, `inspect`
+and `compare` read its tracks from the image, and `export` writes them as FLAC files.
 The roadmap in the Product Map lists what comes next.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
