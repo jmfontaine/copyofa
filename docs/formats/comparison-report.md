@@ -216,18 +216,37 @@ with the reason inspect gives `disc` when the record cannot be used.
 Each name ends in its unit when it has one. Frames are counted at
 `common_sample_rate`.
 
+The coarse search counts in frames of the decimated audio, at `common_sample_rate` /
+`decimation_factor`, so it rounds three seconds-valued parameters to whole decimated
+frames, with Python's `round`, which takes a half to the even integer:
+
+- a window of A holds round(`window_seconds` × `common_sample_rate` /
+  `decimation_factor`) decimated frames, and the windows of A start every
+  round(`hop_seconds` × `common_sample_rate` / `decimation_factor`) decimated frames;
+  at the common rate, both are that number times `decimation_factor`;
+- two candidates of a window lie at least round(`candidate_separation_seconds` ×
+  `common_sample_rate` / `decimation_factor`) decimated frames apart, and at least
+  one.
+
+At 44.1 kHz, a window holds round(5 × 44100 / 16) = 13,781 decimated frames, so it is
+13,781 × 16 = 220,496 frames long, not 220,500, and the windows of A start every
+220,496 frames; two candidates lie at least round(0.5 × 44100 / 16) = 1,378 decimated
+frames apart. `core_seconds` and `minimum_portion_seconds` are not rounded: they are
+compared with frame counts as `core_seconds` × `common_sample_rate` and
+`minimum_portion_seconds` × `common_sample_rate`.
+
 | Parameter | Value | Unit | Meaning |
 | --- | --- | --- | --- |
 | `decimation_factor` | `16` | factor | Decimation of both downmixes for the coarse search. |
 | `decimation_quality` | `"HQ"` | | libsoxr quality preset of that decimation. |
 | `first_difference_coefficient` | `0.5` | coefficient | *c* of the first difference *y*[*n*] = *x*[*n*] − *c*·*x*[*n* − 1] applied after decimation. |
-| `window_seconds` | `5` | s | Length of each window of A. |
-| `hop_seconds` | `5` | s | Distance between the starts of two windows of A. |
+| `window_seconds` | `5` | s | Length of each window of A, rounded to whole decimated frames as above. |
+| `hop_seconds` | `5` | s | Distance between the starts of two windows of A, rounded to whole decimated frames as above. |
 | `silent_window_energy_ratio` | `0.0001` | ratio | A window of A whose energy is at most this fraction of the mean window energy gives no evidence. |
 | `b_position_energy_floor` | `1e-10` | ratio | A position of B whose energy under the window is at most this fraction of B's whole energy gives no candidate. |
 | `candidate_threshold` | `0.4` | correlation | Least magnitude of the normalized cross-correlation of a candidate. |
 | `candidates_per_window` | `3` | candidates | Most candidates per window. |
-| `candidate_separation_seconds` | `0.5` | s | Least distance between two candidates of a window. |
+| `candidate_separation_seconds` | `0.5` | s | Least distance between two candidates of a window, rounded to whole decimated frames as above. |
 | `skipped_windows` | `1` | windows | Most windows skipped between two chained candidates. |
 | `chaining_tolerance_frames` | `32` | frames | Most difference between the offsets of two chained candidates, and between the offsets of a chain and of a portion already found. |
 | `core_ratio` | `0.85` | ratio | Least score, relative to the strongest window, of a window that joins the core. |

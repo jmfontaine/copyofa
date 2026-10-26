@@ -26,12 +26,17 @@ just setup              # Install deps + pre-commit hooks (hooks: main checkout 
 just test               # Run pytest with coverage
 just test <path>        # Run one test file or directory
 just format             # ruff format + pyproject-fmt + rumdl fmt (Markdown)
+just format-check       # The same formatters, checking without changing files
+just lint               # ruff check + rumdl check
 just lint-fix           # ruff check --fix + rumdl check --fix
 just type-check         # ty check
-just verify-types       # Public API type completeness; fails until the first export
+just verify-types       # Public API type completeness (pyright --verifytypes)
 just deps-unused        # deptry src
 just spell              # cspell against cspell.json
+just pre-commit         # Every pre-commit hook on all tracked files
 just qa                 # All checks: every pre-commit hook, then verify-types
+just pre-commit-install # Install the pre-commit hooks (main checkout only)
+just pre-commit-update  # Update the pre-commit hooks to their latest versions
 just deps-update        # Update deps to latest versions
 just changelog-preview  # Release notes for unreleased commits
 just release-prepare    # Maintainers only: open the PR that sets the release version
@@ -159,8 +164,9 @@ refuses a valid comparison Report of any other version.
 
 `inspect`, `compare` and `export` decode audio with soundfile, whose wheels bundle
 libsndfile with FLAC and mpg123, and NumPy; `export` also writes its FLAC files
-through soundfile. `compare` also resamples with soxr (python-soxr,
-bundling libsoxr), which also decimates for its coarse search, at its `HQ` quality.
+through soundfile. `compare` also resamples with soxr (python-soxr, bundling
+libsoxr) to the common sample rate at its `VHQ` quality, and decimates with it for
+its coarse search at its `HQ` quality.
 These three, with jsonschema (see Report schemas), are the only
 runtime dependencies. The Audio Digest is defined on canonical PCM by
 [ADR 0002](docs/decisions/0002-define-audio-digest-from-canonical-pcm.md), so any
