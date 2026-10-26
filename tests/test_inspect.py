@@ -753,10 +753,6 @@ def nest_record(evidence_set: Path, depth: int) -> None:
             lambda bag: (bag / "manifest-sha256.txt").unlink(),
             "the Integrity Baseline is unusable",
         ),
-        (
-            lambda bag: nest_record(bag, 100_000),
-            "the Acquisition Record cannot be parsed: it is nested too deeply",
-        ),
     ],
     ids=[
         "edited",
@@ -764,7 +760,6 @@ def nest_record(evidence_set: Path, depth: int) -> None:
         "other version",
         "no range",
         "unusable baseline",
-        "nested too deeply",
     ],
 )
 def test_inspect_decodes_no_track_when_the_record_cannot_be_used(
@@ -779,6 +774,22 @@ def test_inspect_decodes_no_track_when_the_record_cannot_be_used(
     text = run("inspect", acquired_set)
     assert text.code == 1
     assert f"Disc: not inspected ({reason})" in text.out
+
+
+def test_inspect_decodes_no_track_of_a_record_nested_100_000_deep(
+    run: Run, acquired_set: Path
+) -> None:
+    nest_record(acquired_set, 100_000)
+
+    outcome, report = inspect(run, acquired_set)
+
+    # How deep the parser nests depends on the platform: Python 3.14 on Linux parses
+    # the record, then finds no object; elsewhere the parser gives up.
+    assert outcome.code == 1
+    assert report["disc"]["reason"] in {
+        "the Acquisition Record cannot be parsed: it is nested too deeply",
+        "the Acquisition Record cannot be used: it is not a JSON object",
+    }
 
 
 def test_inspect_does_not_inspect_tracks_of_an_image_that_is_not_accepted(
