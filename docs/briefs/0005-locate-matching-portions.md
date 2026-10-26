@@ -231,12 +231,12 @@ Recorded at the v0.6.0 release review.
 - **Found in review:** the agent's own reviews fixed ends at a track's edge not
   placed to the frame, a silence rule relative to B that skipped quiet copies, a core
   shorter than one block being rejected, a crash on a 1 Hz input, a candidate repeated
-  at 16 Hz and below (fixed and checked with a probe, without a test), a crash in the
-  view on a Report without a common sample rate, and a bare "absent" level for
-  digitally silent audio. The stack's agent review found the B-position energy floor
-  changing results without being stated in the Report; it became a parameter, which
-  is what fixed, stated parameters are for. A fade's boundary sits about 1,600 frames
-  inside AC1's bound, so retuning the end rule could break it.
+  at 16 Hz and below (fixed and checked with a probe, without a test), and a crash in
+  the view on a Report without a common sample rate. The stack's agent review found a
+  bare "absent" level for digitally silent audio, and the B-position energy floor
+  changing results without being stated in the Report; the floor became a parameter,
+  which is what fixed, stated parameters are for. A fade's boundary sits about 1,600
+  frames inside AC1's bound, so retuning the end rule could break it.
 - **Learning:** an acceptance criterion written during plan review, without checking
   it against the spike's scoring, contradicted the method the spike validated. A
   criterion that pins a measured value should cite the evidence that supports it.
