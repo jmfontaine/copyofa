@@ -11,7 +11,14 @@ from typing import TYPE_CHECKING, Any
 import jsonschema
 import numpy as np
 import pytest
-from conftest import RATE, requires_permissions, signal, snapshot, write_audio
+from conftest import (
+    RATE,
+    closed_stdout,
+    requires_permissions,
+    signal,
+    snapshot,
+    write_audio,
+)
 
 from copyofa import comparator, inspector, validator, verifier
 
@@ -904,6 +911,16 @@ def test_validate_canceled_prints_nothing(
 
     assert outcome.code == 130
     assert outcome.out == ""
+
+
+@pytest.mark.parametrize("options", [(), ("--json",)])
+def test_validate_reports_a_closed_stdout(run: Run, options: tuple[str, ...]) -> None:
+    with closed_stdout():
+        outcome = run("validate", STORED / "measured.json", *options)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert outcome.err == "copyofa: stdout closed\n"
 
 
 @pytest.mark.parametrize("valid", [True, False])

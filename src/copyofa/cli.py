@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -24,9 +26,11 @@ from copyofa.errors import CopyOfAError
 from copyofa.importer import import_evidence
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Generator, Sequence
+    from pathlib import Path
 
     from copyofa.acquirer import AcquisitionResult
+    from copyofa.exporter import ExportResult
     from copyofa.importer import ImportResult
 
 EXIT_OK = 0
@@ -69,6 +73,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     importing.add_argument(
         "--to",
+        action=_StoreOnce,
         required=True,
         metavar="destination",
         help="the Evidence Set to create; it must not exist, its parent must",
@@ -109,6 +114,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     acquiring.add_argument(
         "--to",
+        action=_StoreOnce,
         required=True,
         metavar="destination",
         help="the Evidence Set to create; it must not exist, its parent must",
@@ -188,6 +194,7 @@ def _parser() -> argparse.ArgumentParser:
     exporting.add_argument("evidence_set", metavar="evidence-set")
     exporting.add_argument(
         "--to",
+        action=_StoreOnce,
         required=True,
         metavar="directory",
         help="the directory to create; it must not exist, its parent must",
@@ -269,10 +276,53 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        return args.handler(args)
+        code = args.handler(args)
+        sys.stdout.flush()
     except KeyboardInterrupt:
         print("copyofa: canceled", file=sys.stderr)
         return EXIT_CANCELED
+    except _StdoutClosedError as closed:
+        return _stdout_closed(closed.created)
+    except BrokenPipeError:
+        return _stdout_closed()
+    return code
+
+
+class _StdoutClosedError(Exception):
+    """Stdout was closed while a command printed the result of what it created."""
+
+    def __init__(self, created: Path) -> None:
+        super().__init__(created)
+        self.created = created
+
+
+@contextlib.contextmanager
+def _printing_result_of(created: Path) -> Generator[None]:
+    """Name created as kept when stdout is closed while the block prints."""
+    try:
+        yield
+        sys.stdout.flush()
+    except BrokenPipeError as error:
+        raise _StdoutClosedError(created) from error
+
+
+def _stdout_closed(created: Path | None = None) -> int:
+    """Report that stdout was closed, such as by `| true`, naming what was created."""
+    # Python flushes stdout at exit; writing it to the null device from now on keeps
+    # that flush from failing again and printing "Exception ignored".
+    try:
+        descriptor = sys.stdout.fileno()
+    except (AttributeError, OSError, ValueError):
+        pass
+    else:
+        null = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(null, descriptor)
+        os.close(null)
+    message = "copyofa: stdout closed"
+    if created is not None:
+        message = f"{message}; {created} was created"
+    print(_printable(message), file=sys.stderr)
+    return EXIT_PROBLEM
 
 
 def _import(args: argparse.Namespace) -> int:
@@ -293,10 +343,11 @@ def _import(args: argparse.Namespace) -> int:
         return EXIT_PROBLEM
     for warning in result.warnings:
         print(f"copyofa: warning: {warning}", file=sys.stderr)
-    if args.json:
-        _print_json(result.to_json())
-    else:
-        _print_import(result)
+    with _printing_result_of(result.evidence_set):
+        if args.json:
+            _print_json(result.to_json())
+        else:
+            _print_import(result)
     return EXIT_OK
 
 
@@ -331,10 +382,11 @@ def _acquire(args: argparse.Namespace) -> int:
             "copyofa: the Evidence Set was accepted, but the disc was read with errors",
             file=sys.stderr,
         )
-    if args.json:
-        _print_json(result.to_json())
-    else:
-        _print_acquisition(result)
+    with _printing_result_of(result.evidence_set):
+        if args.json:
+            _print_json(result.to_json())
+        else:
+            _print_acquisition(result)
     return EXIT_PROBLEM if read_errors else EXIT_OK
 
 
@@ -387,9 +439,10 @@ def _print_json(document: dict[str, Any]) -> None:
     """Print a `--json` document as UTF-8, whatever the locale.
 
     Lone surrogates are escaped as `\\uXXXX`, which `json.loads` turns back into the
-    original string, so the output stays valid UTF-8.
+    original string, so the output stays valid UTF-8. A NaN or infinite number, which
+    JSON cannot hold, raises ValueError before anything is printed.
     """
-    text = json.dumps(document, indent=2, ensure_ascii=False)
+    text = json.dumps(document, indent=2, ensure_ascii=False, allow_nan=False)
     # Surrogates only occur inside JSON strings, where an escape is valid.
     text = _SURROGATE.sub(lambda match: f"\\u{ord(match.group()):04x}", text)
     sys.stdout.flush()
@@ -561,9 +614,15 @@ def _export(args: argparse.Namespace) -> int:
         return EXIT_PROBLEM
     for warning in result.warnings:
         print(f"copyofa: warning: {warning}", file=sys.stderr)
-    if args.json:
-        _print_json(result.to_json())
-        return EXIT_OK
+    with _printing_result_of(result.directory):
+        if args.json:
+            _print_json(result.to_json())
+        else:
+            _print_export(result)
+    return EXIT_OK
+
+
+def _print_export(result: ExportResult) -> None:
     print(
         _printable(
             f"Exported {_count(len(result.files), 'track')} to {result.directory}"
@@ -576,7 +635,6 @@ def _export(args: argparse.Namespace) -> int:
     print("Left out:")
     for sentence in exporter.LEFT_OUT:
         print(f"  {sentence}")
-    return EXIT_OK
 
 
 def _track_number(value: str) -> int:

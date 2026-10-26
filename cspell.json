@@ -32,6 +32,7 @@
     "downmixes",
     "elif",
     "endfor",
+    "EPIPE",
     "esac",
     "fastjsonschema",
     "filterwarnings",
