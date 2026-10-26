@@ -158,6 +158,27 @@ or decoded or is not a supported format, 2 when an input is not inside an Eviden
 or the arguments are invalid, and 130 when canceled. It writes nothing into either
 set.
 
+Play a disc you acquired, or tag its tracks with other tools, from FLAC files that
+export writes:
+
+```bash
+copyofa export "/Volumes/Archive/Add Violence CD" --to ~/Music/add-violence
+copyofa export "/Volumes/Archive/Add Violence CD" --to ~/Music/add-violence --json \
+  > export.json
+```
+
+Export checks the set as inspect does, then writes each track of the disc from the
+image as a 16-bit stereo FLAC file at 44.1 kHz, `01.flac`, `02.flac` and so on, with no
+tag. It decodes each file and checks its Audio Digest against the recorded one before
+it accepts the directory. The first track's pregap, the lead-in and the lead-out stay
+only in the set. `--json` prints an export result, which
+[Export result format][export-result] describes.
+
+Export exits 0 when every track was exported, 1 when the set is not an acquired set,
+cannot be trusted, or the export is refused or fails (the directory is then not
+created), 2 when the target is not an Evidence Set or the arguments are invalid, and
+130 when canceled. It writes nothing into the set.
+
 Check that a Report, such as one you received, is well formed:
 
 ```bash
@@ -232,6 +253,7 @@ CopyOfA is licensed under the [Apache License 2.0][license].
 [comparison-report]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/comparison-report.md
 [decisions]: https://github.com/jmfontaine/copyofa/tree/main/docs/decisions
 [evidence-set]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/evidence-set.md
+[export-result]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/export-result.md
 [formats]: https://github.com/jmfontaine/copyofa/tree/main/docs/formats
 [inspection-report]: https://github.com/jmfontaine/copyofa/blob/main/docs/formats/inspection-report.md
 [license]: https://github.com/jmfontaine/copyofa/blob/main/LICENSE.txt

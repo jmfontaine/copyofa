@@ -127,7 +127,7 @@ Before copying anything, import refuses, exiting 1 and creating nothing, when:
   because the set must stay valid once moved to a macOS volume;
 - the destination exists, its parent does not exist or cannot be opened, or it lies
   inside a source;
-- a staging directory left by an earlier import or acquire exists (see below);
+- a staging directory left by an earlier import, acquire or export exists (see below);
 - the path of a source or of the destination, or a name in a directory import lists
   (not one inside an excluded directory), is not valid UTF-8, which BagIt manifests
   require;
@@ -147,7 +147,7 @@ and tag file is written does it rename the staging directory to the destination.
 set at the destination is therefore complete. If syncing the destination's parent
 directory fails after that rename, the set is kept and import warns on stderr. A
 staging directory left behind by a crash is never reused or deleted by CopyOfA: the
-next import or acquire to that destination refuses and names it.
+next import, acquire or export to that destination refuses and names it.
 
 ## Acquired sets
 
@@ -413,8 +413,8 @@ Before reading the disc, acquire refuses, exiting 1 and creating nothing, when:
 - `redumper` is not on `PATH`, or `redumper --version` does not give its build or gives
   one older than b768;
 - the destination exists, its parent does not exist or cannot be opened, a staging
-  directory left by an earlier import or acquire exists beside it, or its path is not
-  valid UTF-8;
+  directory left by an earlier import, acquire or export exists beside it, or its path
+  is not valid UTF-8;
 - the `--note` text, a `--ref` value or the `--drive` value is not valid UTF-8, which
   the Acquisition Record requires.
 

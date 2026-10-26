@@ -481,22 +481,26 @@ def test_acquire_fails_when_a_stored_file_does_not_decode_to_the_original(
     assert left_behind(destination) == []
 
 
-def test_acquire_refuses_a_left_staging_directory_naming_both_commands(
-    run: Run, redumper: StandIn, tmp_path: Path
+def test_a_left_staging_directory_is_refused_naming_every_command(
+    run: Run, acquired_set: Path, tmp_path: Path
 ) -> None:
     destination = tmp_path / "Album"
     left = destination.with_name("Album" + staging.STAGING_SUFFIX)
     left.mkdir()
+    (tmp_path / "left").write_bytes(b"x")
 
-    for args in (["acquire"], ["import", tmp_path / "left"]):
-        if args[0] == "import":
-            (tmp_path / "left").write_bytes(b"x")
+    for args in (
+        ["acquire"],
+        ["import", tmp_path / "left"],
+        ["export", acquired_set],
+    ):
         outcome = run(*args, "--to", destination)
         assert outcome.code == 1
         assert (
-            f"a staging directory left by an earlier import or acquire exists at "
-            f"{left}." in outcome.err
+            "a staging directory left by an earlier import, acquire or export exists "
+            f"at {left}." in outcome.err
         )
+        assert not destination.exists()
 
 
 def test_acquire_reads_ten_tracks_a_silent_first_track_and_lead_track_files(

@@ -119,16 +119,17 @@ under `data/` and CopyOfA's records in the `copyofa/` tag directory, as
 [ADR 0001](docs/decisions/0001-store-evidence-sets-as-bagit-bags.md) decides.
 [docs/formats/evidence-set.md](docs/formats/evidence-set.md) documents the layout, the
 Import Record and the Acquisition Record; change it with any change to what import or
-acquire writes. Import and acquire create their destination through the staging
-directory `src/copyofa/staging.py` manages.
+acquire writes. Import, acquire and export create their destination through the
+staging directory `src/copyofa/staging.py` manages.
 [docs/formats/verification-report.md](docs/formats/verification-report.md) documents
 the Report verify prints,
 [docs/formats/inspection-report.md](docs/formats/inspection-report.md) the Report
 inspect prints,
 [docs/formats/comparison-report.md](docs/formats/comparison-report.md) the Report
-compare prints and the page view makes of it, and
+compare prints and the page view makes of it,
 [docs/formats/validation-result.md](docs/formats/validation-result.md) the result
-validate prints; change each with any change to what its command prints.
+validate prints, and [docs/formats/export-result.md](docs/formats/export-result.md)
+the result export prints; change each with any change to what its command prints.
 
 ### Report schemas
 
@@ -191,13 +192,13 @@ Every command follows the conventions `import` and `verify` set in v0.1.0, as
   instead, as UTF-8 whatever the locale, with lone surrogates (path bytes that
   are not valid UTF-8) escaped as `\uXXXX` so the output stays valid UTF-8. Progress,
   warnings and errors go to stderr
-- Exit 0 on success, 1 when the command refused, failed or found a problem (a result
-  is still printed when there is one), 2 for invalid arguments or, for a command that
-  reads an Evidence Set, a target that is not one, and 130 when canceled with Ctrl-C.
-  Import and acquire exit 1 for a source or destination they refuse, acquire also for
-  a set it accepted from a disc read with errors, validate and view for a file
-  they cannot read, and view for a Report it refuses. View prints an HTML page, not
-  JSON, and has no `--json`
+- Exit 0 on success, 1 when the command refused, failed or found a problem (a result is
+  still printed when there is one), 2 for invalid arguments or, for a command that reads
+  an Evidence Set, a target that is not one, and 130 when canceled with Ctrl-C. Import,
+  acquire and export exit 1 for a source or destination they refuse, acquire also for a
+  set it accepted from a disc read with errors, validate and view for a file they cannot
+  read, and view for a Report it refuses. View prints an HTML page, not JSON, and has no
+  `--json`
 - Stdout stays empty whenever no result is produced
 - No interactive prompts
 

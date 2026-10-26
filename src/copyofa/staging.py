@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 STAGING_SUFFIX = ".copyofa-staging"
 
-_COMMANDS = "import or acquire"
+_COMMANDS = "import, acquire or export"
 """The commands that create a staging directory, as a refusal names them."""
 
 T = TypeVar("T")
@@ -80,6 +80,17 @@ def check_destination(given: str) -> Destination:
             f"{staging}. Check it, then remove it."
         )
     return Destination(given, target, staging)
+
+
+def identity(path: Path) -> tuple[int, int]:
+    """Identify a file or directory on its volume, whatever path names it."""
+    info = path.stat()
+    return info.st_dev, info.st_ino
+
+
+def ancestors(path: Path) -> set[tuple[int, int]]:
+    """Identify every directory that holds path."""
+    return {identity(parent) for parent in path.parents}
 
 
 def accept(

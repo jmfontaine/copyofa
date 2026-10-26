@@ -164,18 +164,9 @@ def _resolve(given: str) -> Path:
     return path.parent.resolve() / path.name
 
 
-def _identity(path: Path) -> tuple[int, int]:
-    info = path.stat()
-    return info.st_dev, info.st_ino
-
-
-def _ancestors(path: Path) -> set[tuple[int, int]]:
-    return {_identity(parent) for parent in path.parents}
-
-
 def _refuse_overlapping_sources(sources: Sequence[_Source]) -> None:
-    identities = [_identity(source.resolved) for source in sources]
-    ancestors = [_ancestors(source.resolved) for source in sources]
+    identities = [staging.identity(source.resolved) for source in sources]
+    ancestors = [staging.ancestors(source.resolved) for source in sources]
     for i, first in enumerate(sources):
         for j in range(i + 1, len(sources)):
             second = sources[j]
@@ -205,9 +196,9 @@ def _check_destination(
     destination: str, sources: Sequence[_Source]
 ) -> staging.Destination:
     checked = staging.check_destination(destination)
-    inside = _ancestors(checked.target)
+    inside = staging.ancestors(checked.target)
     for source in sources:
-        if source.is_dir and _identity(source.resolved) in inside:
+        if source.is_dir and staging.identity(source.resolved) in inside:
             raise EvidenceImportError(
                 f"Refused: destination {destination} lies inside source {source.given}."
             )

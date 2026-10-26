@@ -98,6 +98,7 @@
     "resampler",
     "retagging",
     "rfft",
+    "rint",
     "rpds",
     "rumdl",
     "samplerate",
