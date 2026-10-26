@@ -194,3 +194,49 @@ valid version 4 Report:
 1. Residual windows per portion in the view; they stay in the Report.
 2. Per-channel measurements per portion; the downmix measurements stay.
 3. The level of unmatched ranges; the ranges and the digital-silence flag stay.
+
+## Delivery notes
+
+Recorded at the v0.6.0 release review.
+
+- **Delivered within the appetite**, with no scope cut, as a stack of pull requests
+  from one unattended agent: portions in compare with comparison Report format version
+  4 in [#108](https://github.com/jmfontaine/copyofa/pull/108), and the view of version
+  4 in [#109](https://github.com/jmfontaine/copyofa/pull/109). AC1–AC6 have tests
+  built from generated signals, with stored version 3 Reports for the older formats;
+  the whole suite holds 517 tests. The stack's agent review checked AC7. AC8, on the
+  maintainer's machine: *The Downward Spiral* FLAC against MP3 gave one primary
+  portion at offset 0 for each of three tracks; track 3 of the acquired *Add Violence*
+  CD was found in the CD's own image at frame 46845360; against the 2025 download,
+  track 4 gave a primary portion at +34,946 frames and the download's last 4.1 s
+  unmatched at −20.8 dBFS, and track 3 gave ten primary portions at −4,075 frames with
+  35.7 s of the CD unmatched. The maintainer read the track 4 page in Safari, the
+  manual check of #106.
+- **Changed during delivery:** AC1's fade clause did not describe the method: a
+  fade's boundary falls about three blocks inside the fade, where the end rule's gain
+  stops fitting, not where the fade reaches −80 dBFS. The spike had scored fades as
+  zones. [#107](https://github.com/jmfontaine/copyofa/pull/107) bounded a fade's
+  boundary to four blocks of its silent end, with the maintainer's agreement, and
+  recorded in ADR 0006 the details the implementation settled, among them a
+  B-position energy floor that became a Report parameter.
+- **Clarified during delivery:**
+  - Repeats whose residual is within 3 dB of the main portion's are primaries: track 4
+    of *Add Violence* has three primary portions, the main one and the song's two
+    repeated sections, and four short alternates.
+  - Levels of unmatched audio take all channels, as ADR 0006 defines them; the spike
+    measured the downmix, so the download's track 3 tail reads −49.9 dBFS rather than
+    −52.
+  - Compare's short result labels its residual "(one gain)", since a portion is
+    accepted on its residual after the per-block gains.
+- **Found in review:** the agent's own reviews fixed ends at a track's edge not
+  placed to the frame, a silence rule relative to B that skipped quiet copies, a core
+  shorter than one block being rejected, a crash on a 1 Hz input, a candidate repeated
+  at 16 Hz and below (fixed and checked with a probe, without a test), and a crash in
+  the view on a Report without a common sample rate. The stack's agent review found a
+  bare "absent" level for digitally silent audio, and the B-position energy floor
+  changing results without being stated in the Report; the floor became a parameter,
+  which is what fixed, stated parameters are for. A fade's boundary sits about 1,600
+  frames inside AC1's bound, so retuning the end rule could break it.
+- **Learning:** an acceptance criterion written during plan review, without checking
+  it against the spike's scoring, contradicted the method the spike validated. A
+  criterion that pins a measured value should cite the evidence that supports it.
