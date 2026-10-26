@@ -219,6 +219,11 @@ pytest with coverage (`just test`). CI runs the suite:
   fatal
 - against the built wheel, installed into a clean environment
 
+Local test data: the maintainer's albums, for by-hand checks and acceptance, are in
+`/Users/jmf/CopyOfA`, one directory per release, mostly MP3, FLAC, WAV and M4A files.
+List the directory before giving a command that uses its paths. Use it for by-hand
+checks only: never copy its files into the repository or the tests.
+
 ### Distribution
 
 - Wheel and sdist built once by CI and checked by `scripts/check_distributions.py`
@@ -255,6 +260,15 @@ above, report, and stop.
 
 The process for maintainers is in [CONTRIBUTING.md](CONTRIBUTING.md#releasing).
 
-## Deviations from the shared workflow
+## Shared workflow
+
+This repository follows the shared workflow: the `github-workflow` skill's repository
+setup describes its GitHub settings, rulesets, labels and templates. Those settings are
+managed as code in the `infra` repository; change them there, never with `gh api` or
+the GitHub web UI.
+
+It is a pull-request repository: every change reaches `main` through a pull request.
+
+### Deviations from the shared workflow
 
 None.
