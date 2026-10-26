@@ -543,13 +543,23 @@ def _locate_tracks(work: Path, tracks: Sequence[_Track]) -> _Image:
                 hint = following - sizes[index]
                 if hint >= 0:
                     starts[index] = _find(image, work / tracks[index].file, hint)
-    for track, start, length in zip(tracks, starts, sizes, strict=True):
+    for index, (track, start, length) in enumerate(
+        zip(tracks, starts, sizes, strict=True)
+    ):
         if start is None:
-            raise AcquisitionError(
+            message = (
                 f"Failed: the bytes of {track.file}, track {track.number}, are found "
                 "nowhere in the image, or are a single repeated byte that no other "
                 "track places in it."
             )
+            unread = _unread_where(state_path, frames, starts, sizes, index)
+            if unread:
+                message += (
+                    f" The state marks {unread} frames where it would lie as not "
+                    f"read, and {READER} replaces unread sectors with generated ones "
+                    "when it splits the disc into track files."
+                )
+            raise AcquisitionError(message)
         track.first_frame = start // FRAME_BYTES
         track.frame_count = length // FRAME_BYTES
         with (work / track.file).open("rb") as data:
@@ -562,6 +572,34 @@ def _locate_tracks(work: Path, tracks: Sequence[_Track]) -> _Image:
         )
         track.error_frames = int(np.count_nonzero(state < _FIRST_SUCCESS_STATE))
     return _Image(frames)
+
+
+def _unread_where(
+    state_path: Path,
+    frames: int,
+    starts: Sequence[int | None],
+    sizes: Sequence[int],
+    index: int,
+) -> int:
+    """Count the frames not read well where a track that was not found would lie.
+
+    That is right after the previous track, else right before the next one; with
+    neither found, nothing tells where it would lie.
+    """
+    length = sizes[index] // FRAME_BYTES
+    previous = starts[index - 1] if index else None
+    following = starts[index + 1] if index + 1 < len(starts) else None
+    if previous is not None:
+        first = (previous + sizes[index - 1]) // FRAME_BYTES
+    elif following is not None:
+        first = following // FRAME_BYTES - length
+    else:
+        return 0
+    first, end = max(first, 0), min(first + length, frames)
+    if first >= end:
+        return 0
+    state = np.fromfile(state_path, dtype=np.uint8, count=end - first, offset=first)
+    return int(np.count_nonzero(state < _FIRST_SUCCESS_STATE))
 
 
 def _size(path: Path, what: str) -> int:

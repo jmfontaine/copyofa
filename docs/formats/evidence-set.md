@@ -433,7 +433,9 @@ when:
 - the image is missing or not a whole number of frames, or the state does not hold one
   byte per frame of the image;
 - a track file is missing, or its bytes are found nowhere in the image at a frame
-  boundary;
+  boundary; the error also says when the state marks frames where the track would lie
+  as not read, which redumper replaces with generated sectors in the track file (see
+  below);
 - redumper wrote a file that is neither a track file nor named `disc.<extension>` or
   `disc_<language code>.cue`;
 - a stored file does not decode to the SHA-256 of redumper's original.
@@ -453,6 +455,21 @@ A disc read with errors is accepted, since the set is evidence of what the drive
 but acquire exits 1: when `read_errors` gives SCSI or C2 errors, or a track has
 `error_frames`. Subchannel errors alone do not count: the audio is read from the main
 channel.
+
+With redumper's defaults, which acquire uses, few discs read with errors reach that
+point. redumper b768 checks the read status when it splits the image into track files
+(`cd/cd_split.ixx`):
+
+- a pressed CD with a sector read with a C2 error, or skipped, inside a track: redumper
+  refuses to split it ("data errors detected, unable to continue") and exits with an
+  error status, so acquire fails;
+- a CD-R with C2 errors in a few sectors at a track's start or end (16 by default):
+  redumper splits it, but replaces each of those sectors in the track file with a
+  generated one filled with the byte 0x55, so the track's bytes are found nowhere in
+  the image and acquire fails; any other error inside a track makes it refuse as for a
+  pressed CD;
+- errors confined to the lead-in or the lead-out: redumper splits the disc as read, so
+  the set is accepted and acquire exits 1.
 
 ### Restoring redumper's files
 
