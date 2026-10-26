@@ -422,13 +422,6 @@ FAILURES: dict[str, tuple[dict[str, Any], str]] = {
         {"unreadable_log": True},
         "Failed: redumper's log cannot be read: it does not identify the drive.",
     ),
-    "more errors corrected than read": (
-        {"corrected": {"scsi": 0, "c2": 1, "q": 0}},
-        (
-            "Failed: redumper's log cannot be read: it corrects more errors than "
-            "its read had."
-        ),
-    ),
 }
 
 
@@ -487,8 +480,11 @@ def test_acquire_counts_scsi_and_c2_errors_as_read_errors(
     [
         ({"scsi": 2352, "c2": 1176, "q": 3}, {"scsi": 0, "c2": 0}, 0),
         ({"scsi": 2352, "c2": 588, "q": 3}, {"scsi": 0, "c2": 588}, 1),
+        # A re-read turned skipped sectors into 10 more C2 samples than the dump had:
+        # redumper logs the corrected C2 count wrapped as a 32-bit unsigned integer.
+        ({"scsi": 2352, "c2": 2**32 - 10, "q": 3}, {"scsi": 0, "c2": 1186}, 1),
     ],
-    ids=["all corrected", "some left"],
+    ids=["all corrected", "some left", "more c2 than read"],
 )
 def test_acquire_counts_only_the_errors_left_after_re_reading(
     run: Run,

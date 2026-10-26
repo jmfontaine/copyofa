@@ -75,3 +75,7 @@ Alternatives considered:
   drive's lead-in read can replace sectors in error before the re-reads. Such errors
   stay counted though the image no longer holds them, as they were before this
   decision.
+- redumper keeps its counts in 32-bit unsigned integers. When a re-read turns a
+  skipped sector into one with C2 errors, the C2 count it logs as corrected wraps
+  below zero; acquire subtracts in the same arithmetic, so the record still gives the
+  C2 samples left.

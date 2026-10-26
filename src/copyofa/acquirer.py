@@ -387,9 +387,10 @@ def _read_log(path: Path) -> _Log:
     corrected = _CORRECTED.search(text)
     if corrected is not None:
         fixed_scsi, fixed_c2 = (int(count) for count in corrected.groups())
-        if fixed_scsi > scsi or fixed_c2 > c2:
-            raise _unreadable_log("it corrects more errors than its read had")
-        scsi, c2 = scsi - fixed_scsi, c2 - fixed_c2
+        # redumper counts in 32-bit unsigned integers: a re-read that turns a SCSI
+        # error into C2 errors leaves more C2 samples than its dump counted, and the
+        # corrected C2 count it logs wraps below zero.
+        scsi, c2 = (scsi - fixed_scsi) % 2**32, (c2 - fixed_c2) % 2**32
     write_offset = _WRITE_OFFSET.search(text)
     return _Log(
         drive=drive,
