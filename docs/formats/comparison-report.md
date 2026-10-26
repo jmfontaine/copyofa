@@ -137,10 +137,11 @@ copyofa compare <input-a> <input-b> --json --omit-locations > htf.json
 
 The search finds no portion in a track shorter than 5 s, identical audio excepted, and
 may miss a portion shorter than about 2.5 s. A speed, pitch or drift difference gives
-no portion. A boundary at a fade or a crossfade falls inside it, where the per-block
-fit stops confirming the match, not at a fixed level. In music that repeats a section,
-one range of A matches several places in B, and each is a portion. The Report's
-`limitations` state this.
+no portion. A boundary at a fade falls about three blocks inside it, where the gain
+fitted over the eight blocks inside the edge stops fitting the faded audio, not where
+the fade gets quiet; a boundary at a crossfade falls where the other audio refutes the
+match. In music that repeats a section, one range of A matches several places in B,
+and each is a portion. The Report's `limitations` state this.
 
 Compare writes nothing into either set.
 
@@ -656,7 +657,7 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
     "Portions shorter than about 2.5 s may be missed, and the search finds no …",
     "Speed, pitch and drift differences give no portion.",
     "A boundary inside audio below -80 dBFS is placed at the nearest frame …",
-    "A boundary at a fade or a crossfade falls inside it, where the per-block fit …",
+    "A boundary at a fade falls about three blocks of 2048 frames inside it, where …",
     "In music that repeats a section, one range of a track can match several …",
     "Channels are paired in the order each file stores them."
   ]

@@ -50,8 +50,10 @@ LIMITATIONS = (
         "with evidence, and the rest is reported as unmatched."
     ),
     (
-        "A boundary at a fade or a crossfade falls inside it, where the per-block "
-        "fit stops confirming the match, not at a fixed level."
+        "A boundary at a fade falls about three blocks of 2048 frames inside it, "
+        "where the gain fitted over the eight blocks inside the edge stops fitting "
+        "the faded audio, not where the fade gets quiet; a boundary at a crossfade "
+        "falls where the other audio refutes the match."
     ),
     (
         "In music that repeats a section, one range of a track can match several "
