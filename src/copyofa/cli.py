@@ -264,8 +264,8 @@ def _parser() -> argparse.ArgumentParser:
             "Validate a comparison Report, then print an HTML page that shows every "
             "value of the Report, with the SHA-256 of the file, on stdout. The page "
             "holds no script and loads nothing. Exits 0 when the page was printed "
-            "and 1 when the Report is invalid, unsupported, of another kind, or "
-            "cannot be read."
+            "and 1 when the Report is invalid, unsupported, of another kind, of a "
+            "format version view does not render, or cannot be read."
         ),
     )
     viewing.add_argument("report")
@@ -795,6 +795,20 @@ def _view(args: argparse.Namespace) -> int:
         print(
             f"copyofa: {report} is not a comparison Report; view supports "
             "comparison Reports only",
+            file=sys.stderr,
+        )
+        return EXIT_PROBLEM
+    version = result["format_version"]
+    if version not in viewer.SUPPORTED_FORMAT_VERSIONS:
+        names = [str(number) for number in sorted(viewer.SUPPORTED_FORMAT_VERSIONS)]
+        supported = (
+            f"versions {', '.join(names[:-1])} and {names[-1]}"
+            if len(names) > 1
+            else f"version {names[0]}"
+        )
+        print(
+            f"copyofa: {report} is a comparison Report of format version {version}; "
+            f"view supports format {supported}",
             file=sys.stderr,
         )
         return EXIT_PROBLEM
