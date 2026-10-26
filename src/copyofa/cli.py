@@ -173,11 +173,21 @@ def _parser() -> argparse.ArgumentParser:
             "track A. Exits 0 when both were compared and 1 otherwise."
         ),
     )
-    for name in ("track-a", "track-b"):
+    for name in ("input-a", "input-b"):
         comparing.add_argument(
             name.replace("-", "_"),
             metavar=name,
-            help="a FLAC, WAV or MP3 file under the data/ directory of an Evidence Set",
+            help=(
+                "a FLAC, WAV or MP3 file under the data/ directory of an Evidence "
+                f"Set or, with --track-{name[-1]}, an acquired set"
+            ),
+        )
+    for name in ("input-a", "input-b"):
+        comparing.add_argument(
+            f"--track-{name[-1]}",
+            type=_track_number,
+            metavar="NUMBER",
+            help=f"compare this track of the acquired set {name}",
         )
     comparing.add_argument(
         "--json", action="store_true", help="print the comparison Report as JSON"
@@ -494,16 +504,28 @@ def _describe_audio(entry: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
+def _track_number(value: str) -> int:
+    """Parse a track number, a whole number from 1."""
+    if not value.isdecimal() or int(value) < 1:
+        raise argparse.ArgumentTypeError(f"not a track number: {value!r}")
+    return int(value)
+
+
 def _compare(args: argparse.Namespace) -> int:
     def progress(entry: dict[str, Any]) -> None:
         outcome = entry["outcome"].replace("_", " ")
-        print(f"Inspected {_printable(entry['path'])}: {outcome}", file=sys.stderr)
+        print(
+            f"Inspected {_printable(comparator.input_name(entry))}: {outcome}",
+            file=sys.stderr,
+        )
 
     try:
         report = comparator.compare(
-            args.track_a,
-            args.track_b,
+            args.input_a,
+            args.input_b,
             progress=progress,
+            track_a=args.track_a,
+            track_b=args.track_b,
             omit_locations=args.omit_locations,
         )
     except verifier.NotAnEvidenceSetError as error:
@@ -523,11 +545,14 @@ def _print_comparison(report: dict[str, Any]) -> None:
             detail = _describe_audio(entry)
         else:
             detail = f"{entry['outcome'].replace('_', ' ')}: {entry['reason']}"
-        location = (
-            entry["path"]
-            if "evidence_set" not in entry
-            else f"{entry['evidence_set']}/{entry['path']}"
-        )
+        if "track" in entry:
+            location = f"track {entry['track']['number']} of " + entry.get(
+                "evidence_set", entry.get("path", "an acquired set")
+            )
+        elif "evidence_set" in entry:
+            location = f"{entry['evidence_set']}/{entry['path']}"
+        else:
+            location = entry["path"]
         print(_printable(f"Track {name.upper()}: {location} ({detail})"))
     measurements = report.get("measurements")
     if measurements is None:

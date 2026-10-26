@@ -10,7 +10,15 @@ import numpy as np
 import pytest
 import soundfile
 import soxr
-from conftest import RATE, requires_permissions, signal, snapshot, write_audio
+from conftest import (
+    RATE,
+    edit_record,
+    requires_permissions,
+    signal,
+    snapshot,
+    synthetic_disc,
+    write_audio,
+)
 
 import copyofa
 from copyofa import comparator, inspector
@@ -19,7 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from conftest import Outcome, Run
+    from conftest import Outcome, Run, StandIn
 
     MakeSet = Callable[[Callable[[Path], None]], Path]
 
@@ -436,7 +444,7 @@ def test_compare_report_content(run: Run, make_set: MakeSet) -> None:
         "Inspected data/Album/b.flac: interpreted",
     ]
     assert report["report_kind"] == "copyofa.comparison"
-    assert report["format_version"] == 2
+    assert report["format_version"] == 3
     assert report["omitted"] == []
     assert report["copyofa_version"] == copyofa.__version__
     compared_at = datetime.strptime(
@@ -489,7 +497,7 @@ def test_compare_omit_locations_leaves_out_where_each_set_is(
     outcome, report = compare(run, a / "a.flac", b / "b.flac", "--omit-locations")
 
     assert outcome.code == 0, outcome.err
-    assert report["format_version"] == 2
+    assert report["format_version"] == 3
     assert report["omitted"] == ["/inputs/a/evidence_set", "/inputs/b/evidence_set"]
     for name in "ab":
         entry = report["inputs"][name]
@@ -632,3 +640,190 @@ def test_compare_canceled_prints_nothing(
     assert outcome.code == 130
     assert outcome.out == ""
     assert "canceled" in outcome.err
+
+
+def track_samples(redumper: StandIn, number: int) -> np.ndarray:
+    """The samples of a track of the synthetic disc, as write_audio takes them."""
+    data = synthetic_disc(redumper.config).tracks[number - 1]
+    return np.frombuffer(data, dtype="<i2").reshape(-1, 2).astype(np.int32)
+
+
+def test_compare_measures_a_track_of_an_acquired_set(
+    run: Run,
+    make_set: MakeSet,
+    redumper: StandIn,
+    acquired_set: Path,
+) -> None:
+    samples = track_samples(redumper, 2)
+    album = make_set(
+        lambda source: write_audio(source / "02.flac", samples, 16, "FLAC", 44100)
+    )
+
+    outcome, report = compare(
+        run, acquired_set, album / "data/Album/02.flac", "--track-a", "2"
+    )
+
+    assert outcome.code == 0, outcome.err
+    assert report["format_version"] == 3
+    record = json.loads((acquired_set / "copyofa/acquisition-record.json").read_bytes())
+    recorded = record["tracks"][1]
+    a = report["inputs"]["a"]
+    image_digest = next(
+        line.split("  ")[0]
+        for line in (acquired_set / "manifest-sha256.txt").read_text().splitlines()
+        if line.endswith("  data/disc.scram.flac")
+    )
+    assert {key: a[key] for key in ("path", "track", "outcome", "expected_digest")} == {
+        "path": "data/disc.scram.flac",
+        "track": {
+            "number": 2,
+            "first_frame": recorded["first_frame"],
+            "frame_count": recorded["frame_count"],
+        },
+        "outcome": "interpreted",
+        "expected_digest": image_digest,
+    }
+    assert a["observed_digest"] == a["expected_digest"]
+    assert a["audio_digest"] == recorded["audio_digest"]
+    assert a["frames"] == len(samples)
+    assert "flac_md5_signature" not in a
+    assert "track" not in report["inputs"]["b"]
+    assert report["measurements"]["identical_audio"] is True
+    text = run("compare", acquired_set, album / "data/Album/02.flac", "--track-a", "2")
+    assert f"Track A: track 2 of {acquired_set} (flac, 44100 Hz" in text.out
+
+
+def test_compare_measures_two_tracks_of_acquired_sets(
+    run: Run, acquired_set: Path
+) -> None:
+    outcome, report = compare(
+        run, acquired_set, acquired_set, "--track-a", "1", "--track-b", "3"
+    )
+
+    assert outcome.code == 0, outcome.err
+    assert [report["inputs"][name]["track"]["number"] for name in "ab"] == [1, 3]
+    assert "identical_audio" not in report["measurements"]
+
+
+def test_compare_does_not_inspect_a_track_it_cannot_find(
+    run: Run, make_set: MakeSet, acquired_set: Path
+) -> None:
+    imported = make_set(
+        lambda source: write_audio(source / "a.flac", signal(1000, 2, 16), 16, "FLAC")
+    )
+
+    outcome, report = compare(
+        run, acquired_set, imported, "--track-a", "9", "--track-b", "1"
+    )
+
+    assert outcome.code == 1
+    a, b = report["inputs"]["a"], report["inputs"]["b"]
+    assert (a["path"], a["track"], a["outcome"], a["reason"]) == (
+        "data/disc.scram.flac",
+        {"number": 9},
+        "not_inspected",
+        "the Acquisition Record lists no track 9",
+    )
+    assert "observed_digest" not in a
+    assert (b["track"], b["outcome"], b["reason"]) == (
+        {"number": 1},
+        "not_inspected",
+        (
+            "the Evidence Set is not an acquired set: tagmanifest-sha256.txt does "
+            "not list copyofa/acquisition-record.json"
+        ),
+    )
+    assert "path" not in b
+    assert "measurements" not in report
+
+
+def test_compare_does_not_inspect_a_track_of_an_unusable_record_or_image(
+    run: Run, make_acquired_set: Callable[..., Path]
+) -> None:
+    edited = make_acquired_set()
+    edit_record(edited, lambda record: record.update(note="edited"), reseal=False)
+    changed = make_acquired_set()
+    image = changed / "data/disc.scram.flac"
+    data = bytearray(image.read_bytes())
+    data[-1] ^= 0xFF
+    image.write_bytes(bytes(data))
+
+    outcome, report = compare(run, edited, changed, "--track-a", "1", "--track-b", "1")
+
+    assert outcome.code == 1
+    a, b = report["inputs"]["a"], report["inputs"]["b"]
+    assert (a["outcome"], a["reason"]) == (
+        "not_inspected",
+        "the Acquisition Record's digest differs from the tag manifest's",
+    )
+    assert "path" not in a
+    assert (b["path"], b["outcome"], b["reason"]) == (
+        "data/disc.scram.flac",
+        "not_inspected",
+        (
+            "the disc image data/disc.scram.flac was not inspected: its digest "
+            "differs from the manifest's"
+        ),
+    )
+    assert b["observed_digest"] != b["expected_digest"]
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ("{set}", "{set}"),
+        ("{set}", "{set}", "--track-a", "0"),
+        ("{set}", "{set}", "--track-a", "one"),
+        ("{set}/data/disc.scram.flac", "{set}", "--track-a", "1", "--track-b", "1"),
+    ],
+    ids=["set root without option", "track 0", "not a number", "file as a set"],
+)
+def test_compare_exits_2_for_a_track_input_it_cannot_take(
+    run: Run, acquired_set: Path, arguments: tuple[str, ...]
+) -> None:
+    outcome = run(
+        "compare", *(argument.format(set=acquired_set) for argument in arguments)
+    )
+
+    assert outcome.code == 2
+    assert outcome.out == ""
+
+
+def test_compare_omit_locations_with_a_track_input(
+    run: Run, acquired_set: Path
+) -> None:
+    outcome, report = compare(
+        run,
+        acquired_set,
+        acquired_set,
+        "--track-a",
+        "1",
+        "--track-b",
+        "2",
+        "--omit-locations",
+    )
+
+    assert outcome.code == 0, outcome.err
+    assert str(acquired_set) not in outcome.out
+    assert all("evidence_set" not in entry for entry in report["inputs"].values())
+    text = run(
+        "compare",
+        acquired_set,
+        acquired_set,
+        "--track-a",
+        "1",
+        "--track-b",
+        "2",
+        "--omit-locations",
+    )
+    assert "Track A: track 1 of data/disc.scram.flac (flac" in text.out
+    assert str(acquired_set) not in text.out
+
+
+def test_compare_help_names_the_inputs(run: Run) -> None:
+    outcome = run("compare", "--help")
+
+    assert outcome.code == 0
+    assert "input-a" in outcome.out
+    assert "input-b" in outcome.out
+    assert "--track-a" in outcome.out

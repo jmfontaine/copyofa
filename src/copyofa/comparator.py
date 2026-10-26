@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
 REPORT_KIND = "copyofa.comparison"
-REPORT_FORMAT_VERSION = 2
+REPORT_FORMAT_VERSION = 3
 
 RESAMPLER_QUALITY = "VHQ"
 """The soxr quality preset: libsoxr's very high quality."""
@@ -47,6 +47,10 @@ LIMITATIONS = (
 
 _UNUSABLE = "the Integrity Baseline is unusable"
 _NOT_LISTED = f"{evidence_set.MANIFEST} does not list it"
+_NOT_ACQUIRED = (
+    f"the Evidence Set is not an acquired set: {evidence_set.TAG_MANIFEST} does not "
+    f"list {evidence_set.ACQUISITION_RECORD}"
+)
 _IDENTICAL = "the audio is identical"
 _MEASURED = ("correlation", "gain_db", "residual_db", "residual_windows")
 
@@ -71,27 +75,38 @@ class _Overlap:
 
 
 def compare(
-    track_a: str,
-    track_b: str,
+    input_a: str,
+    input_b: str,
     progress: Callable[[dict[str, Any]], None] | None = None,
     *,
+    track_a: int | None = None,
+    track_b: int | None = None,
     omit_locations: bool = False,
 ) -> dict[str, Any]:
     """Compare two tracks preserved in Evidence Sets and return the comparison Report.
 
-    Each track is the path of a file under the `data/` directory of an Evidence Set.
-    Calls progress with each input's Report entry once it is inspected. With
-    omit_locations, neither the Report nor an entry holds where an Evidence Set is
-    stored, and the Report's `omitted` lists what it leaves out. Writes nothing.
-    Raises verifier.NotAnEvidenceSetError when a track is not inside an Evidence Set.
+    Each input is the path of a file under the `data/` directory of an Evidence Set,
+    or, with a track number (track_a for input_a, track_b for input_b), the root of
+    an acquired set, whose track it names. Calls progress with each input's Report
+    entry once it is inspected. With omit_locations, neither the Report nor an entry
+    holds where an Evidence Set is stored, and the Report's `omitted` lists what it
+    leaves out. Writes nothing. Raises verifier.NotAnEvidenceSetError when a file is
+    not under the `data/` directory of an Evidence Set, or a set root given with a
+    track number is not an Evidence Set.
     """
-    locations = [_locate(track_a), _locate(track_b)]
+    locations = [
+        (verifier.locate(given), track) if track is not None else _locate(given)
+        for given, track in ((input_a, track_a), (input_b, track_b))
+    ]
     compared_at = datetime.now(UTC)
     inputs: dict[str, dict[str, Any]] = {}
     omitted: list[str] = []
     decoded: list[_Audio] = []
     for name, (root, path) in zip("ab", locations, strict=True):
-        entry, audio = _inspect(root, path, omit_locations)
+        if isinstance(path, int):
+            entry, audio = _inspect_track(root, path, omit_locations)
+        else:
+            entry, audio = _inspect(root, path, omit_locations)
         if omit_locations:
             omitted.append(f"/inputs/{name}/evidence_set")
         if progress is not None:
@@ -129,6 +144,14 @@ def found_problems(report: dict[str, Any]) -> bool:
     return any(
         entry["outcome"] != inspector.INTERPRETED for entry in report["inputs"].values()
     )
+
+
+def input_name(entry: dict[str, Any]) -> str:
+    """Name an input of a comparison Report by its path in its set and its track."""
+    if "track" not in entry:
+        return entry["path"]
+    track = f"track {entry['track']['number']}"
+    return f"{track} of {entry['path']}" if "path" in entry else track
 
 
 def _locate(track: str) -> tuple[Path, str]:
@@ -192,6 +215,64 @@ def _inspect(
         else np.zeros((0, entry["channels"]), dtype=np.float32)
     )
     return entry, _Audio(samples, entry["sample_rate"], entry.get("audio_digest"))
+
+
+def _inspect_track(
+    root: Path, number: int, omit_location: bool
+) -> tuple[dict[str, Any], _Audio | None]:
+    """Check one track of an acquired set as inspect does; decode it when it can."""
+    baseline = verifier.read_baseline(root)
+    entry: dict[str, Any] = {}
+    if not omit_location:
+        entry["evidence_set"] = str(root)
+    entry["integrity_baseline"] = baseline.to_json()
+    disc = None
+    reason = _UNUSABLE
+    if baseline.usable:
+        try:
+            disc = inspector.read_acquired_disc(root, baseline)
+        except inspector.UnusableRecordError as error:
+            reason = str(error)
+        else:
+            reason = _NOT_ACQUIRED
+    if disc is None:
+        entry.update(
+            {
+                "track": {"number": number},
+                "outcome": inspector.NOT_INSPECTED,
+                "reason": reason,
+            }
+        )
+        return entry, None
+    track = disc.track(number)
+    entry["path"] = disc.image
+    if track is None:
+        entry.update(
+            {
+                "track": {"number": number},
+                "outcome": inspector.NOT_INSPECTED,
+                "expected_digest": disc.image_digest,
+                "reason": f"the Acquisition Record lists no track {number}",
+            }
+        )
+        return entry, None
+    entry["track"] = {
+        "number": track.number,
+        "first_frame": track.first_frame,
+        "frame_count": track.frame_count,
+    }
+    blocks: list[npt.NDArray[np.float32]] = []
+    findings = inspector.decode_track(root, disc, track, blocks.append)
+    entry["outcome"] = findings.pop("outcome")
+    entry["expected_digest"] = disc.image_digest
+    if "observed_digest" in findings:
+        entry["observed_digest"] = findings.pop("observed_digest")
+    entry.update(findings)
+    if entry["outcome"] != inspector.INTERPRETED:
+        return entry, None
+    return entry, _Audio(
+        np.concatenate(blocks), entry["sample_rate"], entry["audio_digest"]
+    )
 
 
 def _measure(a: _Audio, b: _Audio, rate: int) -> dict[str, Any]:

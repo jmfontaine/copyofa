@@ -1,15 +1,20 @@
 # Comparison Report format
 
-`copyofa compare <track-a> <track-b> --json` prints a comparison Report: a JSON
-document measuring how the audio of two tracks preserved in
-[Evidence Sets](evidence-set.md) relates. Like every `--json` output of CopyOfA, it is
-UTF-8, whatever the locale; a path that is not valid UTF-8 keeps each invalid byte as a
-`\udcXX` escape (see [Import result](evidence-set.md#import-result)). Save it with a
+`copyofa compare <input-a> <input-b> [--track-a <number>] [--track-b <number>] --json`
+prints a comparison Report: a JSON document measuring how the audio of two tracks
+preserved in [Evidence Sets](evidence-set.md) relates. Each input is a file in a set,
+or, with `--track-a` or `--track-b`, a track of an
+[acquired set](evidence-set.md#acquired-sets). Like every `--json` output of CopyOfA, it
+is UTF-8, whatever the locale; a path that is not valid UTF-8 keeps each invalid byte as
+a `\udcXX` escape (see [Import result](evidence-set.md#import-result)). Save it with a
 shell redirect:
 
 ```bash
 copyofa compare "/Volumes/Archive/With Teeth/data/04 The Hand That Feeds.flac" \
   "/Volumes/Archive/Definitive NIN/data/18 The Hand That Feeds.mp3" --json > htf.json
+copyofa compare "/Volumes/Archive/Add Violence CD" \
+  "/Volumes/Archive/Add Violence/data/01-01 Less Than.flac" --track-a 1 --json \
+  > less-than.json
 ```
 
 A Report holds measurements: offset, overlap, correlation, gain and residual. It
@@ -17,9 +22,11 @@ draws no conclusion from them, such as "same master" or "match", and has no thre
 [ADR 0003](../decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md)
 records the method and why it was chosen.
 
-It has two format versions, each with its JSON Schema:
+It has three format versions, each with its JSON Schema:
+[comparison-report-3.schema.json](../../src/copyofa/schemas/comparison-report-3.schema.json)
+for version 3, which this document describes and `compare` prints,
 [comparison-report-2.schema.json](../../src/copyofa/schemas/comparison-report-2.schema.json)
-for version 2, which this document describes and `compare` prints, and
+for [version 2](#format-version-2), and
 [comparison-report-1.schema.json](../../src/copyofa/schemas/comparison-report-1.schema.json)
 for [version 1](#format-version-1). [`copyofa validate`](validation-result.md) checks a
 Report against the schema of its version.
@@ -29,7 +36,7 @@ locations out when you compare, as
 [described below](#leaving-out-evidence-set-locations):
 
 ```bash
-copyofa compare <track-a> <track-b> --json --omit-locations > htf.json
+copyofa compare <input-a> <input-b> --json --omit-locations > htf.json
 ```
 
 ## How compare works
@@ -40,12 +47,21 @@ copyofa compare <track-a> <track-b> --json --omit-locations > htf.json
    be searched, such as a set root without search permission, the set is the nearest
    directory whose `data/` holds the file; its records then cannot be read, and the
    input is `not_inspected`.
+
+   With `--track-a <number>`, input A is instead that track of the acquired set whose
+   root is input A, and likewise `--track-b` for input B. The root must be an Evidence
+   Set, else compare exits 2. A set root given without the option is refused as any
+   path outside `data/`: compare exits 2.
 2. **Integrity first.** Each input is checked as `inspect` checks a file (see
    [Inspection Report format](inspection-report.md#how-inspect-works)): the Integrity
    Baseline must be usable, `manifest-sha256.txt` must list the file, and the file must
    be the accepted bytes. It is then decoded with libsndfile: FLAC, WAV or MP3, with
-   inspect's rules, outcomes and reasons. When either input is not `interpreted`,
-   nothing is measured.
+   inspect's rules, outcomes and reasons. A track input is checked as inspect checks
+   a track (see
+   [Inspection Report format](inspection-report.md#how-inspect-works)): the Acquisition
+   Record must be usable and list the track, and the disc image must be the accepted
+   bytes; the image is then decoded over the track's range. When either input is not
+   `interpreted`, nothing is measured.
 3. **Common rate.** When the sample rates differ, the track at the higher rate is
    resampled to the lower one with libsoxr at its `VHQ` quality. Measurements cover
    only the band of that common rate.
@@ -63,7 +79,7 @@ Compare writes nothing into either set.
 | Field | Content |
 | --- | --- |
 | `report_kind` | Always `copyofa.comparison`. |
-| `format_version` | The version of this format, `2`. A later change to the fields increments it. |
+| `format_version` | The version of this format, `3`. A later change to the fields increments it. |
 | `copyofa_version` | The version of CopyOfA that ran the comparison. |
 | `compared_at` | The comparison time in UTC, such as `2026-10-25T18:30:00Z`. |
 | `omitted` | The JSON Pointers of the values the Report leaves out, each of `/inputs/a/evidence_set` and `/inputs/b/evidence_set` at most once; `[]` when it leaves out nothing. See [Leaving out Evidence Set locations](#leaving-out-evidence-set-locations). |
@@ -92,6 +108,24 @@ An input is `not_inspected` with the reason `manifest-sha256.txt does not list i
 when the manifest does not list it, and with `the Integrity Baseline is unusable`,
 without decoding, when its set's baseline is unusable. `expected_digest` is then
 absent when the manifest does not list the file.
+
+An input given with `--track-a` or `--track-b` also holds `track`: its `number`, and
+its `first_frame` and `frame_count` in the image when the Acquisition Record lists the
+track. In such an input:
+
+- `path`, `expected_digest` and `observed_digest` describe the disc image, such as
+  `data/disc.scram.flac`; `path` and `expected_digest` are absent when no usable
+  Acquisition Record names the image.
+- `outcome`, `reason`, the audio properties, `frames`, `audio_digest`, `peak` and the
+  silences describe the track, with inspect's track outcomes: `interpreted`, `failed`
+  and `not_inspected`.
+- `flac_md5_signature` is absent: it covers the whole image, not the track.
+
+A track input is `not_inspected` with the reason
+`the Evidence Set is not an acquired set: tagmanifest-sha256.txt does not list
+copyofa/acquisition-record.json` when the set is not an acquired set, with
+`the Acquisition Record lists no track <number>` when the record does not list it, and
+with the reason inspect gives `disc` when the record cannot be used.
 
 ### Method
 
@@ -168,11 +202,19 @@ edited copy. Removing locations from a Report already saved means comparing agai
 
 The human-readable result of `compare --omit-locations` shows each track as its path
 inside its set, such as `data/04 The Hand That Feeds.flac`, instead of
-`<evidence_set>/<path>`. Neither it nor the JSON holds the path of either set. Compare
-may still name a path given on the command line on stderr, such as in an error.
+`<evidence_set>/<path>`, and a track input as `track 1 of data/disc.scram.flac` instead
+of `track 1 of <evidence_set>`. Neither it nor the JSON holds the path of either set.
+Compare may still name a path given on the command line on stderr, such as in an error.
 
 The schema requires an input's `evidence_set` exactly when `omitted` does not list it.
 Without the option, compare prints `"omitted": []`.
+
+## Format version 2
+
+Compare printed format version 2 in CopyOfA 0.4. It is version 3 without track
+inputs: `format_version` is `2`, no input holds `track`, and each input's `path` is
+always present. `copyofa validate` and `copyofa view` still accept it, and the version
+2 schema is unchanged. A Report with `track` is not valid at version 2.
 
 ## Format version 1
 
@@ -189,8 +231,8 @@ same song from *Definitive NIN* (44.1 kHz MP3):
 ```json
 {
   "report_kind": "copyofa.comparison",
-  "format_version": 2,
-  "copyofa_version": "0.4.0",
+  "format_version": 3,
+  "copyofa_version": "0.5.0",
   "compared_at": "2026-10-25T18:30:00Z",
   "omitted": [],
   "inputs": {
@@ -320,6 +362,41 @@ The example is shortened: a Report holds all 64 hexadecimal digits of each diges
 every residual window, not just the first, and the whole of each limitation. Here
 the MP3 starts 782 frames, about 18 ms, earlier than the FLAC.
 
+A track input: track 1 of an acquired set of *Add Violence* (2017 CD), compared with
+the first track of the 2025 digital reissue (24-bit, 48 kHz FLAC). The offset is −4240
+frames: the reissue starts 4240 frames, about 96 ms, earlier, and the residual is
+−37.5 dB:
+
+```json
+"a": {
+  "evidence_set": "/Volumes/Archive/Add Violence CD",
+  "integrity_baseline": {
+    "manifest_sha256": "bc7e…",
+    "usable": true,
+    "problems": []
+  },
+  "path": "data/disc.scram.flac",
+  "track": {
+    "number": 1,
+    "first_frame": 26548188,
+    "frame_count": 9285108
+  },
+  "outcome": "interpreted",
+  "expected_digest": "4ad6…",
+  "observed_digest": "4ad6…",
+  "format": "flac",
+  "encoding": "pcm_16",
+  "sample_rate": 44100,
+  "channels": 2,
+  "bits_per_sample": 16,
+  "frames": 9285108,
+  "audio_digest": "pcm1:44100:2:16:1e9b66e1…",
+  "peak": [28930, 28922],
+  "leading_silence_frames": 0,
+  "trailing_silence_frames": 0
+}
+```
+
 ## Viewing a Report
 
 `copyofa view <report>` prints a comparison Report as one HTML page, which a reader
@@ -331,7 +408,7 @@ copyofa view htf.json > htf.html
 
 View first validates the file as [`copyofa validate`](validation-result.md) does, and
 refuses a Report that is invalid, unsupported, or of another kind. It supports
-comparison Reports only, of format version 1 or 2.
+comparison Reports only, of format version 1, 2 or 3.
 
 The page shows every field of the Report with its value as the Report records it, and
 adds only labels and units, and for each track a duration computed from its frames
@@ -343,8 +420,9 @@ and sample rate. It gives:
 - what the Report leaves out: its `omitted` list, or that it holds none, and for
   version 1 that the Report has no such field;
 - for each input, its Evidence Set location, or that it is left out, Integrity
-  Baseline, path, outcome and reason, properties, File Digests, Audio Digest, peak,
-  silence, FLAC MD5 signature and limitations;
+  Baseline, path, track number, first frame and frame count, outcome and reason,
+  properties, File Digests, Audio Digest, peak, silence, FLAC MD5 signature and
+  limitations;
 - the method;
 - the measurements: identical audio, offset, overlap, and for the downmix and each
   channel the correlation, gain and residual, with one table of residual windows
@@ -373,6 +451,8 @@ Ctrl-C. It has no `--json` option and writes no file.
 `copyofa compare` exits 0 when both inputs are `interpreted` and were measured, even
 when a value is absent. It exits 1 when either input is `not_inspected`, `failed` or
 `not_interpreted`, and still prints its result or Report, without measurements. It
-exits 2, printing nothing on stdout, when a track is not under the `data/` directory
-of an Evidence Set or the arguments are invalid, and 130 when canceled with Ctrl-C.
+exits 2, printing nothing on stdout, when a file is not under the `data/` directory
+of an Evidence Set, an input given with `--track-a` or `--track-b` is not an Evidence
+Set, or the arguments are invalid, such as a track number that is not a whole number
+from 1, and 130 when canceled with Ctrl-C.
 mpg123 may write notes about damaged MP3 frames to stderr.

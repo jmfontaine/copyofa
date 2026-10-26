@@ -154,7 +154,7 @@ def test_validate_prints_a_short_result(run: Run, reports: dict[str, Path]) -> N
     assert lines[0] == "Result: valid"
     assert f"SHA-256: {hashlib.sha256(path.read_bytes()).hexdigest()}" in lines
     assert "Report kind: copyofa.comparison" in lines
-    assert "Format version: 2" in lines
+    assert "Format version: 3" in lines
     assert "Limitations:" in lines
     assert "Traceback" not in outcome.out + outcome.err
 
@@ -371,7 +371,7 @@ def test_validate_accepts_a_comparison_report_that_leaves_locations_out(
 
     assert outcome.code == 0, outcome.err
     assert result["outcome"] == "valid"
-    assert result["format_version"] == 2
+    assert result["format_version"] == 3
 
 
 # Edits to a version 2 comparison Report that break the rule that each input's
@@ -434,7 +434,7 @@ def test_validate_finds_an_evidence_set_that_omitted_does_not_account_for_invali
     assert outcome.code == 1
     assert outcome.err == ""
     assert result["outcome"] == "invalid"
-    assert result["format_version"] == 2
+    assert result["format_version"] == 3
     assert location in {problem["location"] for problem in result["problems"]}
 
 
@@ -814,6 +814,81 @@ def test_validate_checks_the_disc_of_an_inspection_report(
 ) -> None:
     change, location = DISC_EDITS[name]
     report = run("inspect", acquired_set, "--json")
+    assert report.code == 0, report.err
+    document = json.loads(report.out)
+    change(document)
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 1
+    assert result["outcome"] == "invalid"
+    assert location in {problem["location"] for problem in result["problems"]}
+
+
+def as_failed_without_range(entry: dict[str, Any]) -> None:
+    """Turn an interpreted track input into a failed one that has no range."""
+    for key in [*FINDINGS, "track"]:
+        entry.pop(key, None)
+    entry.update(outcome="failed", reason="edited", track={"number": 1})
+
+
+# What an interpreted input holds beyond a failed one.
+FINDINGS = (
+    "format",
+    "encoding",
+    "sample_rate",
+    "channels",
+    "bits_per_sample",
+    "frames",
+    "audio_digest",
+    "peak",
+    "leading_silence_frames",
+    "trailing_silence_frames",
+)
+
+
+# jsonschema reports a value a `false` subschema forbids at the object holding it.
+TRACK_EDITS: dict[str, tuple[Callable[[dict[str, Any]], None], str]] = {
+    "a track at version 2": (
+        lambda report: report.update(format_version=2),
+        "/inputs/a",
+    ),
+    "a FLAC MD5 signature for a track": (
+        lambda report: report["inputs"]["a"].update(flac_md5_signature="matching"),
+        "/inputs/a",
+    ),
+    "an interpreted track without its range": (
+        lambda report: report["inputs"]["a"]["track"].pop("first_frame"),
+        "/inputs/a/track",
+    ),
+    "a failed track without its range": (
+        lambda report: as_failed_without_range(report["inputs"]["a"]),
+        "/inputs/a/track",
+    ),
+    "a File Digest without the image's path": (
+        lambda report: report["inputs"]["a"].pop("path"),
+        "/inputs/a",
+    ),
+    "neither a path nor a track": (
+        lambda report: report["inputs"]["b"].pop("path"),
+        "/inputs/b",
+    ),
+}
+
+
+@pytest.mark.parametrize("name", TRACK_EDITS)
+def test_validate_checks_the_track_input_of_a_comparison_report(
+    run: Run, acquired_set: Path, tmp_path: Path, name: str
+) -> None:
+    change, location = TRACK_EDITS[name]
+    report = run(
+        "compare",
+        acquired_set,
+        acquired_set / "data/disc.scram.flac",
+        "--track-a",
+        "1",
+        "--json",
+    )
     assert report.code == 0, report.err
     document = json.loads(report.out)
     change(document)

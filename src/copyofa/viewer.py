@@ -40,7 +40,7 @@ td ul, td ol { margin: 0; padding-left: 1.2rem; }
 
 
 def render(report: dict[str, Any], sha256: str) -> str:
-    """Return the HTML page of a valid comparison Report of format version 1 or 2.
+    """Return the HTML page of a valid comparison Report of format version 1 to 3.
 
     sha256 is the SHA-256 of the exact bytes the Report was read from. Every text of
     the Report is escaped, and a character that is not printable, such as a lone
@@ -48,7 +48,10 @@ def render(report: dict[str, Any], sha256: str) -> str:
     `\\udc80`, so the page is valid UTF-8 and inert.
     """
     inputs = report["inputs"]
-    title = f"Comparison of {inputs['a']['path']} and {inputs['b']['path']}"
+    title = (
+        f"Comparison of {comparator.input_name(inputs['a'])} and "
+        f"{comparator.input_name(inputs['b'])}"
+    )
     body = [
         "<h1>Comparison Report</h1>",
         *_report_section(report, sha256),
@@ -121,6 +124,15 @@ def _inputs_section(inputs: dict[str, Any]) -> list[str]:
             lambda e: _list(e["integrity_baseline"], "problems"),
         ),
         ("Path in the Evidence Set", lambda e: _show(e, "path")),
+        ("Track of the acquired disc", lambda e: _show(e.get("track", {}), "number")),
+        (
+            "First frame of the track in the image",
+            lambda e: _show(e.get("track", {}), "first_frame"),
+        ),
+        (
+            "Frames of the track in the image",
+            lambda e: _show(e.get("track", {}), "frame_count"),
+        ),
         ("Outcome", lambda e: _show(e, "outcome")),
         ("Reason", lambda e: _show(e, "reason")),
         ("Format", lambda e: _show(e, "format")),
