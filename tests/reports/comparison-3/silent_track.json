@@ -1,0 +1,109 @@
+{
+  "report_kind": "copyofa.comparison",
+  "format_version": 3,
+  "copyofa_version": "0.6.0.dev0",
+  "compared_at": "2026-10-26T03:12:24Z",
+  "omitted": [],
+  "inputs": {
+    "a": {
+      "evidence_set": "/Volumes/Archive/set-1",
+      "integrity_baseline": {
+        "manifest_sha256": "85d3d156f602055060e9171495f69a0a4235796bb48981d1c8bf633a1e15fb31",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/a.flac",
+      "outcome": "interpreted",
+      "expected_digest": "da6fb7f0d64228b55977d8fffe5a8bbe82ae0ec5b663cae101b4a0d05fec6e2a",
+      "observed_digest": "da6fb7f0d64228b55977d8fffe5a8bbe82ae0ec5b663cae101b4a0d05fec6e2a",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 44100,
+      "audio_digest": "pcm1:44100:2:16:f1962b197b6911a1bc5cefafd26b6e3e640c3212d23fb254cb67877d865a3637",
+      "peak": [
+        32766,
+        32768
+      ],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0,
+      "flac_md5_signature": "matching"
+    },
+    "b": {
+      "evidence_set": "/Volumes/Archive/set-2",
+      "integrity_baseline": {
+        "manifest_sha256": "3ad939f5b28e788fbfa45258ae3fced41ec2663902c7afccfc8c269d886f73a2",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/b.flac",
+      "outcome": "interpreted",
+      "expected_digest": "c0de1e35634299a8e9570657172a98bc0b9039e33d53a978965069e4141c05ec",
+      "observed_digest": "c0de1e35634299a8e9570657172a98bc0b9039e33d53a978965069e4141c05ec",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 44100,
+      "audio_digest": "pcm1:44100:2:16:fd6f479534cdd14635e88dfedf25c3859c01062b645f2a85570f20451b4a95bc",
+      "peak": [
+        0,
+        0
+      ],
+      "leading_silence_frames": 44100,
+      "trailing_silence_frames": 0,
+      "flac_md5_signature": "matching"
+    }
+  },
+  "method": {
+    "decoder": "libsndfile",
+    "decoder_version": "1.2.2",
+    "resampler": "libsoxr",
+    "resampler_version": "0.1.3-14-ga66f3ee",
+    "resampler_quality": "VHQ",
+    "common_sample_rate": 44100,
+    "alignment": "downmix_cross_correlation"
+  },
+  "measurements": {
+    "downmix": {
+      "absent": {
+        "correlation": "no offset was found: the downmix of track B is zero throughout",
+        "gain_db": "no offset was found: the downmix of track B is zero throughout",
+        "residual_db": "no offset was found: the downmix of track B is zero throughout",
+        "residual_windows": "no offset was found: the downmix of track B is zero throughout"
+      }
+    },
+    "channels": [
+      {
+        "absent": {
+          "correlation": "no offset was found: the downmix of track B is zero throughout",
+          "gain_db": "no offset was found: the downmix of track B is zero throughout",
+          "residual_db": "no offset was found: the downmix of track B is zero throughout",
+          "residual_windows": "no offset was found: the downmix of track B is zero throughout"
+        }
+      },
+      {
+        "absent": {
+          "correlation": "no offset was found: the downmix of track B is zero throughout",
+          "gain_db": "no offset was found: the downmix of track B is zero throughout",
+          "residual_db": "no offset was found: the downmix of track B is zero throughout",
+          "residual_windows": "no offset was found: the downmix of track B is zero throughout"
+        }
+      }
+    ],
+    "absent": {
+      "offset": "no offset was found: the downmix of track B is zero throughout",
+      "overlap": "no offset was found: the downmix of track B is zero throughout"
+    }
+  },
+  "limitations": [
+    "No measurement says whether the tracks share a master, a mix or a source; the Report draws no such conclusion.",
+    "MP3 is lossy: the measurements of an MP3 depend on its decoder.",
+    "Tracks at different sample rates are compared at the lower rate, after resampling, so differences above that rate's band are not measured.",
+    "One global offset aligns the tracks: inserted or removed sections, drift and speed changes are not located; they lower the correlation and raise the residual.",
+    "Channels are paired in the order each file stores them."
+  ]
+}

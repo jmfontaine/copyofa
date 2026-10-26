@@ -1,0 +1,61 @@
+{
+  "report_kind": "copyofa.comparison",
+  "format_version": 3,
+  "copyofa_version": "0.6.0.dev0",
+  "compared_at": "2026-10-26T03:12:24Z",
+  "omitted": [],
+  "inputs": {
+    "a": {
+      "evidence_set": "/Volumes/Archive/set-1",
+      "integrity_baseline": {
+        "manifest_sha256": "d8541a579968eb6d2eb7af45b750df215fe21649005cac3b6488c29e887cb39c",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/a.flac",
+      "outcome": "interpreted",
+      "expected_digest": "14cba9a210312b5c883742d74dcb29a5b2deaa065448f909f5c288f8f5edf7c4",
+      "observed_digest": "14cba9a210312b5c883742d74dcb29a5b2deaa065448f909f5c288f8f5edf7c4",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 1000,
+      "audio_digest": "pcm1:44100:2:16:8b348bf56e76cfaf202c26ce708b3671349e9ce84890cb5a3faad2e32b935887",
+      "peak": [
+        32701,
+        32715
+      ],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0,
+      "flac_md5_signature": "matching"
+    },
+    "b": {
+      "evidence_set": "/Volumes/Archive/set-1",
+      "integrity_baseline": {
+        "manifest_sha256": "d8541a579968eb6d2eb7af45b750df215fe21649005cac3b6488c29e887cb39c",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/unlisted.flac",
+      "outcome": "not_inspected",
+      "reason": "manifest-sha256.txt does not list it"
+    }
+  },
+  "method": {
+    "decoder": "libsndfile",
+    "decoder_version": "1.2.2",
+    "resampler": "libsoxr",
+    "resampler_version": "0.1.3-14-ga66f3ee",
+    "resampler_quality": "VHQ",
+    "alignment": "downmix_cross_correlation"
+  },
+  "limitations": [
+    "No measurement says whether the tracks share a master, a mix or a source; the Report draws no such conclusion.",
+    "MP3 is lossy: the measurements of an MP3 depend on its decoder.",
+    "Tracks at different sample rates are compared at the lower rate, after resampling, so differences above that rate's band are not measured.",
+    "One global offset aligns the tracks: inserted or removed sections, drift and speed changes are not located; they lower the correlation and raise the residual.",
+    "Channels are paired in the order each file stores them."
+  ]
+}

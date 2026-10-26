@@ -17,14 +17,19 @@ copyofa compare "/Volumes/Archive/Add Violence CD" \
   > less-than.json
 ```
 
-A Report holds measurements: offset, overlap, correlation, gain and residual. It
-draws no conclusion from them, such as "same master" or "match", and has no threshold.
+A Report holds measurements: the portions of track A found in track B, each with its
+offset, correlation, gain and residual, and the audio that only one track holds. It
+draws no conclusion from them, such as "same master" or "match".
 [ADR 0003](../decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md)
-records the method and why it was chosen.
+records how the tracks are decoded and measured, and
+[ADR 0006](../decisions/0006-locate-matching-portions-between-tracks.md) how portions
+are located and why that method was chosen.
 
-It has three format versions, each with its JSON Schema:
+It has four format versions, each with its JSON Schema:
+[comparison-report-4.schema.json](../../src/copyofa/schemas/comparison-report-4.schema.json)
+for version 4, which this document describes and `compare` prints,
 [comparison-report-3.schema.json](../../src/copyofa/schemas/comparison-report-3.schema.json)
-for version 3, which this document describes and `compare` prints,
+for [version 3](#format-version-3),
 [comparison-report-2.schema.json](../../src/copyofa/schemas/comparison-report-2.schema.json)
 for [version 2](#format-version-2), and
 [comparison-report-1.schema.json](../../src/copyofa/schemas/comparison-report-1.schema.json)
@@ -65,12 +70,78 @@ copyofa compare <input-a> <input-b> --json --omit-locations > htf.json
 3. **Common rate.** When the sample rates differ, the track at the higher rate is
    resampled to the lower one with libsoxr at its `VHQ` quality. Measurements cover
    only the band of that common rate.
-4. **Alignment.** Each track is mixed down to mono, the mean of its channels. The
-   offset is the lag with the largest magnitude of the FFT cross-correlation of the
-   two downmixes: one global offset, in whole frames at the common rate.
-5. **Measurements.** Over the frames where the aligned tracks overlap, compare
-   measures the correlation, the gain and the residual on the downmix, and for each
-   channel when both tracks have the same channel count.
+4. **Locating portions.** Each track is mixed down to mono, the mean of its channels. A
+   portion is a range of A that appears in B at one offset. When both tracks have an
+   Audio Digest and the digests are equal, there is no search: one primary portion
+   covers both tracks at offset 0. Otherwise compare searches with the fixed
+   [parameters](#parameters) below, in these stages:
+   - **Coarse search.** Both downmixes are decimated by 16 with libsoxr at its `HQ`
+     quality, then filtered with a first difference of coefficient 0.5:
+     *y*[*n*] = *x*[*n*] − 0.5·*x*[*n* − 1]. A is cut into windows of 5 s, without
+     overlap. A window whose energy is at most 10⁻⁴ of the mean window energy gives no
+     evidence. For each other window, compare takes the magnitude of its normalized
+     cross-correlation with every position of B that holds the whole window. Up to
+     three positions that score at least 0.4, and lie at least 0.5 s apart, are
+     candidates. A position of B whose energy under the window is at most 10⁻¹⁰ of B's
+     whole energy gives no candidate, so that rounding errors in the running sum of
+     that energy cannot pass for a match where B is next to silent. Candidates of
+     neighboring windows, with at most one window skipped between them, whose offsets
+     differ by at most 32 frames form a chain. A track shorter than one window gives
+     no candidate, and neither does a track at a sample rate under 2 Hz, where a
+     window holds no frame of the decimated audio.
+   - **Offset.** Chains are refined at the common rate, strongest first. A chain whose
+     windows all lie inside a portion already found at an offset within 32 frames of
+     its strongest window's is not refined again. The core of a chain is its strongest
+     window and the neighboring windows that score at least 0.85 of it, up to 20 s.
+     The offset is the integer within 32 frames of the strongest window's coarse offset
+     that maximizes |Σ*ab*| / √Σ*b*² over the core, taken over the frames of the core
+     that have a frame of B at every offset searched.
+   - **Blocks.** The core is cut into blocks of 2048 frames. With *p* the mean power of
+     A's downmix in a block and *g* the block's own least-squares gain, a block where
+     *p* is zero is neutral when B's mean power is at most 10⁻⁶ (−60 dBFS), and refutes
+     the match otherwise. Any other block confirms the match when its residual
+     Σ(*a* − *g*·*b*)² is at most 0.2·Σ*a*² (−7 dB), and otherwise refutes it, unless
+     *p* is below −80 dBFS, where it is neutral: quiet audio can confirm a match but
+     never refute it. A chain gives no portion when its core has no confirming block,
+     or when fewer than half of its non-neutral blocks confirm.
+   - **Growth.** The run of the core without a refuting block that holds the most
+     confirming blocks grows outward, from its first and last confirming blocks, block
+     by block, until a block refutes the match. Compare never bridges a short gap.
+   - **Ends.** Each end is then placed to the frame. With *g* the least-squares gain
+     over the eight blocks inside the block edge, the end is the frame, between eight
+     blocks inside and one block outside that edge, that ends the maximum-scoring
+     prefix or suffix of 0.2·*a*[*n*]² − (*a*[*n*] − *g*·*b*[*n* + offset])². That
+     range stops where either track does; of equally scoring prefixes or suffixes,
+     the shortest is taken.
+   - **Holes.** Windows of the chain left outside the portion are refined again, so a
+     portion after a hole is kept.
+   - **Acceptance.** A portion is kept when it is at least 1 s long and its residual
+     after the per-block gains, 10·log10(Σ*ₖ*Σ(*a* − *gₖ*·*b*)² / Σ*a*²) over its blocks
+     *k*, counted from its start, is at most −10 dB. A portion whose residual is
+     undefined because *a* − *gₖ*·*b* is zero throughout is kept.
+   - **Merging and ranking.** Portions whose offsets differ by at most 2 frames and
+     whose ranges of A overlap or touch are merged; the merged portion takes the offset
+     of the longer one. A portion is an alternate when portions whose residual after
+     the per-block gains is at least 3 dB lower cover 90 % or more of its range of A.
+     For that comparison, residuals below −60 dB and undefined ones count as −60 dB, so
+     exact repeats tie and are all primary. Compare reports every portion, primaries
+     first, then alternates, each in order of A.
+5. **Measurements.** Compare measures each portion over its ranges: the correlation,
+   the gain and the residual on the downmix, and for each channel when both tracks
+   have the same channel count, with the residual of each one-second window.
+6. **Unmatched audio.** The ranges of A and of B that no primary portion covers are
+   reported, each with whether it is digitally silent and, when it is not, its level.
+   Alternates do not shrink them. Compare measures both on the samples at the common
+   rate. When it finds no portion, the Report says why, and each track is one
+   unmatched range.
+
+The search finds no portion in a track shorter than 5 s, identical audio excepted, and
+may miss a portion shorter than about 2.5 s. A speed, pitch or drift difference gives
+no portion. A boundary at a fade falls about three blocks inside it, where the gain
+fitted over the eight blocks inside the edge stops fitting the faded audio, not where
+the fade gets quiet; a boundary at a crossfade falls where the other audio refutes the
+match. In music that repeats a section, one range of A matches several places in B,
+and each is a portion. The Report's `limitations` state this.
 
 Compare writes nothing into either set.
 
@@ -79,12 +150,12 @@ Compare writes nothing into either set.
 | Field | Content |
 | --- | --- |
 | `report_kind` | Always `copyofa.comparison`. |
-| `format_version` | The version of this format, `3`. A later change to the fields increments it. |
+| `format_version` | The version of this format, `4`. A later change to the fields increments it. |
 | `copyofa_version` | The version of CopyOfA that ran the comparison. |
 | `compared_at` | The comparison time in UTC, such as `2026-10-25T18:30:00Z`. |
 | `omitted` | The JSON Pointers of the values the Report leaves out, each of `/inputs/a/evidence_set` and `/inputs/b/evidence_set` at most once; `[]` when it leaves out nothing. See [Leaving out Evidence Set locations](#leaving-out-evidence-set-locations). |
 | `inputs` | `a` and `b`: each input, described below. |
-| `method` | How the tracks were decoded, resampled and aligned, described below. |
+| `method` | How the tracks were decoded, resampled and searched for portions, described below. |
 | `measurements` | The measurements, described below; absent when either input is not `interpreted`. |
 | `limitations` | Sentences stating what the whole Report does not establish or did not examine. |
 
@@ -137,7 +208,44 @@ with the reason inspect gives `disc` when the record cannot be used.
 | `resampler_version` | Its version, such as `0.1.3-14-ga66f3ee`. |
 | `resampler_quality` | Always `VHQ`, libsoxr's very high quality preset. |
 | `common_sample_rate` | The lower of the two sample rates, at which every measurement is made; absent when nothing is measured. |
-| `alignment` | Always `downmix_cross_correlation`: one global offset, at the lag with the largest magnitude of the cross-correlation of the mono downmixes. |
+| `alignment` | Always `windowed_portions`: the tracks are aligned by portions, each at its own offset, found with the windows and blocks described above. |
+| `parameters` | The fixed parameters of the search, listed below. Every value is the same in every Report of this version; the Report states them because the result moves with them. |
+
+### Parameters
+
+Each name ends in its unit when it has one. Frames are counted at
+`common_sample_rate`.
+
+| Parameter | Value | Unit | Meaning |
+| --- | --- | --- | --- |
+| `decimation_factor` | `16` | factor | Decimation of both downmixes for the coarse search. |
+| `decimation_quality` | `"HQ"` | | libsoxr quality preset of that decimation. |
+| `first_difference_coefficient` | `0.5` | coefficient | *c* of the first difference *y*[*n*] = *x*[*n*] − *c*·*x*[*n* − 1] applied after decimation. |
+| `window_seconds` | `5` | s | Length of each window of A. |
+| `hop_seconds` | `5` | s | Distance between the starts of two windows of A. |
+| `silent_window_energy_ratio` | `0.0001` | ratio | A window of A whose energy is at most this fraction of the mean window energy gives no evidence. |
+| `b_position_energy_floor` | `1e-10` | ratio | A position of B whose energy under the window is at most this fraction of B's whole energy gives no candidate. |
+| `candidate_threshold` | `0.4` | correlation | Least magnitude of the normalized cross-correlation of a candidate. |
+| `candidates_per_window` | `3` | candidates | Most candidates per window. |
+| `candidate_separation_seconds` | `0.5` | s | Least distance between two candidates of a window. |
+| `skipped_windows` | `1` | windows | Most windows skipped between two chained candidates. |
+| `chaining_tolerance_frames` | `32` | frames | Most difference between the offsets of two chained candidates, and between the offsets of a chain and of a portion already found. |
+| `core_ratio` | `0.85` | ratio | Least score, relative to the strongest window, of a window that joins the core. |
+| `core_seconds` | `20` | s | Longest core. |
+| `refinement_radius_frames` | `32` | frames | Distance from the coarse offset over which the offset is searched. |
+| `block_frames` | `2048` | frames | Length of a block. |
+| `matched_block_residual_ratio` | `0.2` | ratio | Most residual, relative to the energy of A in the block, of a block that confirms the match (−7 dB). |
+| `core_confirming_ratio` | `0.5` | ratio | Least fraction of the non-neutral blocks of the core that confirm. |
+| `evidence_floor_dbfs` | `-80` | dBFS | A block of A below this mean power is neutral instead of refuting. |
+| `silence_against_signal_dbfs` | `-60` | dBFS | Where A is zero in a block, B above this mean power refutes the match. |
+| `end_range_inside_blocks` | `8` | blocks | Blocks inside the edge of a portion that place its end. |
+| `end_range_outside_blocks` | `1` | blocks | Blocks outside the edge of a portion that place its end. |
+| `acceptance_residual_db` | `-10` | dB | Greatest residual after the per-block gains of a kept portion. |
+| `minimum_portion_seconds` | `1` | s | Shortest kept portion. |
+| `merge_tolerance_frames` | `2` | frames | Most difference between the offsets of two merged portions. |
+| `alternate_margin_db` | `3` | dB | Least amount by which another portion's residual must be lower to rank this one as an alternate. |
+| `alternate_coverage_ratio` | `0.9` | ratio | Least fraction of a portion's range of A that better portions cover to make it an alternate. |
+| `equal_residual_floor_db` | `-60` | dB | Residuals below it, and undefined ones, count as this value when ranking. |
 
 ### Measurements
 
@@ -145,14 +253,30 @@ Track B is measured against track A. Frames are counted at `common_sample_rate`.
 
 | Field | Content |
 | --- | --- |
-| `identical_audio` | `true` when both tracks have an Audio Digest and the digests are equal; absent otherwise. The offset is then 0, without a search, unless the tracks have no frames, and the residual is absent. |
-| `offset` | `frames`, an integer, and `seconds`. A positive offset means track B starts that many frames later than track A: frame *n* of A lines up with frame *n* + `frames` of B. |
-| `overlap` | `a` and `b`: where the aligned tracks overlap in each, as its `start_frame`, its length in `frames` (the same for both), and the `fraction` of the track it covers. |
-| `downmix` | The values below, measured on the mono downmixes. |
-| `channels` | The values below for each channel, in order, pairing the channels by position; present only when both tracks have the same channel count. |
-| `absent` | For each of `offset`, `overlap` and `channels` that is absent, why. |
+| `identical_audio` | `true` when both tracks have an Audio Digest and the digests are equal; absent otherwise. `portions` then holds one primary portion at offset 0, found without a search, unless the tracks have no frames, and its residuals are absent. |
+| `portions` | The portions found, each described below; `[]` when there is none. Primary portions come first, then alternates, each in order of A. |
+| `unmatched` | `a` and `b`: the ranges of each track that no primary portion covers, each described below. |
+| `absent` | `portions`, the reason `portions` is empty; present exactly when it is. |
 
-`downmix` and each entry of `channels` hold, over the overlap, with *a* and *b* the
+Each entry of `portions` holds:
+
+- `rank`: `primary`, or `alternate` when better-matching portions cover 90 % or more of
+  its range of A, as described above.
+- `a` and `b`: the portion's range in each track, as its `start_frame` and its length
+  in `frames`, the same for both.
+- `offset`: `frames`, an integer, and `seconds`. A positive offset means the range of B
+  starts that many frames later than the range of A: frame *n* of A lines up with frame
+  *n* + `frames` of B.
+- `block_gain_residual_db`: the residual after the per-block gains, on the downmix,
+  10·log10(Σ*ₖ*Σ(*a* − *gₖ*·*b*)² / Σ*a*²) dB over the blocks *k* of 2048 frames
+  counted from the start of the portion. It differs from the residual of `downmix`,
+  which uses one gain for the whole portion.
+- `downmix`: the values below, measured on the mono downmixes.
+- `channels`: the values below for each channel, in order, pairing the channels by
+  position; present only when both tracks have the same channel count.
+- `absent`: for each of `block_gain_residual_db` and `channels` that is absent, why.
+
+`downmix` and each entry of `channels` hold, over the portion, with *a* and *b* the
 samples of A and B:
 
 - `correlation`: the Pearson correlation coefficient of *a* and *b*, from −1 to 1. A
@@ -164,22 +288,34 @@ samples of A and B:
 - `residual_db`: the level of *a* − *g*·*b* relative to A,
   10·log10(Σ(*a* − *g*·*b*)² / Σ*a*²) dB. The lower it is, the less of A the gained
   B leaves unexplained; about 0 dB means B explains none of it.
-- `residual_windows`: the residual over each one-second window of the overlap, in
-  order: its `start_frame` from the start of the overlap, its length in `frames`
-  (shorter for the last window when the overlap is not a whole number of seconds),
+- `residual_windows`: the residual over each one-second window of the portion, in
+  order: its `start_frame` from the start of the portion, its length in `frames`
+  (shorter for the last window when the portion is not a whole number of seconds),
   and its `residual_db`.
 - `absent`: for each of these values that is absent, why. A window whose residual is
   absent holds its own `absent` with the reason.
+
+Each entry of `unmatched.a` and `unmatched.b` holds a range that no primary portion
+covers, in order:
+
+- `start_frame` and `frames`: the range in that track.
+- `digitally_silent`: `true` when every sample of every channel in the range is zero,
+  at the common rate.
+- `level_dbfs`: present only when the range is not digitally silent: the level of the
+  range, 10·log10 of the mean power of all its samples of all channels at the common
+  rate, in dB relative to full scale.
 
 A value that the audio leaves undefined is absent, never NaN or infinity:
 
 | Absent value | When |
 | --- | --- |
-| `offset`, `overlap`, and every value of `downmix` and `channels` | A track has no frames, or, for audio that is not identical, a downmix is zero throughout, so the cross-correlation has no maximum. |
-| `correlation` | A track is constant over the overlap. |
-| `gain_db` | Track B is zero over the overlap, or the gain is exactly zero. |
+| `portions` | The reason in `measurements.absent`: `track A has no frames` or `track B has no frames`; `track A is shorter than one window of 5 s` or `track B is shorter than one window of 5 s`; `the downmix of track A is zero throughout` or `the downmix of track B is zero throughout`; or `no portion was found`. |
+| `block_gain_residual_db` | The audio is identical, or *a* − *g*·*b* after the per-block gains is zero throughout the portion. |
+| `channels` of a portion | The tracks have different channel counts. |
+| `correlation` | A track is constant over the portion. |
+| `gain_db` | Track B is zero over the portion, or the gain is exactly zero. |
 | `residual_db`, `residual_windows` | The audio is identical, or the gain is undefined. |
-| `residual_db` of the overlap or of a window | Track A is zero over it, or *a* − *g*·*b* is exactly zero over it. |
+| `residual_db` of the portion or of a window | Track A is zero over it, or *a* − *g*·*b* is exactly zero over it. |
 
 ## Leaving out Evidence Set locations
 
@@ -209,9 +345,37 @@ Compare may still name a path given on the command line on stderr, such as in an
 The schema requires an input's `evidence_set` exactly when `omitted` does not list it.
 Without the option, compare prints `"omitted": []`.
 
+## Format version 3
+
+Compare printed format version 3 in CopyOfA 0.5. It differs from version 4 in `method`
+and `measurements`; the inputs, `omitted`, and the other fields are the same.
+`copyofa validate` and `copyofa view` still accept it, and the version 3 schema is
+unchanged. A Report with `portions` is not valid at version 3. In version 3:
+
+- `format_version` is `3`.
+- `method.alignment` is always `downmix_cross_correlation`: one global offset, at the
+  lag with the largest magnitude of the FFT cross-correlation of the mono downmixes,
+  in whole frames at the common rate. `method` has no `parameters`.
+- `measurements` holds `identical_audio`, `offset` (`frames` and `seconds`, as
+  `offset` of a portion), `overlap`, `downmix`, `channels` and `absent`, and no
+  `portions` or `unmatched`. `overlap` gives, for `a` and `b`, where the aligned
+  tracks overlap: its `start_frame`, its length in `frames` (the same for both), and
+  the `fraction` of the track it covers.
+- `downmix` and `channels` are measured over the overlap, not over a portion, and
+  their `residual_windows` count `start_frame` from the start of the overlap. With
+  identical audio, the offset is 0 and the residual is absent.
+- `absent` holds a reason for each of `offset`, `overlap` and `channels` that is
+  absent: `offset`, `overlap` and every value of `downmix` and `channels` are absent
+  when a track has no frames or, for audio that is not identical, a downmix is zero
+  throughout. The reasons for the other values say "overlap" where version 4 says
+  "portion".
+- `limitations` state that one global offset aligns the tracks, and not the limits of
+  the search for portions.
+
 ## Format version 2
 
-Compare printed format version 2 in CopyOfA 0.4. It is version 3 without track
+Compare printed format version 2 in CopyOfA 0.4. It is [version 3](#format-version-3)
+without track
 inputs: `format_version` is `2`, no input holds `track`, and each input's `path` is
 always present. `copyofa validate` and `copyofa view` still accept it, and the version
 2 schema is unchanged. A Report with `track` is not valid at version 2.
@@ -225,62 +389,66 @@ unchanged. A Report with `omitted` is not valid at version 1.
 
 ## Example
 
-The Hand That Feeds from *With Teeth* (2019 deluxe, 24-bit, 96 kHz FLAC) against the
-same song from *Definitive NIN* (44.1 kHz MP3):
+Track 4 of an acquired set of *Add Violence* (2017 CD) against track 4 of the 2025
+digital reissue (24-bit, 48 kHz FLAC), with track input A:
 
 ```json
 {
   "report_kind": "copyofa.comparison",
-  "format_version": 3,
-  "copyofa_version": "0.5.0",
-  "compared_at": "2026-10-25T18:30:00Z",
+  "format_version": 4,
+  "copyofa_version": "0.6.0",
+  "compared_at": "2026-10-26T03:15:12Z",
   "omitted": [],
   "inputs": {
     "a": {
-      "evidence_set": "/Volumes/Archive/With Teeth",
+      "evidence_set": "/Volumes/Archive/Add Violence CD",
       "integrity_baseline": {
-        "manifest_sha256": "6765…",
+        "manifest_sha256": "8c86…",
         "usable": true,
         "problems": []
       },
-      "path": "data/04 - Nine Inch Nails - The Hand That Feeds.flac",
+      "path": "data/disc.scram.flac",
+      "track": {
+        "number": 4,
+        "first_frame": 59373288,
+        "frame_count": 8234940
+      },
       "outcome": "interpreted",
-      "expected_digest": "db61…",
-      "observed_digest": "db61…",
+      "expected_digest": "4ad6…",
+      "observed_digest": "4ad6…",
       "format": "flac",
-      "encoding": "pcm_24",
-      "sample_rate": 96000,
-      "channels": 2,
-      "bits_per_sample": 24,
-      "frames": 20330556,
-      "audio_digest": "pcm1:96000:2:24:4665…",
-      "peak": [8108867, 8112205],
-      "leading_silence_frames": 0,
-      "trailing_silence_frames": 0,
-      "flac_md5_signature": "matching"
-    },
-    "b": {
-      "evidence_set": "/Volumes/Archive/Definitive NIN",
-      "integrity_baseline": {
-        "manifest_sha256": "f265…",
-        "usable": true,
-        "problems": []
-      },
-      "path": "data/18 The Hand That Feeds.mp3",
-      "outcome": "interpreted",
-      "expected_digest": "468e…",
-      "observed_digest": "468e…",
-      "format": "mp3",
-      "encoding": "mpeg_layer_iii",
+      "encoding": "pcm_16",
       "sample_rate": 44100,
       "channels": 2,
-      "frames": 9341568,
-      "peak": [1.177331566810608, 1.1805001497268677],
-      "leading_silence_frames": 1,
+      "bits_per_sample": 16,
+      "frames": 8234940,
+      "audio_digest": "pcm1:44100:2:16:a4c1…",
+      "peak": [32768, 32768],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0
+    },
+    "b": {
+      "evidence_set": "/Volumes/Archive/Add Violence",
+      "integrity_baseline": {
+        "manifest_sha256": "a871…",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/01-04 Not Anymore.flac",
+      "outcome": "interpreted",
+      "expected_digest": "416f…",
+      "observed_digest": "416f…",
+      "format": "flac",
+      "encoding": "pcm_24",
+      "sample_rate": 48000,
+      "channels": 2,
+      "bits_per_sample": 24,
+      "frames": 9196800,
+      "audio_digest": "pcm1:48000:2:24:aeb2…",
+      "peak": [8136205, 8135850],
+      "leading_silence_frames": 0,
       "trailing_silence_frames": 0,
-      "limitations": [
-        "MP3 is lossy: its decoded samples, and so its frame count, depend on …"
-      ]
+      "flac_md5_signature": "absent"
     }
   },
   "method": {
@@ -290,112 +458,221 @@ same song from *Definitive NIN* (44.1 kHz MP3):
     "resampler_version": "0.1.3-14-ga66f3ee",
     "resampler_quality": "VHQ",
     "common_sample_rate": 44100,
-    "alignment": "downmix_cross_correlation"
+    "alignment": "windowed_portions",
+    "parameters": {
+      "decimation_factor": 16,
+      "decimation_quality": "HQ",
+      "first_difference_coefficient": 0.5,
+      "window_seconds": 5,
+      "hop_seconds": 5,
+      "silent_window_energy_ratio": 0.0001,
+      "b_position_energy_floor": 1e-10,
+      "candidate_threshold": 0.4,
+      "candidates_per_window": 3,
+      "candidate_separation_seconds": 0.5,
+      "skipped_windows": 1,
+      "chaining_tolerance_frames": 32,
+      "core_ratio": 0.85,
+      "core_seconds": 20,
+      "refinement_radius_frames": 32,
+      "block_frames": 2048,
+      "matched_block_residual_ratio": 0.2,
+      "core_confirming_ratio": 0.5,
+      "evidence_floor_dbfs": -80,
+      "silence_against_signal_dbfs": -60,
+      "end_range_inside_blocks": 8,
+      "end_range_outside_blocks": 1,
+      "acceptance_residual_db": -10,
+      "minimum_portion_seconds": 1,
+      "merge_tolerance_frames": 2,
+      "alternate_margin_db": 3,
+      "alternate_coverage_ratio": 0.9,
+      "equal_residual_floor_db": -60
+    }
   },
   "measurements": {
-    "offset": {
-      "frames": -782,
-      "seconds": -0.017732426303854874
-    },
-    "overlap": {
-      "a": {
-        "start_frame": 782,
-        "frames": 9338567,
-        "fraction": 0.9999162682538151
+    "portions": [
+      {
+        "rank": "primary",
+        "a": {
+          "start_frame": 180743,
+          "frames": 8053618
+        },
+        "b": {
+          "start_frame": 215689,
+          "frames": 8053618
+        },
+        "offset": {
+          "frames": 34946,
+          "seconds": 0.7924263038548753
+        },
+        "block_gain_residual_db": -22.031079860026253,
+        "downmix": {
+          "correlation": 0.996859930941858,
+          "gain_db": 0.17258339349911697,
+          "residual_db": -22.027127851256214,
+          "residual_windows": [
+            {
+              "start_frame": 0,
+              "frames": 44100,
+              "residual_db": -14.254952251218452
+            },
+            {
+              "start_frame": 44100,
+              "frames": 44100,
+              "residual_db": -25.7788955812312
+            }
+          ]
+        },
+        "channels": [
+          {
+            "correlation": 0.9964346736830453,
+            "gain_db": 0.16887083154952615,
+            "residual_db": -21.476451970147288,
+            "residual_windows": [
+              {
+                "start_frame": 0,
+                "frames": 44100,
+                "residual_db": -14.21993421849833
+              }
+            ]
+          },
+          {
+            "correlation": 0.9970458322784992,
+            "gain_db": 0.17422724464395617,
+            "residual_db": -22.29176581443863,
+            "residual_windows": [
+              {
+                "start_frame": 0,
+                "frames": 44100,
+                "residual_db": -14.261034741456669
+              }
+            ]
+          }
+        ]
       },
-      "b": {
-        "start_frame": 0,
-        "frames": 9338567,
-        "fraction": 0.9996787477220098
+      {
+        "rank": "alternate",
+        "a": {
+          "start_frame": 986278,
+          "frames": 77805
+        },
+        "b": {
+          "start_frame": 1777223,
+          "frames": 77805
+        },
+        "offset": {
+          "frames": 790945,
+          "seconds": 17.935260770975056
+        },
+        "block_gain_residual_db": -15.019716761815886,
+        "downmix": {
+          "correlation": 0.9831640250215374,
+          "gain_db": -0.06247275865201059,
+          "residual_db": -14.764025652478612,
+          "residual_windows": [
+            {
+              "start_frame": 0,
+              "frames": 44100,
+              "residual_db": -15.408633596777289
+            },
+            {
+              "start_frame": 44100,
+              "frames": 33705,
+              "residual_db": -13.965842497247705
+            }
+          ]
+        },
+        "channels": [
+          {
+            "correlation": 0.9836046127542462,
+            "gain_db": -0.05836424650597183,
+            "residual_db": -14.87822744416375,
+            "residual_windows": [
+              {
+                "start_frame": 0,
+                "frames": 44100,
+                "residual_db": -15.510480197953989
+              },
+              {
+                "start_frame": 44100,
+                "frames": 33705,
+                "residual_db": -14.089329066628428
+              }
+            ]
+          },
+          {
+            "correlation": 0.9827297376306026,
+            "gain_db": -0.06607907358359948,
+            "residual_db": -14.654369543351907,
+            "residual_windows": [
+              {
+                "start_frame": 0,
+                "frames": 44100,
+                "residual_db": -15.308154125421096
+              },
+              {
+                "start_frame": 44100,
+                "frames": 33705,
+                "residual_db": -13.85453140244729
+              }
+            ]
+          }
+        ]
       }
-    },
-    "downmix": {
-      "correlation": 0.9705710741571085,
-      "gain_db": 1.831632040257753,
-      "residual_db": -12.366318859412127,
-      "residual_windows": [
+    ],
+    "unmatched": {
+      "a": [
         {
           "start_frame": 0,
-          "frames": 44100,
-          "residual_db": -13.750449944166423
+          "frames": 180743,
+          "digitally_silent": false,
+          "level_dbfs": -36.77583985814157
+        },
+        {
+          "start_frame": 8234361,
+          "frames": 579,
+          "digitally_silent": false,
+          "level_dbfs": -11.76307533610161
+        }
+      ],
+      "b": [
+        {
+          "start_frame": 0,
+          "frames": 215689,
+          "digitally_silent": false,
+          "level_dbfs": -31.061533712318802
+        },
+        {
+          "start_frame": 8269307,
+          "frames": 180253,
+          "digitally_silent": false,
+          "level_dbfs": -20.795944160919614
         }
       ]
-    },
-    "channels": [
-      {
-        "correlation": 0.9634965094357804,
-        "gain_db": 1.7621394736835168,
-        "residual_db": -11.446332106961695,
-        "residual_windows": [
-          {
-            "start_frame": 0,
-            "frames": 44100,
-            "residual_db": -13.577980049906282
-          }
-        ]
-      },
-      {
-        "correlation": 0.9656206626469909,
-        "gain_db": 1.7820362681681134,
-        "residual_db": -11.70202333746773,
-        "residual_windows": [
-          {
-            "start_frame": 0,
-            "frames": 44100,
-            "residual_db": -13.811131366008414
-          }
-        ]
-      }
-    ]
+    }
   },
   "limitations": [
     "No measurement says whether the tracks share a master, a mix or a source; …",
     "MP3 is lossy: the measurements of an MP3 depend on its decoder.",
     "Tracks at different sample rates are compared at the lower rate, after …",
-    "One global offset aligns the tracks: inserted or removed sections, drift …",
+    "Portions shorter than about 2.5 s may be missed, and the search finds no …",
+    "Speed, pitch and drift differences give no portion.",
+    "A boundary inside audio below -80 dBFS is placed at the nearest frame …",
+    "A boundary at a fade falls about three blocks of 2048 frames inside it, where …",
+    "In music that repeats a section, one range of a track can match several …",
     "Channels are paired in the order each file stores them."
   ]
 }
 ```
 
 The example is shortened: a Report holds all 64 hexadecimal digits of each digest,
-every residual window, not just the first, and the whole of each limitation. Here
-the MP3 starts 782 frames, about 18 ms, earlier than the FLAC.
-
-A track input: track 1 of an acquired set of *Add Violence* (2017 CD), compared with
-the first track of the 2025 digital reissue (24-bit, 48 kHz FLAC). The offset is −4240
-frames: the reissue starts 4240 frames, about 96 ms, earlier, and the residual is
-−37.5 dB:
-
-```json
-"a": {
-  "evidence_set": "/Volumes/Archive/Add Violence CD",
-  "integrity_baseline": {
-    "manifest_sha256": "bc7e…",
-    "usable": true,
-    "problems": []
-  },
-  "path": "data/disc.scram.flac",
-  "track": {
-    "number": 1,
-    "first_frame": 26548188,
-    "frame_count": 9285108
-  },
-  "outcome": "interpreted",
-  "expected_digest": "4ad6…",
-  "observed_digest": "4ad6…",
-  "format": "flac",
-  "encoding": "pcm_16",
-  "sample_rate": 44100,
-  "channels": 2,
-  "bits_per_sample": 16,
-  "frames": 9285108,
-  "audio_digest": "pcm1:44100:2:16:1e9b66e1…",
-  "peak": [28930, 28922],
-  "leading_silence_frames": 0,
-  "trailing_silence_frames": 0
-}
-```
+every residual window, not just the first ones, and the whole of each limitation. It
+also holds all seven portions: three primary, four alternate. The example keeps the
+first, and the fourth, an alternate. The primary portion covers A from 4.098 s to
+186.720 s, and B starts 34946 frames, about 0.792 s, later. The first 4.1 s of A and
+the first 4.9 s of B, and the last 4.1 s of B, at −20.8 dBFS, match no primary
+portion.
 
 ## Viewing a Report
 
@@ -408,7 +685,9 @@ copyofa view htf.json > htf.html
 
 View first validates the file as [`copyofa validate`](validation-result.md) does, and
 refuses a Report that is invalid, unsupported, or of another kind. It supports
-comparison Reports only, of format version 1, 2 or 3.
+comparison Reports only, of format version 1, 2 or 3. It does not render format version
+4, which `compare` prints, yet: it refuses such a Report, with the reason on stderr and
+nothing on stdout, and exits 1.
 
 The page shows every field of the Report with its value as the Report records it, and
 adds only labels and units, and for each track a duration computed from its frames
@@ -448,8 +727,9 @@ Ctrl-C. It has no `--json` option and writes no file.
 
 ## Exit codes
 
-`copyofa compare` exits 0 when both inputs are `interpreted` and were measured, even
-when a value is absent. It exits 1 when either input is `not_inspected`, `failed` or
+`copyofa compare` exits 0 when both inputs are `interpreted` and were compared, whether
+or not it found a portion, even when a value is absent. It exits 1 when either input is
+`not_inspected`, `failed` or
 `not_interpreted`, and still prints its result or Report, without measurements. It
 exits 2, printing nothing on stdout, when a file is not under the `data/` directory
 of an Evidence Set, an input given with `--track-a` or `--track-b` is not an Evidence

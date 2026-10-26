@@ -21,7 +21,7 @@ from conftest import (
 )
 
 import copyofa
-from copyofa import comparator, inspector
+from copyofa import comparator, inspector, locator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -30,8 +30,6 @@ if TYPE_CHECKING:
     from conftest import Outcome, Run, StandIn
 
     MakeSet = Callable[[Callable[[Path], None]], Path]
-
-MEASURED = ("correlation", "gain_db", "residual_db", "residual_windows")
 
 
 def tones(rate: int, seconds: float, seed: int = 7) -> np.ndarray:
@@ -60,11 +58,18 @@ def two_sets(
     return make_set(a) / "data/Album", make_set(b) / "data/Album"
 
 
+def only_portion(report: dict[str, Any]) -> dict[str, Any]:
+    [portion] = report["measurements"]["portions"]
+    return portion
+
+
 @pytest.mark.parametrize("delay", [12345, -12345])
 def test_compare_finds_the_exact_offset(
     run: Run, make_set: MakeSet, delay: int
 ) -> None:
-    samples = signal(2 * RATE, 2, 16)
+    # Eleven seconds: a window of A is searched only where B holds all of it, so
+    # with the leading silence in A, the first window of A gives no candidate.
+    samples = signal(11 * RATE, 2, 16)
     delayed = np.vstack([np.zeros((abs(delay), 2), np.int32), samples])
     later, earlier = (delayed, samples) if delay > 0 else (samples, delayed)
 
@@ -76,26 +81,24 @@ def test_compare_finds_the_exact_offset(
     outcome, report = compare(run, a / "a.flac", b / "b.flac")
 
     assert outcome.code == 0, outcome.err
-    measurements = report["measurements"]
-    assert measurements["offset"] == {"frames": delay, "seconds": delay / RATE}
-    assert measurements["overlap"] == {
-        "a": {
-            "start_frame": max(0, -delay),
-            "frames": 2 * RATE,
-            "fraction": 2 * RATE / len(earlier),
-        },
-        "b": {
-            "start_frame": max(0, delay),
-            "frames": 2 * RATE,
-            "fraction": 2 * RATE / len(later),
-        },
+    portion = only_portion(report)
+    assert portion["rank"] == "primary"
+    assert portion["offset"] == {"frames": delay, "seconds": delay / RATE}
+    assert portion["a"] == {"start_frame": max(0, -delay), "frames": 11 * RATE}
+    assert portion["b"] == {"start_frame": max(0, delay), "frames": 11 * RATE}
+    assert portion["downmix"]["correlation"] == pytest.approx(1)
+    # The leading silence is all that the portion leaves out.
+    unmatched = report["measurements"]["unmatched"]
+    silence = [{"start_frame": 0, "frames": abs(delay), "digitally_silent": True}]
+    assert unmatched == {
+        "a": [] if delay > 0 else silence,
+        "b": silence if delay > 0 else [],
     }
-    assert measurements["downmix"]["correlation"] == pytest.approx(1)
 
 
 def test_compare_measures_gain_and_residual(run: Run, make_set: MakeSet) -> None:
-    # Two and a half seconds, so the last residual window is half a second.
-    samples = signal(5 * RATE // 2, 2, 16)
+    # Five and a half seconds, so the last residual window is half a second.
+    samples = signal(11 * RATE // 2, 2, 16)
 
     a, b = two_sets(
         make_set,
@@ -105,67 +108,45 @@ def test_compare_measures_gain_and_residual(run: Run, make_set: MakeSet) -> None
     outcome, report = compare(run, a / "a.flac", b / "b.flac")
 
     assert outcome.code == 0, outcome.err
-    measurements = report["measurements"]
-    for values in [measurements["downmix"], *measurements["channels"]]:
+    portion = only_portion(report)
+    assert portion["block_gain_residual_db"] < -60
+    for values in [portion["downmix"], *portion["channels"]]:
         # B is A at half amplitude, so A is twice B: +6.02 dB.
         assert values["gain_db"] == pytest.approx(20 * math.log10(2), abs=0.01)
         assert values["residual_db"] < -60
         windows = values["residual_windows"]
         assert [(window["start_frame"], window["frames"]) for window in windows] == [
-            (0, RATE),
-            (RATE, RATE),
-            (2 * RATE, RATE // 2),
+            *((second * RATE, RATE) for second in range(5)),
+            (5 * RATE, RATE // 2),
         ]
         assert all(window["residual_db"] < -60 for window in windows)
-    assert len(measurements["channels"]) == 2
-    assert "identical_audio" not in measurements
-
-
-def test_compare_reports_identical_audio(run: Run, make_set: MakeSet) -> None:
-    samples = signal(RATE, 2, 16)
-
-    a, b = two_sets(
-        make_set,
-        lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"),
-        lambda source: write_audio(source / "b.wav", samples, 16, "WAV"),
-    )
-    outcome, report = compare(run, a / "a.flac", b / "b.wav")
-
-    assert outcome.code == 0, outcome.err
-    inputs = report["inputs"]
-    assert inputs["a"]["audio_digest"] == inputs["b"]["audio_digest"]
-    measurements = report["measurements"]
-    assert measurements["identical_audio"] is True
-    assert measurements["offset"] == {"frames": 0, "seconds": 0.0}
-    for values in [measurements["downmix"], *measurements["channels"]]:
-        assert values["gain_db"] == 0
-        assert values["correlation"] == 1
-        assert "residual_db" not in values
-        assert values["absent"] == {
-            "residual_db": "the audio is identical",
-            "residual_windows": "the audio is identical",
-        }
+    assert len(portion["channels"]) == 2
+    assert "identical_audio" not in report["measurements"]
 
 
 def test_compare_resamples_to_the_lower_rate(run: Run, make_set: MakeSet) -> None:
     def fill_a(source: Path) -> None:
-        soundfile.write(source / "a.flac", tones(48000, 3), 48000, subtype="PCM_24")
+        soundfile.write(source / "a.flac", tones(48000, 6), 48000, subtype="PCM_24")
 
     def fill_b(source: Path) -> None:
-        soundfile.write(source / "b.flac", tones(44100, 3), 44100, subtype="PCM_24")
+        soundfile.write(source / "b.flac", tones(44100, 6), 44100, subtype="PCM_24")
 
     a, b = two_sets(make_set, fill_a, fill_b)
     outcome, report = compare(run, a / "a.flac", b / "b.flac")
 
     assert outcome.code == 0, outcome.err
     assert report["method"]["common_sample_rate"] == 44100
-    measurements = report["measurements"]
-    assert abs(measurements["offset"]["frames"]) <= 1
-    assert measurements["downmix"]["correlation"] > 0.99
+    [portion] = [
+        portion
+        for portion in report["measurements"]["portions"]
+        if portion["rank"] == "primary"
+    ]
+    assert abs(portion["offset"]["frames"]) <= 1
+    assert portion["downmix"]["correlation"] > 0.99
 
 
 def test_compare_measures_lossy_audio(run: Run, make_set: MakeSet) -> None:
-    samples = tones(RATE, 3)
+    samples = tones(RATE, 6)
 
     def fill_a(source: Path) -> None:
         soundfile.write(source / "a.flac", samples, RATE, subtype="PCM_16")
@@ -179,26 +160,19 @@ def test_compare_measures_lossy_audio(run: Run, make_set: MakeSet) -> None:
     outcome, report = compare(run, a / "a.flac", b / "b.mp3")
 
     assert outcome.code == 0, outcome.err
-    assert report["measurements"]["downmix"]["correlation"] > 0.9
+    primaries = [
+        portion
+        for portion in report["measurements"]["portions"]
+        if portion["rank"] == "primary"
+    ]
+    assert primaries
+    assert all(portion["downmix"]["correlation"] > 0.9 for portion in primaries)
     assert "audio_digest" not in report["inputs"]["b"]
-
-
-def test_compare_measures_unrelated_audio(run: Run, make_set: MakeSet) -> None:
-    first, second = signal(RATE, 2, 16, seed=1), signal(RATE, 2, 16, seed=2)
-    a, b = two_sets(
-        make_set,
-        lambda source: write_audio(source / "a.flac", first, 16, "FLAC"),
-        lambda source: write_audio(source / "b.flac", second, 16, "FLAC"),
-    )
-    outcome, report = compare(run, a / "a.flac", b / "b.flac")
-
-    assert outcome.code == 0, outcome.err
-    assert abs(report["measurements"]["downmix"]["correlation"]) < 0.1
 
 
 def test_compare_aligns_a_polarity_inversion(run: Run, make_set: MakeSet) -> None:
     # Halved, so that negating the 16-bit minimum stays in range.
-    samples = signal(RATE, 2, 16) >> 1
+    samples = signal(6 * RATE, 2, 16) >> 1
 
     a, b = two_sets(
         make_set,
@@ -208,22 +182,26 @@ def test_compare_aligns_a_polarity_inversion(run: Run, make_set: MakeSet) -> Non
     outcome, report = compare(run, a / "a.flac", b / "b.flac")
 
     assert outcome.code == 0, outcome.err
-    measurements = report["measurements"]
-    assert measurements["offset"]["frames"] == 0
-    assert measurements["downmix"]["correlation"] == pytest.approx(-1)
-    assert measurements["downmix"]["gain_db"] == pytest.approx(0, abs=1e-9)
+    portion = only_portion(report)
+    assert portion["offset"]["frames"] == 0
+    assert portion["downmix"]["correlation"] == pytest.approx(-1)
+    assert portion["downmix"]["gain_db"] == pytest.approx(0, abs=1e-9)
 
 
 def _reject_constant(name: str) -> Any:
     pytest.fail(f"the JSON holds {name}")
 
 
-def test_compare_gives_undefined_values_as_absent(run: Run, make_set: MakeSet) -> None:
+def test_compare_finds_no_portion_in_a_silent_track(
+    run: Run, make_set: MakeSet
+) -> None:
     a, b = two_sets(
         make_set,
-        lambda source: write_audio(source / "a.flac", signal(RATE, 2, 16), 16, "FLAC"),
         lambda source: write_audio(
-            source / "b.flac", np.zeros((RATE, 2), np.int32), 16, "FLAC"
+            source / "a.flac", signal(6 * RATE, 2, 16), 16, "FLAC"
+        ),
+        lambda source: write_audio(
+            source / "b.flac", np.zeros((6 * RATE, 2), np.int32), 16, "FLAC"
         ),
     )
     outcome = run("compare", a / "a.flac", b / "b.flac", "--json")
@@ -231,19 +209,23 @@ def test_compare_gives_undefined_values_as_absent(run: Run, make_set: MakeSet) -
     assert outcome.code == 0, outcome.err
     report = json.loads(outcome.out, parse_constant=_reject_constant)
     measurements = report["measurements"]
-    reason = "no offset was found: the downmix of track B is zero throughout"
-    assert measurements["absent"] == {"offset": reason, "overlap": reason}
-    for values in [measurements["downmix"], *measurements["channels"]]:
-        assert values == {"absent": dict.fromkeys(MEASURED, reason)}
+    assert measurements["portions"] == []
+    assert measurements["absent"] == {
+        "portions": "the downmix of track B is zero throughout"
+    }
+    assert measurements["unmatched"]["b"] == [
+        {"start_frame": 0, "frames": 6 * RATE, "digitally_silent": True}
+    ]
 
 
-def test_compare_gives_values_undefined_over_the_overlap_as_absent(
+def test_compare_gives_values_undefined_over_a_portion_as_absent(
     run: Run, make_set: MakeSet
 ) -> None:
-    # The left channels align the tracks; B's right channel is silent.
-    samples = signal(RATE, 2, 16)
-    silent_right = samples.copy()
-    silent_right[:, 1] = 0
+    # Both channels of A are the same, so A's downmix is B's, at twice the level;
+    # B's right channel is silent.
+    left = signal(6 * RATE, 1, 16)
+    samples = np.hstack([left, left])
+    silent_right = np.hstack([left, np.zeros_like(left)])
 
     a, b = two_sets(
         make_set,
@@ -254,21 +236,21 @@ def test_compare_gives_values_undefined_over_the_overlap_as_absent(
 
     assert outcome.code == 0, outcome.err
     report = json.loads(outcome.out, parse_constant=_reject_constant)
-    left, right = report["measurements"]["channels"]
-    assert left["correlation"] == 1
-    assert right["absent"] == {
-        "correlation": "track B is constant over the overlap",
-        "gain_db": "track B is zero throughout the overlap",
+    left_values, right_values = only_portion(report)["channels"]
+    assert left_values["correlation"] == 1
+    assert right_values["absent"] == {
+        "correlation": "track B is constant over the portion",
+        "gain_db": "track B is zero throughout the portion",
         "residual_db": (
-            "the gain is undefined: track B is zero throughout the overlap"
+            "the gain is undefined: track B is zero throughout the portion"
         ),
         "residual_windows": (
-            "the gain is undefined: track B is zero throughout the overlap"
+            "the gain is undefined: track B is zero throughout the portion"
         ),
     }
 
 
-def test_compare_gives_values_absent_for_identical_tracks_without_frames(
+def test_compare_finds_no_portion_in_identical_tracks_without_frames(
     run: Run, make_set: MakeSet
 ) -> None:
     track = make_set(
@@ -282,18 +264,18 @@ def test_compare_gives_values_absent_for_identical_tracks_without_frames(
 
     assert outcome.code == 0, outcome.err
     report = json.loads(outcome.out, parse_constant=_reject_constant)
-    measurements = report["measurements"]
-    assert measurements["identical_audio"] is True
-    reason = "no offset was found: track A has no frames"
-    assert measurements["absent"] == {"offset": reason, "overlap": reason}
-    for values in [measurements["downmix"], *measurements["channels"]]:
-        assert values == {"absent": dict.fromkeys(MEASURED, reason)}
+    assert report["measurements"] == {
+        "identical_audio": True,
+        "portions": [],
+        "unmatched": {"a": [], "b": []},
+        "absent": {"portions": "track A has no frames"},
+    }
 
 
 def test_compare_downmix_only_for_different_channel_counts(
     run: Run, make_set: MakeSet
 ) -> None:
-    stereo = signal(RATE, 2, 16) >> 1
+    stereo = signal(6 * RATE, 2, 16) >> 1
     mono = stereo.sum(axis=1, keepdims=True, dtype=np.int32) >> 1
 
     a, b = two_sets(
@@ -304,12 +286,12 @@ def test_compare_downmix_only_for_different_channel_counts(
     outcome, report = compare(run, a / "a.flac", b / "b.flac")
 
     assert outcome.code == 0, outcome.err
-    measurements = report["measurements"]
-    assert "channels" not in measurements
-    assert measurements["absent"] == {
+    portion = only_portion(report)
+    assert "channels" not in portion
+    assert portion["absent"] == {
         "channels": "the tracks have different channel counts: 2 and 1"
     }
-    assert measurements["downmix"]["correlation"] > 0.99
+    assert portion["downmix"]["correlation"] > 0.99
 
 
 def test_compare_exits_2_for_a_track_outside_an_evidence_set(
@@ -444,7 +426,7 @@ def test_compare_report_content(run: Run, make_set: MakeSet) -> None:
         "Inspected data/Album/b.flac: interpreted",
     ]
     assert report["report_kind"] == "copyofa.comparison"
-    assert report["format_version"] == 3
+    assert report["format_version"] == 4
     assert report["omitted"] == []
     assert report["copyofa_version"] == copyofa.__version__
     compared_at = datetime.strptime(
@@ -472,6 +454,8 @@ def test_compare_report_content(run: Run, make_set: MakeSet) -> None:
             2,
         )
         assert (entry["bits_per_sample"], entry["frames"]) == (16, RATE)
+    # The schema pins each parameter to the value ADR 0006 decides.
+    assert set(report["method"].pop("parameters")) == set(locator.PARAMETERS)
     assert report["method"] == {
         "decoder": "libsndfile",
         "decoder_version": soundfile.__libsndfile_version__,
@@ -479,7 +463,7 @@ def test_compare_report_content(run: Run, make_set: MakeSet) -> None:
         "resampler_version": soxr.__libsoxr_version__,
         "resampler_quality": "VHQ",
         "common_sample_rate": RATE,
-        "alignment": "downmix_cross_correlation",
+        "alignment": "windowed_portions",
     }
     assert report["limitations"] == list(comparator.LIMITATIONS)
 
@@ -497,7 +481,7 @@ def test_compare_omit_locations_leaves_out_where_each_set_is(
     outcome, report = compare(run, a / "a.flac", b / "b.flac", "--omit-locations")
 
     assert outcome.code == 0, outcome.err
-    assert report["format_version"] == 3
+    assert report["format_version"] == 4
     assert report["omitted"] == ["/inputs/a/evidence_set", "/inputs/b/evidence_set"]
     for name in "ab":
         entry = report["inputs"][name]
@@ -532,7 +516,7 @@ def test_compare_omit_locations_shows_each_path_in_its_set(
     assert lines[1] == (
         "Track B: data/Album/b.wav (wav, 44100 Hz, 16-bit, 2 channels, 0:01.000)"
     )
-    assert lines[2].startswith("Offset: ")
+    assert lines[2] == "Common sample rate: 44100 Hz"
     assert str(tmp_path) not in outcome.out
 
 
@@ -557,8 +541,9 @@ def test_compare_omit_locations_with_an_input_that_is_not_inspected(
 
 
 def test_compare_human_result(run: Run, make_set: MakeSet) -> None:
-    samples = signal(2 * RATE, 2, 16)
-    delayed = np.vstack([np.zeros((12345, 2), np.int32), samples >> 1])
+    samples = signal(11 * RATE, 2, 16)
+    tail = signal(2 * RATE, 2, 16, seed=5) >> 3
+    delayed = np.vstack([np.zeros((12345, 2), np.int32), samples >> 1, tail])
     a, b = two_sets(
         make_set,
         lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"),
@@ -570,19 +555,22 @@ def test_compare_human_result(run: Run, make_set: MakeSet) -> None:
     assert outcome.code == 0, outcome.err
     lines = outcome.out.splitlines()
     assert lines[0] == (
-        f"Track A: {a / 'a.flac'} (flac, 44100 Hz, 16-bit, 2 channels, 0:02.000)"
+        f"Track A: {a / 'a.flac'} (flac, 44100 Hz, 16-bit, 2 channels, 0:11.000)"
     )
     assert lines[1] == (
-        f"Track B: {b / 'b.wav'} (wav, 44100 Hz, 16-bit, 2 channels, 0:02.279)"
+        f"Track B: {b / 'b.wav'} (wav, 44100 Hz, 16-bit, 2 channels, 0:13.279)"
     )
-    assert lines[2:5] == [
-        "Offset: +12345 frames (+0.280 s) at 44100 Hz",
-        "Overlap: 100.0% of track A, 87.7% of track B",
-        "Correlation: 1.000",
+    assert lines[2] == "Common sample rate: 44100 Hz"
+    assert lines[3].startswith(
+        "Portion 1, primary: A 0.000-11.000 s, B 0.280-11.280 s, "
+        "offset +12345 frames (+0.280 s), correlation 1.000, residual (one gain) -"
+    )
+    assert lines[3].endswith(" dB")
+    level = 10 * math.log10(np.mean(np.square(tail / 32768)))
+    assert lines[4:] == [
+        "Unmatched in B: 0.000-0.280 s, digital silence",
+        f"Unmatched in B: 11.280-13.280 s, {level:.1f} dBFS",
     ]
-    assert lines[5] == "Gain: +6.02 dB"
-    assert lines[6].startswith("Residual: -")
-    assert len(lines) == 7
 
 
 def test_compare_human_result_names_identical_and_absent_values(
@@ -599,12 +587,38 @@ def test_compare_human_result_names_identical_and_absent_values(
 
     assert outcome.code == 0, outcome.err
     assert outcome.out.splitlines()[2:] == [
+        "Common sample rate: 44100 Hz",
         "Identical audio: the Audio Digests are equal",
-        "Offset: +0 frames (+0.000 s) at 44100 Hz",
-        "Overlap: 100.0% of track A, 100.0% of track B",
-        "Correlation: absent (track A is constant over the overlap)",
-        "Gain: absent (track B is zero throughout the overlap)",
-        "Residual: absent (the audio is identical)",
+        (
+            "Portion 1, primary: A 0.000-1.000 s, B 0.000-1.000 s, "
+            "offset +0 frames (+0.000 s), "
+            "correlation absent (track A is constant over the portion), "
+            "residual (one gain) absent (the audio is identical)"
+        ),
+    ]
+
+
+def test_compare_human_result_names_why_no_portion_was_found(
+    run: Run, make_set: MakeSet
+) -> None:
+    a, b = two_sets(
+        make_set,
+        lambda source: write_audio(
+            source / "a.flac", signal(RATE, 2, 16, seed=1), 16, "FLAC"
+        ),
+        lambda source: write_audio(
+            source / "b.flac", signal(RATE, 2, 16, seed=2), 16, "FLAC"
+        ),
+    )
+
+    outcome = run("compare", a / "a.flac", b / "b.flac")
+
+    assert outcome.code == 0, outcome.err
+    assert outcome.out.splitlines()[2:] == [
+        "Common sample rate: 44100 Hz",
+        "No portion found: track A is shorter than one window of 5 s",
+        "Unmatched in A: 0.000-1.000 s, -4.8 dBFS",
+        "Unmatched in B: 0.000-1.000 s, -4.8 dBFS",
     ]
 
 
@@ -664,7 +678,7 @@ def test_compare_measures_a_track_of_an_acquired_set(
     )
 
     assert outcome.code == 0, outcome.err
-    assert report["format_version"] == 3
+    assert report["format_version"] == 4
     record = json.loads((acquired_set / "copyofa/acquisition-record.json").read_bytes())
     recorded = record["tracks"][1]
     a = report["inputs"]["a"]

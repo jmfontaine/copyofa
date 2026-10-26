@@ -3,27 +3,26 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
-import soundfile
-from conftest import RATE, signal, snapshot, synthetic_disc, write_audio
+from conftest import RATE, signal, snapshot, write_audio
 
 import copyofa
-from copyofa import comparator, validator, viewer
+from copyofa import validator, viewer
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
-    from pathlib import Path
 
-    from conftest import Run, StandIn
+    from conftest import Run
 
     MakeSet = Callable[[Callable[[Path], None]], Path]
-    Tracks = tuple[Path, Path]
 
 CSP = "default-src 'none'; style-src 'unsafe-inline'"
 # Elements and attributes that would make a page load something or run something.
@@ -110,203 +109,45 @@ class Page(HTMLParser):
         ]
 
 
-def tone(seconds: float, channels: int = 2) -> np.ndarray:
-    """Two sines of different pitch, shaped (frames, channels), as 16-bit samples."""
-    time = np.arange(round(RATE * seconds)) / RATE
-    waves = [np.sin(2 * np.pi * (330 + 110 * n) * time) for n in range(channels)]
-    return (np.stack(waves, axis=1) * 20000).astype(np.int32)
-
-
-def two_sets(
-    make_set: MakeSet, a: Callable[[Path], None], b: Callable[[Path], None]
-) -> Tracks:
-    return make_set(a) / "data/Album", make_set(b) / "data/Album"
-
-
-def measured(make_set: MakeSet) -> Tracks:
-    # B is A at half amplitude, 1234 frames later; 2.5 s, so the last window is short.
-    samples = signal(5 * RATE // 2, 2, 16)
-    delayed = np.vstack([np.zeros((1234, 2), np.int32), samples >> 1])
-    a, b = two_sets(
-        make_set,
-        lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"),
-        lambda source: write_audio(source / "b.flac", delayed, 16, "FLAC"),
-    )
-    return a / "a.flac", b / "b.flac"
-
-
-def lossy(make_set: MakeSet) -> Tracks:
-    samples = tone(3)
-
-    def fill_b(source: Path) -> None:
-        soundfile.write(
-            source / "b.mp3",
-            samples / 32768,
-            RATE,
-            format="MP3",
-            subtype="MPEG_LAYER_III",
-        )
-
-    a, b = two_sets(
-        make_set,
-        lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"),
-        fill_b,
-    )
-    return a / "a.flac", b / "b.mp3"
-
-
-def identical(make_set: MakeSet) -> Tracks:
-    samples = signal(RATE, 2, 16)
-    a, b = two_sets(
-        make_set,
-        lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"),
-        lambda source: write_audio(source / "b.wav", samples, 16, "WAV"),
-    )
-    return a / "a.flac", b / "b.wav"
-
-
-def silent_channel(make_set: MakeSet) -> Tracks:
-    # The left channels align the tracks; B's right channel is silent.
-    samples = signal(RATE, 2, 16)
-    silent_right = samples.copy()
-    silent_right[:, 1] = 0
-    a, b = two_sets(
-        make_set,
-        lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"),
-        lambda source: write_audio(source / "b.flac", silent_right, 16, "FLAC"),
-    )
-    return a / "a.flac", b / "b.flac"
-
-
-def silent_track(make_set: MakeSet) -> Tracks:
-    a, b = two_sets(
-        make_set,
-        lambda source: write_audio(source / "a.flac", signal(RATE, 2, 16), 16, "FLAC"),
-        lambda source: write_audio(
-            source / "b.flac", np.zeros((RATE, 2), np.int32), 16, "FLAC"
-        ),
-    )
-    return a / "a.flac", b / "b.flac"
-
-
-def silent_window(make_set: MakeSet) -> Tracks:
-    # A is silent in its second second, so the residual of that window is undefined.
-    first, other = signal(RATE, 2, 16), signal(RATE, 2, 16, seed=3)
-    a, b = two_sets(
-        make_set,
-        lambda source: write_audio(
-            source / "a.flac",
-            np.vstack([first, np.zeros((RATE, 2), np.int32)]),
-            16,
-            "FLAC",
-        ),
-        lambda source: write_audio(
-            source / "b.flac", np.vstack([first, other]), 16, "FLAC"
-        ),
-    )
-    return a / "a.flac", b / "b.flac"
-
-
-def mono(make_set: MakeSet) -> Tracks:
-    stereo = signal(RATE, 2, 16) >> 1
-    single = stereo.sum(axis=1, keepdims=True, dtype=np.int32) >> 1
-    a, b = two_sets(
-        make_set,
-        lambda source: write_audio(source / "a.flac", stereo, 16, "FLAC"),
-        lambda source: write_audio(source / "b.flac", single, 16, "FLAC"),
-    )
-    return a / "a.flac", b / "b.flac"
-
-
-def not_interpreted(make_set: MakeSet) -> Tracks:
-    def fill(source: Path) -> None:
-        write_audio(source / "a.flac", signal(1000, 2, 16), 16, "FLAC")
-        (source / "cover.jpg").write_bytes(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00" * 50)
-
-    album = make_set(fill) / "data/Album"
-    return album / "a.flac", album / "cover.jpg"
-
-
-def not_inspected(make_set: MakeSet) -> Tracks:
-    album = (
-        make_set(
-            lambda source: write_audio(
-                source / "a.flac", signal(1000, 2, 16), 16, "FLAC"
-            )
-        )
-        / "data/Album"
-    )
-    write_audio(album / "unlisted.flac", signal(1000, 2, 16), 16, "FLAC")
-    return album / "a.flac", album / "unlisted.flac"
-
-
-def locations_omitted(make_set: MakeSet) -> Tracks:
-    return measured(make_set)
-
-
-CASES: dict[str, Callable[[MakeSet], Tracks]] = {
-    "measured": measured,
-    "lossy": lossy,
-    "identical": identical,
-    "silent_channel": silent_channel,
-    "silent_track": silent_track,
-    "silent_window": silent_window,
-    "mono": mono,
-    "not_interpreted": not_interpreted,
-    "not_inspected": not_inspected,
-    "locations_omitted": locations_omitted,
-}
-
-
-def acquired_track(
-    make_set: MakeSet, make_acquired_set: Callable[..., Path], redumper: StandIn
-) -> Tracks:
-    """Track 2 of an acquired set, and a FLAC file of the same audio."""
-    acquired = make_acquired_set()
-    data = synthetic_disc(redumper.config).tracks[1]
-    samples = np.frombuffer(data, dtype="<i2").reshape(-1, 2).astype(np.int32)
-    album = make_set(
-        lambda source: write_audio(source / "02.flac", samples, 16, "FLAC", 44100)
-    )
-    return acquired, album / "data/Album/02.flac"
-
-
-# Cases whose input A is a track of an acquired set.
-TRACK_CASES: dict[str, Callable[[MakeSet, Callable[..., Path], StandIn], Tracks]] = {
-    "acquired_track": acquired_track
-}
-# The options of `compare` that a case adds to its command.
-OPTIONS = {
-    "locations_omitted": ("--omit-locations",),
-    "acquired_track": ("--track-a", "2"),
-}
+# Version 3 comparison Reports that compare 0.6.0.dev0 printed, one per case, kept as
+# they were so the page keeps rendering versions 1 to 3: `measured` (2.5 s, B is A at
+# half amplitude 1234 frames later, so the last window is short), `lossy` (A FLAC, B
+# MP3), `identical`, `silent_channel`, `silent_track`, `silent_window`, `mono`,
+# `not_interpreted`, `not_inspected`, `locations_omitted` (compared with
+# --omit-locations) and `acquired_track` (A is track 2 of an acquired set).
+REPORTS = Path(__file__).parent / "reports" / "comparison-3"
+CASES = sorted(path.stem for path in REPORTS.glob("*.json"))
 
 
 @pytest.fixture
-def report_of(
-    run: Run, make_set: MakeSet, tmp_path: Path, request: pytest.FixtureRequest
-) -> Callable[[str], tuple[Path, dict[str, Any]]]:
-    """Save the comparison Report of a case, and return its path and document."""
+def report_of(tmp_path: Path) -> Callable[[str], tuple[Path, dict[str, Any]]]:
+    """Copy a stored version 3 Report into the test's directory; return it."""
 
     def _report_of(name: str) -> tuple[Path, dict[str, Any]]:
-        if name in TRACK_CASES:
-            a, b = TRACK_CASES[name](
-                make_set,
-                request.getfixturevalue("make_acquired_set"),
-                request.getfixturevalue("redumper"),
-            )
-        else:
-            a, b = CASES[name](make_set)
-        outcome = run("compare", a, b, "--json", *OPTIONS.get(name, ()))
-        assert outcome.code in (0, 1), outcome.err
         path = tmp_path / f"{name}.json"
-        path.write_text(outcome.out, encoding="utf-8")
-        return path, json.loads(outcome.out)
+        shutil.copyfile(REPORTS / f"{name}.json", path)
+        return path, json.loads(path.read_text(encoding="utf-8"))
 
     return _report_of
 
 
-@pytest.fixture(params=[*CASES, *TRACK_CASES])
+def test_every_case_is_stored() -> None:
+    assert CASES == [
+        "acquired_track",
+        "identical",
+        "locations_omitted",
+        "lossy",
+        "measured",
+        "mono",
+        "not_inspected",
+        "not_interpreted",
+        "silent_channel",
+        "silent_track",
+        "silent_window",
+    ]
+
+
+@pytest.fixture(params=CASES)
 def case(
     request: pytest.FixtureRequest,
     report_of: Callable[[str], tuple[Path, dict[str, Any]]],
@@ -380,7 +221,7 @@ def test_view_holds_the_limitations_word_for_word(
 
     page = view(run, path)
 
-    assert report["limitations"] == list(comparator.LIMITATIONS)
+    assert report["limitations"]
     for limitation in report["limitations"]:
         assert limitation in page.nodes
     for entry in report["inputs"].values():
@@ -553,9 +394,7 @@ def test_view_shows_the_properties_and_digests_of_each_input(
 
 
 def test_view_shows_each_location_that_the_report_leaves_out_as_left_out(
-    run: Run,
-    report_of: Callable[[str], tuple[Path, dict[str, Any]]],
-    tmp_path: Path,
+    run: Run, report_of: Callable[[str], tuple[Path, dict[str, Any]]]
 ) -> None:
     path, report = report_of("locations_omitted")
     assert report["omitted"] == ["/inputs/a/evidence_set", "/inputs/b/evidence_set"]
@@ -570,7 +409,7 @@ def test_view_shows_each_location_that_the_report_leaves_out_as_left_out(
     assert page.row("Inputs", "Path in the Evidence Set") == [
         entry["path"] for entry in report["inputs"].values()
     ]
-    assert str(tmp_path) not in page.text
+    assert "/Volumes/Archive" not in page.text
 
 
 def test_view_shows_that_the_report_leaves_nothing_out(
@@ -715,25 +554,18 @@ def test_view_says_when_the_tracks_were_not_measured(
 
 
 def test_view_shows_text_of_the_report_as_text(
-    run: Run, make_set: MakeSet, tmp_path: Path
+    run: Run, report_of: Callable[[str], tuple[Path, dict[str, Any]]]
 ) -> None:
+    path, _ = report_of("identical")
+    # Three texts put into the Report by hand: a path with markup and an entity, a
+    # path the Report records as `\udc80` (a byte that is not valid UTF-8), and a
+    # limitation with markup.
     name = '<script>alert("1")&amp;\'.flac'
-    album = (
-        make_set(
-            lambda source: write_audio(source / name, signal(1000, 2, 16), 16, "FLAC")
-        )
-        / "data/Album"
-    )
-    outcome = run("compare", album / name, album / name, "--json")
-    assert outcome.code == 0, outcome.err
-    path = tmp_path / "report.json"
-    path.write_text(outcome.out, encoding="utf-8")
-    # Two more kinds of text, put into the Report by hand: one the Report records as
-    # `\udc80`, a path byte that is not valid UTF-8, and a limitation with markup.
     surrogate = "data/Album/caf\udc80.flac"
     markup = "<b>bold</b> & <script>x</script>"
 
     def change(report: dict[str, Any]) -> None:
+        report["inputs"]["a"]["path"] = f"data/Album/{name}"
         report["inputs"]["b"]["path"] = surrogate
         report["limitations"].append(markup)
 
@@ -965,3 +797,28 @@ def test_view_shows_a_comparison_report_of_format_version_2(
     assert page.row("Inputs", "Path in the Evidence Set") == [
         entry["path"] for entry in report["inputs"].values()
     ]
+
+
+def test_view_refuses_a_comparison_report_of_format_version_4(
+    run: Run, make_set: MakeSet, tmp_path: Path
+) -> None:
+    samples = signal(6 * RATE, 2, 16)
+    delayed = np.vstack([np.zeros((RATE // 2, 2), np.int32), samples])
+    a = make_set(lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"))
+    b = make_set(lambda source: write_audio(source / "b.flac", delayed, 16, "FLAC"))
+    comparison = run(
+        "compare", a / "data/Album/a.flac", b / "data/Album/b.flac", "--json"
+    )
+    assert comparison.code == 0, comparison.err
+    path = tmp_path / "report.json"
+    path.write_text(comparison.out, encoding="utf-8")
+    assert json.loads(comparison.out)["format_version"] == 4
+    assert validator.validate(str(path)).result["outcome"] == validator.VALID
+
+    outcome = run("view", path)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert "format version 4" in outcome.err
+    assert "does not render yet" in outcome.err
+    assert "Traceback" not in outcome.err
