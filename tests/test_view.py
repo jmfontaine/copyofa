@@ -147,12 +147,72 @@ def test_every_case_is_stored() -> None:
     ]
 
 
-@pytest.fixture(params=CASES)
+def _version_4_signals(name: str) -> tuple[np.ndarray, np.ndarray]:
+    """Return tracks A and B of a version 4 case, as write_audio takes them."""
+    if name == "portions":
+        # A holds 12 s that B holds after 1 s of digital silence, then 2 s that B does
+        # not hold. B then holds 3 s that A does not, then a copy of 6 s of the shared
+        # audio with noise added about 24 dB below it: an alternate portion.
+        shared = signal(12 * RATE, 2, 16, seed=11) >> 2
+        only_a = signal(2 * RATE, 2, 16, seed=12) >> 2
+        only_b = signal(3 * RATE, 2, 16, seed=13) >> 2
+        hiss = signal(6 * RATE, 2, 16, seed=14) >> 6
+        silence = np.zeros((RATE, 2), np.int32)
+        noisy = shared[4 * RATE : 10 * RATE] + hiss
+        return np.vstack([shared, only_a]), np.vstack([silence, shared, only_b, noisy])
+    if name == "no_portion":
+        return signal(6 * RATE, 2, 16, seed=21), signal(6 * RATE, 2, 16, seed=22)
+    if name == "identical":
+        samples = signal(6 * RATE, 2, 16, seed=23)
+        return samples, samples
+    assert name == "mono"
+    stereo = signal(6 * RATE, 2, 16, seed=24) >> 1
+    return stereo, stereo.sum(axis=1, keepdims=True, dtype=np.int32) >> 1
+
+
+VERSION_4_CASES = ["portions", "no_portion", "identical", "mono"]
+"""Version 4 Reports that the tests have compare print: `portions` (a primary and an
+alternate portion, and unmatched audio in both tracks, digitally silent and not),
+`no_portion` (unrelated tracks), `identical`, and `mono` (A stereo, B its mono
+downmix, so a portion has no channels)."""
+
+
+@pytest.fixture
+def version_4(
+    run: Run, make_set: MakeSet, tmp_path: Path
+) -> Callable[[str], tuple[Path, dict[str, Any]]]:
+    """Have compare print a version 4 Report of a case; return it."""
+
+    def _version_4(name: str) -> tuple[Path, dict[str, Any]]:
+        a, b = _version_4_signals(name)
+        first = make_set(lambda source: write_audio(source / "a.flac", a, 16, "FLAC"))
+        second = make_set(lambda source: write_audio(source / "b.flac", b, 16, "FLAC"))
+        outcome = run(
+            "compare",
+            first / "data/Album/a.flac",
+            second / "data/Album/b.flac",
+            "--json",
+        )
+        assert outcome.code == 0, outcome.err
+        path = tmp_path / f"{name}-4.json"
+        path.write_text(outcome.out, encoding="utf-8")
+        report = json.loads(outcome.out)
+        assert report["format_version"] == 4
+        return path, report
+
+    return _version_4
+
+
+@pytest.fixture(params=[*CASES, *(f"version 4: {name}" for name in VERSION_4_CASES)])
 def case(
     request: pytest.FixtureRequest,
     report_of: Callable[[str], tuple[Path, dict[str, Any]]],
+    version_4: Callable[[str], tuple[Path, dict[str, Any]]],
 ) -> tuple[Path, dict[str, Any]]:
-    return report_of(request.param)
+    name = request.param
+    if name.startswith("version 4: "):
+        return version_4(name.removeprefix("version 4: "))
+    return report_of(name)
 
 
 def view(run: Run, path: Path) -> Page:
@@ -799,26 +859,180 @@ def test_view_shows_a_comparison_report_of_format_version_2(
     ]
 
 
-def test_view_refuses_a_comparison_report_of_format_version_4(
-    run: Run, make_set: MakeSet, tmp_path: Path
+def test_view_shows_the_parameters_of_the_method(
+    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
 ) -> None:
-    samples = signal(6 * RATE, 2, 16)
-    delayed = np.vstack([np.zeros((RATE // 2, 2), np.int32), samples])
-    a = make_set(lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"))
-    b = make_set(lambda source: write_audio(source / "b.flac", delayed, 16, "FLAC"))
-    comparison = run(
-        "compare", a / "data/Album/a.flac", b / "data/Album/b.flac", "--json"
-    )
-    assert comparison.code == 0, comparison.err
-    path = tmp_path / "report.json"
-    path.write_text(comparison.out, encoding="utf-8")
-    assert json.loads(comparison.out)["format_version"] == 4
-    assert validator.validate(str(path)).result["outcome"] == validator.VALID
+    path, report = version_4("identical")
+    parameters = report["method"]["parameters"]
 
-    outcome = run("view", path)
+    page = view(run, path)
 
-    assert outcome.code == 1
-    assert outcome.out == ""
-    assert "format version 4" in outcome.err
-    assert "does not render yet" in outcome.err
-    assert "Traceback" not in outcome.err
+    assert page.row("Method", "Alignment") == ["windowed_portions"]
+    assert page.tables["Parameters"][1:] == [
+        [name, shown(value)] for name, value in parameters.items()
+    ]
+
+
+def seconds(extent: dict[str, Any]) -> str:
+    start, frames = extent["start_frame"], extent["frames"]
+    return f"{start / RATE:.3f}-{(start + frames) / RATE:.3f}"
+
+
+def test_view_shows_each_portion(
+    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = version_4("portions")
+    portions = report["measurements"]["portions"]
+    assert [portion["rank"] for portion in portions] == ["primary", "alternate"]
+
+    page = view(run, path)
+
+    assert page.row("Overview", "Portions") == ["2 portions, listed below"]
+    for index, portion in enumerate(portions, 1):
+        downmix = portion["downmix"]
+        assert page.row("Portions", str(index)) == [
+            portion["rank"],
+            str(portion["a"]["start_frame"]),
+            str(portion["a"]["frames"]),
+            seconds(portion["a"]),
+            str(portion["b"]["start_frame"]),
+            str(portion["b"]["frames"]),
+            seconds(portion["b"]),
+            str(portion["offset"]["frames"]),
+            number(portion["offset"]["seconds"]),
+            cell(portion, "block_gain_residual_db"),
+            cell(downmix, "correlation"),
+            cell(downmix, "gain_db"),
+            cell(downmix, "residual_db"),
+        ]
+        heading = f"Portion {index} ({portion['rank']})"
+        series = [("Downmix", downmix)] + [
+            (f"Channel {channel}", values)
+            for channel, values in enumerate(portion["channels"], 1)
+        ]
+        assert page.tables[f"{heading}: values"][0] == ["", *(n for n, _ in series)]
+        assert page.row(f"{heading}: values", "Residual (dB)") == [
+            cell(values, "residual_db") for _, values in series
+        ]
+        for name, values in series:
+            if "residual_windows" not in values:
+                continue
+            rows = page.tables[f"{heading}: residual windows, {name}"]
+            assert rows[0][0] == "Start frame (from the start of the portion)"
+            assert rows[1:] == [
+                [
+                    str(window["start_frame"]),
+                    str(window["frames"]),
+                    cell(window, "residual_db"),
+                ]
+                for window in values["residual_windows"]
+            ]
+
+
+def cell(values: dict[str, Any], key: str) -> str:
+    """Return the cell of a value: the value, or its absence with its reason."""
+    if key in values:
+        return number(values[key])
+    return f"absent: {values['absent'][key]}"
+
+
+def test_view_shows_the_unmatched_audio_of_each_track(
+    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = version_4("portions")
+    unmatched = report["measurements"]["unmatched"]
+    # B's leading silence, and audio that only one track holds.
+    assert [extent["digitally_silent"] for extent in unmatched["b"]] == [True, False]
+    assert [extent["digitally_silent"] for extent in unmatched["a"]] == [False]
+
+    page = view(run, path)
+
+    for name in ("a", "b"):
+        rows = page.tables[f"Unmatched audio: track {name.upper()}"]
+        assert rows[0] == [
+            "Start frame",
+            "Frames",
+            "Range (s, computed)",
+            "Digitally silent",
+            "Level (dBFS)",
+        ]
+        assert rows[1:] == [
+            [
+                str(extent["start_frame"]),
+                str(extent["frames"]),
+                seconds(extent),
+                number(extent["digitally_silent"]),
+                "no level (digitally silent)"
+                if extent["digitally_silent"]
+                else number(extent["level_dbfs"]),
+            ]
+            for extent in unmatched[name]
+        ]
+
+
+def test_view_says_why_no_portion_was_found(
+    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = version_4("no_portion")
+    measurements = report["measurements"]
+    assert measurements["portions"] == []
+
+    page = view(run, path)
+
+    assert page.row("Overview", "Portions") == [
+        f"absent: {measurements['absent']['portions']}"
+    ]
+    assert "Portions" not in page.tables
+    for name in ("a", "b"):
+        [extent] = measurements["unmatched"][name]
+        rows = page.tables[f"Unmatched audio: track {name.upper()}"][1:]
+        assert rows[0][:2] == [str(extent["start_frame"]), str(extent["frames"])]
+
+
+def test_view_shows_identical_audio_as_one_portion(
+    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = version_4("identical")
+    [portion] = report["measurements"]["portions"]
+
+    page = view(run, path)
+
+    assert page.row("Overview", "Identical audio") == ["true"]
+    reason = portion["absent"]["block_gain_residual_db"]
+    assert page.row("Portions", "1")[9] == f"absent: {reason}"
+    assert "Unmatched audio: track A" not in page.tables
+    assert "No unmatched range." in page.nodes
+
+
+def test_view_shows_why_a_portion_has_no_channels(
+    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = version_4("mono")
+    [portion] = report["measurements"]["portions"]
+
+    page = view(run, path)
+
+    assert page.tables["Portion 1 (primary): values"][0] == ["", "Downmix"]
+    assert f"absent: {portion['absent']['channels']}" in page.nodes
+
+
+def test_view_shows_portions_of_a_report_without_a_common_sample_rate(
+    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    # The schema lets a Report leave the common sample rate out; the ranges in
+    # seconds, which the page computes from it, are then absent.
+    path, report = version_4("portions")
+    edited = edit(path, lambda document: document["method"].pop("common_sample_rate"))
+    assert validator.validate(str(edited)).result["outcome"] == validator.VALID
+
+    page = view(run, edited)
+
+    unavailable = "absent: the Report holds no common sample rate"
+    portion = report["measurements"]["portions"][0]
+    row = page.row("Portions", "1")
+    assert row[1:4] == [
+        str(portion["a"]["start_frame"]),
+        str(portion["a"]["frames"]),
+        unavailable,
+    ]
+    assert page.tables["Unmatched audio: track B"][1][2] == unavailable

@@ -685,13 +685,12 @@ copyofa view htf.json > htf.html
 
 View first validates the file as [`copyofa validate`](validation-result.md) does, and
 refuses a Report that is invalid, unsupported, or of another kind. It supports
-comparison Reports only, of format version 1, 2 or 3. It does not render format version
-4, which `compare` prints, yet: it refuses such a Report, with the reason on stderr and
-nothing on stdout, and exits 1.
+comparison Reports only, of format version 1, 2, 3 or 4.
 
 The page shows every field of the Report with its value as the Report records it, and
-adds only labels and units, and for each track a duration computed from its frames
-and sample rate. It gives:
+adds only labels and units, for each track a duration computed from its frames and
+sample rate, and for version 4 each range also in seconds, computed from its frames
+and the common sample rate. It gives:
 
 - the SHA-256 of the exact bytes of the file it was generated from, the Report's kind
   and format version, and the CopyOfA version that generated the page, which is not
@@ -702,10 +701,21 @@ and sample rate. It gives:
   Baseline, path, track number, first frame and frame count, outcome and reason,
   properties, File Digests, Audio Digest, peak, silence, FLAC MD5 signature and
   limitations;
-- the method;
-- the measurements: identical audio, offset, overlap, and for the downmix and each
-  channel the correlation, gain and residual, with one table of residual windows
-  for each of them;
+- the method, and for version 4 a table of its parameters, each by its name in the
+  Report;
+- for versions 1 to 3, the measurements: identical audio, offset, overlap, and for the
+  downmix and each channel the correlation, gain and residual, with one table of
+  residual windows for each of them;
+- for version 4, the measurements:
+  - identical audio, and how many portions the Report holds, or why it holds none;
+  - a table of the portions, in the Report's order, one row each: rank, start frame
+    and frames in A and in B, offset in frames and seconds, residual after the
+    per-block gains, and the correlation, gain and residual of the downmix;
+  - for each portion, the correlation, gain and residual of the downmix and of each
+    channel, with one table of residual windows for each of them;
+  - for each track, its unmatched ranges: start frame, frames, whether the range is
+    digitally silent, and its level, or "no level (digitally silent)" for a silent
+    range, which has none; or that the track has no unmatched range;
 - each absent value, marked absent with its reason; when the Report holds no
   measurements, the page says that the tracks were not measured;
 - the Report's limitations, word for word.
