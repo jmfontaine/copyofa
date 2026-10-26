@@ -169,9 +169,11 @@ Alternatives considered:
   gives no portion; the Report states these limits.
 - A boundary inside audio below −80 dBFS is placed at the nearest frame with evidence,
   and the rest is reported as unmatched; lossy encoding moves boundaries only there.
-- A boundary at a fade or a crossfade falls inside it, where the per-block fit stops
-  confirming the match, not at a fixed level: in the spike, about 0.15 to 0.17 s inside
-  3 s and 8 s fades of a CD track, and 0.58 s and 1.73 s into a 3 s crossfade.
+- A boundary at a fade falls about three blocks inside it, where the end rule's gain
+  over the eight blocks inside the edge stops fitting the faded audio, not where the
+  fade gets quiet; in the spike, 0 to 0.45 s inside 3 s and 8 s fades of a CD track. A
+  boundary at a crossfade falls where the other audio refutes the match: 0.58 s and
+  1.73 s into a 3 s crossfade.
 - The coarse search costs two FFTs of B's length per window of A, so its time grows
   with the product of the two lengths: about 1 s for two 3½-minute tracks, 28 s and
   2.7 GB for two 27-minute releases. Memory and speed are not optimized yet.
