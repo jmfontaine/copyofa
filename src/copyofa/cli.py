@@ -711,14 +711,6 @@ def _view(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return EXIT_PROBLEM
-    if result["format_version"] not in viewer.RENDERED_VERSIONS:
-        print(
-            f"copyofa: {report} is a comparison Report of format version "
-            f"{result['format_version']}, which this version of view does not "
-            "render yet",
-            file=sys.stderr,
-        )
-        return EXIT_PROBLEM
     page = viewer.render(validation.document, result["sha256"])
     sys.stdout.flush()
     sys.stdout.buffer.write(page.encode())

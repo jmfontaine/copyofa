@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 
 SUPPORTED_KINDS = frozenset({comparator.REPORT_KIND})
 """The kinds of Report this module renders."""
-RENDERED_VERSIONS = frozenset({1, 2, 3})
-"""The format versions of a comparison Report this module renders."""
 
 _ABSENT = "absent"
 _LEFT_OUT = "left out"
@@ -38,11 +36,13 @@ th, td { border: 1px solid #999; padding: 0.25rem 0.6rem; text-align: left;
 thead th, tbody th { font-weight: 600; }
 td { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 td ul, td ol { margin: 0; padding-left: 1.2rem; }
-.absent { font-style: italic; }"""
+.absent { font-style: italic; }
+.wide { overflow-x: auto; }
+.wide td { overflow-wrap: normal; white-space: nowrap; }"""
 
 
 def render(report: dict[str, Any], sha256: str) -> str:
-    """Return the HTML page of a valid comparison Report of format version 1 to 3.
+    """Return the HTML page of a valid comparison Report of format version 1 to 4.
 
     sha256 is the SHA-256 of the exact bytes the Report was read from. Every text of
     the Report is escaped, and a character that is not printable, such as a lone
@@ -66,7 +66,7 @@ def render(report: dict[str, Any], sha256: str) -> str:
         ),
         *_inputs_section(inputs),
         *_method_section(report["method"]),
-        *_measurements_section(report.get("measurements")),
+        *_measurements_section(report.get("measurements"), report["method"]),
         "<h2>Limitations</h2>",
         _items(report["limitations"]),
     ]
@@ -172,18 +172,34 @@ def _method_section(method: dict[str, Any]) -> list[str]:
         ("Common sample rate (Hz)", "common_sample_rate"),
         ("Alignment", "alignment"),
     )
-    return [
+    parts = [
         "<h2>Method</h2>",
         _table(None, [(label, _show(method, key)) for label, key in fields]),
     ]
+    if "parameters" in method:
+        parts += [
+            "<h3>Parameters</h3>",
+            _table(
+                ["Parameter", "Value"],
+                [
+                    (f"<code>{_text(name)}</code>", _scalar(value))
+                    for name, value in method["parameters"].items()
+                ],
+            ),
+        ]
+    return parts
 
 
-def _measurements_section(measurements: dict[str, Any] | None) -> list[str]:
+def _measurements_section(
+    measurements: dict[str, Any] | None, method: dict[str, Any]
+) -> list[str]:
     if measurements is None:
         return [
             "<h2>Measurements</h2>",
             "<p>The tracks were not measured: the Report holds no measurements.</p>",
         ]
+    if "portions" in measurements:
+        return _portions_section(measurements, method.get("common_sample_rate"))
     absent = measurements.get("absent", {})
     alignment = [("Identical audio", _show(measurements, "identical_audio"))]
     if "offset" in measurements:
@@ -228,8 +244,141 @@ def _measurements_section(measurements: dict[str, Any] | None) -> list[str]:
         parts.append(f"<p>Channels: {_absent(absent.get('channels'))}</p>")
     for name, values in series:
         if "residual_windows" in values:
-            parts += [f"<h3>Residual windows: {_text(name)}</h3>", _windows(values)]
+            parts += [
+                f"<h3>Residual windows: {_text(name)}</h3>",
+                _windows(values, "overlap"),
+            ]
     return parts
+
+
+def _portions_section(measurements: dict[str, Any], rate: int | None) -> list[str]:
+    """Return the measurements of a Report of format version 4: its portions."""
+    portions = measurements["portions"]
+    if portions:
+        count = len(portions)
+        listed = f"{count} {'portion' if count == 1 else 'portions'}, listed below"
+    else:
+        listed = _absent(measurements.get("absent", {}).get("portions"))
+    parts = [
+        "<h2>Measurements</h2>",
+        "<h3>Overview</h3>",
+        _table(
+            None,
+            [
+                ("Identical audio", _show(measurements, "identical_audio")),
+                ("Portions", listed),
+            ],
+        ),
+    ]
+    if portions:
+        # Many columns of full-precision numbers: the table scrolls rather than
+        # breaking a number across lines.
+        table = _portions_table(portions, rate)
+        parts += ["<h3>Portions</h3>", f'<div class="wide">\n{table}\n</div>']
+    for number, portion in enumerate(portions, 1):
+        parts += _portion_section(number, portion)
+    for name in ("a", "b"):
+        parts.append(f"<h3>Unmatched audio: track {name.upper()}</h3>")
+        parts.append(_unmatched_table(measurements["unmatched"][name], rate))
+    return parts
+
+
+def _portions_table(portions: Sequence[dict[str, Any]], rate: int | None) -> str:
+    rows = []
+    for number, portion in enumerate(portions, 1):
+        downmix = portion["downmix"]
+        rows.append(
+            (
+                str(number),
+                _show(portion, "rank"),
+                _show(portion["a"], "start_frame"),
+                _show(portion["a"], "frames"),
+                _seconds(portion["a"], rate),
+                _show(portion["b"], "start_frame"),
+                _show(portion["b"], "frames"),
+                _seconds(portion["b"], rate),
+                _show(portion["offset"], "frames"),
+                _show(portion["offset"], "seconds"),
+                _show(portion, "block_gain_residual_db"),
+                _show(downmix, "correlation"),
+                _show(downmix, "gain_db"),
+                _show(downmix, "residual_db"),
+            )
+        )
+    return _table(
+        [
+            "Portion",
+            "Rank",
+            "Track A start frame",
+            "Track A frames",
+            "Track A range (s, computed)",
+            "Track B start frame",
+            "Track B frames",
+            "Track B range (s, computed)",
+            "Offset (frames)",
+            "Offset (seconds)",
+            "Residual after the per-block gains (dB)",
+            "Downmix correlation",
+            "Downmix gain (dB)",
+            "Downmix residual (dB)",
+        ],
+        rows,
+    )
+
+
+def _portion_section(number: int, portion: dict[str, Any]) -> list[str]:
+    """Return the values of a portion, for the downmix and each channel, with their
+    residual windows."""
+    series = [("Downmix", portion["downmix"])]
+    series += [
+        (f"Channel {channel}", values)
+        for channel, values in enumerate(portion.get("channels", []), 1)
+    ]
+    rank = _text(portion["rank"])
+    parts = [f"<h3>Portion {number} ({rank}): values</h3>", _values_table(series)]
+    if "channels" not in portion:
+        reason = portion.get("absent", {}).get("channels")
+        parts.append(f"<p>Channels: {_absent(reason)}</p>")
+    for name, values in series:
+        if "residual_windows" in values:
+            parts += [
+                f"<h3>Portion {number} ({rank}): residual windows, {_text(name)}</h3>",
+                _windows(values, "portion"),
+            ]
+    return parts
+
+
+def _unmatched_table(ranges: Sequence[dict[str, Any]], rate: int | None) -> str:
+    if not ranges:
+        return "<p>No unmatched range.</p>"
+    return _table(
+        [
+            "Start frame",
+            "Frames",
+            "Range (s, computed)",
+            "Digitally silent",
+            "Level (dBFS)",
+        ],
+        [
+            (
+                _show(extent, "start_frame"),
+                _show(extent, "frames"),
+                _seconds(extent, rate),
+                _show(extent, "digitally_silent"),
+                _show(extent, "level_dbfs"),
+            )
+            for extent in ranges
+        ],
+    )
+
+
+def _seconds(extent: dict[str, Any], rate: int | None) -> str:
+    """Format a range of frames at a sample rate as seconds, such as `4.098-186.720`,
+    or mark it absent when the Report holds no common sample rate."""
+    if rate is None:
+        return _absent("the Report holds no common sample rate")
+    start, frames = int(extent["start_frame"]), int(extent["frames"])
+    return f"{start / rate:.3f}-{(start + frames) / rate:.3f}"
 
 
 def _values_table(series: Sequence[tuple[str, dict[str, Any]]]) -> str:
@@ -251,12 +400,12 @@ def _values_table(series: Sequence[tuple[str, dict[str, Any]]]) -> str:
     )
 
 
-def _windows(values: dict[str, Any]) -> str:
+def _windows(values: dict[str, Any], origin: str) -> str:
     windows = values["residual_windows"]
     if not windows:
         return "<p>No windows.</p>"
     return _table(
-        ["Start frame (from the start of the overlap)", "Frames", "Residual (dB)"],
+        [f"Start frame (from the start of the {origin})", "Frames", "Residual (dB)"],
         [
             (
                 _show(window, "start_frame"),

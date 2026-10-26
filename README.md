@@ -239,9 +239,9 @@ the Report with labels and units, each absent value with its reason, and each
 limitation. It gives the SHA-256 of the Report file it was generated from, so a
 recipient can check the page against the Report. The page runs no script and loads
 nothing, so it opens in any browser, offline. It draws no conclusion from the
-measurements. [Comparison Report format][comparison-report] describes it. View renders
-Reports of format versions 1 to 3 and does not render version 4, which compare prints,
-yet.
+measurements. For a Report of the current format, it shows the method's parameters,
+a table of the portions with each one's residual windows, and the unmatched audio of
+each track. [Comparison Report format][comparison-report] describes it.
 
 View exits 0 when it printed the page, 1 when the Report is invalid, unsupported, not a
 comparison Report, or cannot be read, 2 when the arguments are invalid, and 130 when
