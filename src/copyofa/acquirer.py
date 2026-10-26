@@ -326,6 +326,13 @@ _ERRORS = re.compile(
     r"^media errors: *\n +SCSI: (\d+) samples\n +C2: (\d+) samples\n +Q: (\d+)$",
     re.MULTILINE,
 )
+# What redumper's refine stage, which runs when --retries re-reads sectors in error,
+# corrected of the errors its dump stage logged.
+_CORRECTED = re.compile(
+    r"^correction statistics: *\n +SCSI: (\d+) samples\n +C2: (\d+) samples\n"
+    r" +Q: (\d+) sectors$",
+    re.MULTILINE,
+)
 
 
 def _read_log(path: Path) -> _Log:
@@ -371,6 +378,14 @@ def _read_log(path: Path) -> _Log:
     if errors is None:
         raise _unreadable_log("it gives no media error counts")
     scsi, c2, q = (int(count) for count in errors.groups())
+    corrected = _CORRECTED.search(text)
+    if corrected is not None:
+        fixed_scsi, fixed_c2, fixed_q = (int(count) for count in corrected.groups())
+        scsi, c2, q = (
+            max(scsi - fixed_scsi, 0),
+            max(c2 - fixed_c2, 0),
+            max(q - fixed_q, 0),
+        )
     write_offset = _WRITE_OFFSET.search(text)
     return _Log(
         drive=drive,

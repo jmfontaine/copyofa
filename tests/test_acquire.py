@@ -470,6 +470,37 @@ def test_acquire_counts_scsi_and_c2_errors_as_read_errors(
     assert "Read errors: found (SCSI 0 samples, C2 12 samples;" in outcome.out
 
 
+@pytest.mark.parametrize(
+    ("corrected", "left", "code"),
+    [
+        ({"scsi": 2352, "c2": 1176, "q": 0}, {"scsi": 0, "c2": 0, "q": 5}, 0),
+        ({"scsi": 2352, "c2": 588, "q": 0}, {"scsi": 0, "c2": 588, "q": 5}, 1),
+    ],
+    ids=["all corrected", "some left"],
+)
+def test_acquire_counts_only_the_errors_left_after_re_reading(
+    run: Run,
+    redumper: StandIn,
+    tmp_path: Path,
+    corrected: dict[str, int],
+    left: dict[str, int],
+    code: int,
+) -> None:
+    redumper.configure(
+        media_errors={"scsi": 2352, "c2": 1176, "q": 5}, corrected=corrected
+    )
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination)
+
+    assert outcome.code == code, outcome.err
+    assert record_of(destination)["read_errors"] == {
+        "scsi_samples": left["scsi"],
+        "c2_samples": left["c2"],
+        "subchannel_q_sectors": left["q"],
+    }
+
+
 def test_acquire_stops_redumper_and_cleans_up_when_canceled_while_reading(
     run: Run,
     redumper: StandIn,

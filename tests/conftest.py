@@ -191,7 +191,8 @@ DISC: dict[str, Any] = {
     "media_errors": {"scsi": 0, "c2": 0, "q": 3},
     # Other keys, all optional: version_output, exit_status, sessions, data_track,
     # omit_track_file, corrupt_track_file, unreadable_log, error_frames (track
-    # number to [first frame in the track, count]), lead_track_files (write the
+    # number to [first frame in the track, count]), corrected (the errors a refine
+    # stage corrected, as media_errors gives them), lead_track_files (write the
     # lead-in and lead-out as tracks 0 and A), cd_text_languages (language codes
     # after the first, each with a further cue sheet), cd_text_charset (the CD-Text
     # character code) and hang. A track may also be silent.
@@ -354,6 +355,7 @@ def _log(config: dict[str, Any], disc: SyntheticDisc, arguments: list[str]) -> s
         "",
         "protection: none",
         "",
+        *_refine_lines(config),
         "*** SPLIT (time check: 0s)",
         "",
         f"disc write offset: {config['write_offset']:+}",
@@ -370,6 +372,22 @@ def _log(config: dict[str, Any], disc: SyntheticDisc, arguments: list[str]) -> s
         "*** END (time check: 0s)",
     ]
     return "".join(f"{line}\n" for line in lines)
+
+
+def _refine_lines(config: dict[str, Any]) -> list[str]:
+    """Return the refine stage, which redumper logs only when it re-read sectors."""
+    if "corrected" not in config:
+        return []
+    corrected = config["corrected"]
+    return [
+        "*** REFINE (time check: 0s)",
+        "",
+        "correction statistics: ",
+        f"  SCSI: {corrected['scsi']} samples",
+        f"  C2: {corrected['c2']} samples",
+        f"  Q: {corrected['q']} sectors",
+        "",
+    ]
 
 
 def stand_in_redumper(arguments: list[str]) -> int:

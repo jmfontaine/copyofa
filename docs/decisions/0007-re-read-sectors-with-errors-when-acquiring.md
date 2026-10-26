@@ -33,7 +33,12 @@ and its refine stage touches no other sector.
    redumper's own default.
 2. **The record states it.** The argument is one of the `reader.arguments` the
    Acquisition Record already lists, so its format does not change.
-3. **Remaining errors are handled as before.** A disc whose errors remain after the
+3. **The record counts the errors left.** redumper logs the errors of its first read
+   as `media errors`, and what its re-reads corrected as `correction statistics`.
+   The record's `read_errors` is the first less the second, so a disc whose errors
+   were all corrected is accepted and acquire exits 0. Before this decision, no
+   re-read ran and the two were the same.
+4. **Remaining errors are handled as before.** A disc whose errors remain after the
    re-reads fails or is accepted exactly as ADR 0005 and the Evidence Set format
    describe.
 
@@ -60,6 +65,6 @@ Alternatives considered:
 ## Consequences
 
 - Acquiring a damaged disc takes longer: up to 20 more reads of each sector in error.
-- The stand-in `redumper` of the tests cannot recover a sector, so tests check that
-  acquire passes and records the count; a damaged disc is acquired by hand to confirm
-  the re-reads.
+- The stand-in `redumper` of the tests logs a refine stage when told what it
+  corrected, so tests cover the counts; a damaged disc is acquired by hand to confirm
+  the re-reads themselves.
