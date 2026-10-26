@@ -58,6 +58,9 @@ _STOP_TIMEOUT = 10
 class AcquisitionError(CopyOfAError):
     """An acquisition that was refused or failed; no Evidence Set was created."""
 
+    reader_log: str | None = None
+    """redumper's log, when the acquisition failed after redumper wrote it."""
+
 
 @dataclass(frozen=True)
 class AcquisitionResult:
@@ -154,12 +157,19 @@ def acquire(
         if progress is not None:
             progress(message)
 
+    reader_log: str | None = None
+
     def build_set(root: Path) -> tuple[int, int]:
+        nonlocal reader_log
         work = root / READER
         work.mkdir()
         report(f"Reading the disc with {READER} {build}")
-        _run_reader(executable, arguments, work, report)
-        log = _read_log(work / f"{IMAGE_NAME}.log")
+        try:
+            _run_reader(executable, arguments, work, report)
+        finally:
+            # Read now: storing the files moves the log into the payload.
+            reader_log = _log_text(work / f"{IMAGE_NAME}.log")
+        log = _read_log(reader_log)
         if log.sessions > 1:
             raise AcquisitionError(
                 f"Refused: the disc has {log.sessions} sessions; acquire accepts "
@@ -204,7 +214,12 @@ def acquire(
         )
         return len(payload), total
 
-    (files, total), warnings = staging.accept(checked, "acquire", build_set)
+    try:
+        (files, total), warnings = staging.accept(checked, "acquire", build_set)
+    except AcquisitionError as error:
+        if str(error).startswith("Failed:"):
+            error.reader_log = reader_log
+        raise
     return AcquisitionResult(checked.target, record, files, total, warnings)
 
 
@@ -341,12 +356,18 @@ _CORRECTED = re.compile(
 )
 
 
-def _read_log(path: Path) -> _Log:
-    """Read the drive, the table of contents, the errors and the write offset."""
+def _log_text(path: Path) -> str | None:
+    """Return redumper's log, or None when it wrote none that can be read."""
     try:
-        text = path.read_bytes().decode(errors="replace").replace("\r\n", "\n")
-    except FileNotFoundError:
-        raise AcquisitionError(f"Failed: {READER} wrote no log.") from None
+        return path.read_bytes().decode(errors="replace").replace("\r\n", "\n")
+    except OSError:
+        return None
+
+
+def _read_log(text: str | None) -> _Log:
+    """Read the drive, the table of contents, the errors and the write offset."""
+    if text is None:
+        raise AcquisitionError(f"Failed: {READER} wrote no log that can be read.")
     inquiry = _INQUIRY.search(text)
     if inquiry is None:
         raise _unreadable_log("it does not identify the drive")

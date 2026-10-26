@@ -444,6 +444,14 @@ when:
   `disc_<language code>.cue`;
 - a stored file does not decode to the SHA-256 of redumper's original.
 
+When acquire fails, its message starting with `Failed:`, after redumper wrote its log,
+stderr also carries that log: the line `copyofa: redumper's log:`, then the log,
+decoded as UTF-8 with undecodable bytes replaced and characters that break a line
+escaped, then the failure message last. The log gives what the failure message
+cannot, such as the error counts of the read and of the re-reads, and which track
+made redumper refuse to split the disc. A refusal, a cancellation, a destination that
+appears during the acquisition, and a system error such as a full disk print no log.
+
 Each track's range is found where the previous track's ends, or else by searching the
 image for the track's bytes; a track of a single repeated byte, such as digital
 silence, that starts the disc is found where the next track begins. A range is

@@ -78,6 +78,8 @@ copyofa acquire --to /Volumes/Archive/add-violence-cd --drive disk6 --json \
 - `--retries` sets how many times redumper re-reads a sector it read with an error,
   20 by default. When a scratched disc fails with redumper's "data errors detected",
   try a higher count, such as 100, or another drive.
+- When the acquisition fails after redumper ran, stderr carries redumper's log before
+  the failure message, so the cause is visible without reading the disc again.
 - A disc with more than one session or with a data track is refused.
 
 Acquire exits 0 when the set is accepted from a disc read without error, 1 when it is

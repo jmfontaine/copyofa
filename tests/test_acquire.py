@@ -441,6 +441,17 @@ def test_acquire_refuses_or_fails_after_reading_and_leaves_nothing(
     assert f"copyofa: {reason}" in outcome.err
     assert len(disc_runs(redumper)) == 1
     assert left_behind(destination) == []
+    if reason.startswith("Refused:"):
+        assert "redumper's log:" not in outcome.err
+    else:
+        assert_log_precedes_failure(outcome.err, redumper.last_log(), reason)
+
+
+def assert_log_precedes_failure(err: str, log: str, reason: str) -> None:
+    """Check that stderr ends with redumper's log, then the failure."""
+    shown = "".join(f"{line}\n" for line in log.splitlines())
+    assert f"copyofa: redumper's log:\n{shown}copyofa: {reason}" in err
+    assert err.splitlines()[-1].startswith("copyofa: Failed: ")
 
 
 @pytest.mark.parametrize("output", [[], ["--json"]], ids=["text", "json"])
@@ -575,9 +586,8 @@ def test_acquire_fails_when_a_stored_file_does_not_decode_to_the_original(
     outcome = run("acquire", "--to", destination)
 
     assert outcome.code == 1
-    assert "Failed: disc.state.xz does not decode to redumper's disc.state." in (
-        outcome.err
-    )
+    reason = "Failed: disc.state.xz does not decode to redumper's disc.state."
+    assert_log_precedes_failure(outcome.err, redumper.last_log(), reason)
     assert left_behind(destination) == []
 
 

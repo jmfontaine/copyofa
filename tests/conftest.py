@@ -389,6 +389,12 @@ def _refine_lines(config: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _write_log(config_path: Path, log: bytes) -> None:
+    """Write redumper's log, and a copy beside the configuration for the tests."""
+    Path("disc.log").write_bytes(log)
+    (config_path.parent / "last.log").write_bytes(log)
+
+
 def stand_in_redumper(arguments: list[str]) -> int:
     """Answer a redumper command line as the configuration says."""
     config_path = Path(os.environ["REDUMPER_STAND_IN"])
@@ -408,7 +414,7 @@ def stand_in_redumper(arguments: list[str]) -> int:
         time.sleep(300)
         return 1
     if config.get("exit_status"):
-        Path("disc.log").write_text(log.split("*** DUMP")[0])
+        _write_log(config_path, log.split("*** DUMP")[0].encode())
         print("error: drive not ready")
         return config["exit_status"]
     for line in log.splitlines():
@@ -430,8 +436,9 @@ def stand_in_redumper(arguments: list[str]) -> int:
     Path("disc.cue").write_bytes(cue)
     for language in config.get("cd_text_languages", []):
         Path(f"disc_{language}.cue").write_bytes(cue)
-    Path("disc.log").write_bytes(
-        b"garbage\n" if config.get("unreadable_log") else log.encode(codec)
+    _write_log(
+        config_path,
+        b"garbage\n" if config.get("unreadable_log") else log.encode(codec),
     )
     if config.get("lead_track_files"):
         width = len(str(len(disc.tracks)))
@@ -476,6 +483,10 @@ class StandIn:
         if not path.exists():
             return []
         return [json.loads(line) for line in path.read_text().splitlines()]
+
+    def last_log(self) -> str:
+        """Return the log the last call wrote, as acquire decodes it."""
+        return (self.directory / "last.log").read_bytes().decode(errors="replace")
 
 
 @pytest.fixture
