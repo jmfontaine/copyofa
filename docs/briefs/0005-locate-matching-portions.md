@@ -49,7 +49,8 @@ affected ranges:
 ## Out of scope
 
 - Speed, pitch and drift differences; they give no portion, which the Report states.
-  Inputs shorter than one window (5 s) give no portion either.
+  The search finds no portion in an input shorter than one window (5 s) either;
+  identical audio still gets its portion.
 - Comparing whole discs or releases as such (the Later outcome Compare Editions).
   Compare still takes two inputs, which may be long.
 - Choosing thresholds or the window length; they are fixed.
@@ -89,8 +90,8 @@ affected ranges:
   - `absent`: why `portions` is empty, such as "no portion found", an input shorter
     than one window, or a track with no frames.
 - **`limitations`** state the method's limits instead of version 3's sentence on one
-  global offset: portions shorter than about 2.5 s may be missed, inputs shorter than
-  5 s give none, and speed or drift differences give none.
+  global offset: portions shorter than about 2.5 s may be missed, the search finds no
+  portion in inputs shorter than 5 s, and speed or drift differences give none.
 - Frames are counted at `common_sample_rate`. Inputs and everything else stay as in
   version 3. Compare prints version 4 from this release on; validate and view keep
   accepting versions 1 to 3.
@@ -132,19 +133,19 @@ ship no recording. Existing compare tests whose signals are shorter than one win
 (5 s) are given longer signals where they need a portion.
 
 - **AC1 — Edits found.** From a generated signal, variants with a cut, an inserted
-  section from another signal, a repeated section, added leading and trailing silence,
-  a fade-in and fade-out, a crossfade at a cut, a shift, a 0.3 s replacement and an
+  section from another signal, a repeated section, added leading and trailing silence, a
+  linear fade-in and fade-out, a crossfade at a cut, a shift, a 0.3 s replacement and an
   inverted polarity each give the expected primary portions, with no extra primary
   portion and every offset exact. Every boundary is within 32 frames of the expected
   one, except that a fade's boundary is within one block (2048 frames) of the frame
   where the faded signal's mean power over a block crosses −80 dBFS, and any boundary
-  inside a crossfade counts as expected. The same holds after resampling B to 48 kHz,
-  at 24 bits, and with a −1.5 dB gain.
+  inside a crossfade counts as expected. The same holds after resampling B to 48 kHz, at
+  24 bits, and with a −1.5 dB gain.
 - **AC2 — Repeats and no match.** B holding a section of A twice, once exact and once
   with noise added about 20 dB below it, gives the noisy copy as an alternate, ranked
   after the primary; two exact copies give two primaries. Two unrelated generated
   signals give no portion, with the reason in `absent`, and compare exits 0; so do
-  inputs shorter than 5 s.
+  inputs shorter than 5 s whose Audio Digests differ.
 - **AC3 — Unmatched ranges.** Audio that only A holds and audio that only B holds are
   reported as unmatched with their level; digital silence is flagged and has no level.
 - **AC4 — Identical audio.** Two inputs with equal Audio Digests give

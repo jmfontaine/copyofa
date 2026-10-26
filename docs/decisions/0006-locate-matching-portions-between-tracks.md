@@ -24,13 +24,14 @@ one.
 A spike tested a windowed method on content known to be identical, so that every
 expected answer was known:
 
-- **Edits made to a CD track with an answer key** (cut, insertion from another track,
-  repetition, added silence, fades, a crossfade, a shift, combined edits), each also
-  resampled to 48 and 96 kHz, at 24 bits, with a gain change, and as 128 and 320 kbps
-  MP3, and a 0.3 s replacement, a dropout and an inverted polarity at 16 bits and as
-  128 kbps MP3: with the 5-second windows decided below, 80 runs and none of 142
-  expected portions missed (240 runs and 426 portions over three window lengths), every
-  offset exact, boundaries within 0 to 20 frames on lossless inputs.
+- **Edits made to a CD track with an answer key** (among them a cut, an insertion from
+  another track, a repetition, added silence, fades, a crossfade, a shift, combined
+  edits, a 5 s replacement and an unedited copy), each also resampled to 48 and 96 kHz,
+  at 24 bits, with a gain change, and as 128 and 320 kbps MP3, and a 0.3 s
+  replacement, a dropout and an inverted polarity at 16 bits and as 128 kbps MP3:
+  with the 5-second windows decided below, 80 runs and none of 142 expected portions
+  missed (240 runs and 426 portions over three window lengths), every offset exact,
+  boundaries within 0 to 20 frames on lossless inputs.
 - **The same audio cut differently** (each CD track inside its disc image, tracks
   joined into one stream, a 48 kHz download against its own tracks): 26 runs at
   5-second windows, 56 over three window lengths, all exact.
@@ -74,12 +75,15 @@ Report becomes `windowed_portions`.
      when its residual Σ(*a* − *g*·*b*)² is at most 0.2·Σ*a*² (−7 dB); otherwise it
      refutes it, unless *p* is below −80 dBFS, where it is neutral: quiet audio can
      confirm a match but never refute it.
-   - **Growth.** The core must have at least half of its non-neutral blocks
-     confirming. Its longest run without a refuting block grows outward, block by
-     block, until a block refutes the match. Short gaps are never bridged.
-   - **Ends.** Each end is placed to the frame within one block of the block edge, at
-     the end of the maximum-scoring prefix or suffix of the score
-     0.2·*a*[*n*]² − (*a*[*n*] − *g*·*b*[*n* + offset])².
+   - **Growth.** The core must have at least one confirming block, and at least half
+     of its non-neutral blocks confirming. Its run without a refuting block that holds
+     the most confirming blocks grows outward, from its first and last confirming
+     blocks, block by block, until a block refutes the match. Short gaps are never
+     bridged.
+   - **Ends.** Each end is then placed to the frame: with *g* the least-squares gain
+     over the eight blocks inside the block edge, the end is the frame, between eight
+     blocks inside and one block outside that edge, that ends the maximum-scoring
+     prefix or suffix of 0.2·*a*[*n*]² − (*a*[*n*] − *g*·*b*[*n* + offset])².
    - **Holes.** Windows of the chain left outside the portion are refined again, so a
      portion after a hole is kept.
 3. **Acceptance.** A portion is kept when it is at least 1 s long and its residual
@@ -109,9 +113,9 @@ Report becomes `windowed_portions`.
    skipped window, chaining tolerance 32 frames, core ratio 0.85 and core length 20 s,
    refinement radius 32 frames, block 2048 frames, matched-block residual 0.2, core
    confirming ratio 0.5, evidence floor −80 dBFS, silence against signal −60 dBFS, end
-   range one block, acceptance residual −10 dB, minimum portion 1 s, merge tolerance
-   2 frames, alternate margin 3 dB, alternate coverage 90 %, and equal-residual floor
-   −60 dB.
+   range eight blocks inside and one outside, acceptance residual −10 dB, minimum
+   portion 1 s, merge tolerance 2 frames, alternate margin 3 dB, alternate coverage
+   90 %, and equal-residual floor −60 dB.
 
 ## Rationale and alternatives
 
@@ -159,9 +163,9 @@ Alternatives considered:
 - Comparison Reports get a new format version, with portions and unmatched ranges in
   place of the offset and overlap. Reports of earlier versions keep their meaning and
   their schemas.
-- A portion shorter than about 2.5 s may be missed, an input shorter than 5 s gives
-  no portion, and a speed or drift difference gives no portion; the Report states
-  these limits.
+- A portion shorter than about 2.5 s may be missed, the search finds no portion in an
+  input shorter than 5 s (identical audio excepted), and a speed or drift difference
+  gives no portion; the Report states these limits.
 - A boundary inside audio below −80 dBFS is placed at the nearest frame with evidence,
   and the rest is reported as unmatched; lossy encoding moves boundaries only there.
 - The coarse search costs two FFTs of B's length per window of A, so its time grows
