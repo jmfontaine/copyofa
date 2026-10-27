@@ -24,6 +24,8 @@ from copyofa.errors import CopyOfAError
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
 
+    import numpy.typing as npt
+
 READER = "redumper"
 MINIMUM_BUILD = 768
 """The oldest redumper build acquire accepts: the one whose output it was tested on."""
@@ -46,7 +48,8 @@ XZ = "xz"
 AS_WRITTEN = "as_written"
 
 # redumper's State values, one byte per frame of the image: ERROR_SKIP (0) and
-# ERROR_C2 (1) mark a frame that was not read successfully.
+# ERROR_C2 (1) mark a frame that was not read successfully, and name an error range's
+# state by their order in inspector.ERROR_STATES.
 _FIRST_SUCCESS_STATE = 2
 
 _CHUNK_SIZE = 1024 * 1024
@@ -81,14 +84,14 @@ class AcquisitionResult:
 def has_read_errors(record: dict[str, Any]) -> bool:
     """Tell whether an Acquisition Record shows audio that was not read cleanly.
 
-    SCSI and C2 errors count, and so does a track frame not read successfully.
-    Subchannel errors do not: the audio is read from the main channel.
+    SCSI and C2 errors count, and so does a track's error range. Subchannel errors
+    do not: the audio is read from the main channel.
     """
     errors = record["read_errors"]
     return bool(
         errors["scsi_samples"]
         or errors["c2_samples"]
-        or any(track["error_frames"] for track in record["tracks"])
+        or any(track["error_ranges"] for track in record["tracks"])
     )
 
 
@@ -140,6 +143,8 @@ def acquire(
     if drive is not None:
         arguments.append(f"--drive={drive}")
     arguments.append(f"--retries={retries}")
+    # Split every disc as read, without generated sectors (ADR 0008).
+    arguments += ["--force-split", "--leave-unchanged"]
 
     record: dict[str, Any] = {
         "record_kind": evidence_set.ACQUISITION_RECORD_KIND,
@@ -441,7 +446,7 @@ class _Track:
     first_frame: int = 0
     frame_count: int = 0
     sha256: str = ""
-    error_frames: int = 0
+    error_ranges: list[dict[str, Any]] = field(default_factory=list)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -453,7 +458,7 @@ class _Track:
                 f"{evidence_set.CD_BITS_PER_SAMPLE}:{self.sha256}"
             ),
             **self.cue,
-            "error_frames": self.error_frames,
+            "error_ranges": self.error_ranges,
         }
 
 
@@ -554,7 +559,7 @@ class _Image:
 
 
 def _locate_tracks(work: Path, tracks: Sequence[_Track]) -> _Image:
-    """Find each track's range in the image and count its frames not read well."""
+    """Find each track's range in the image and its frames not read successfully."""
     image_path = work / f"{IMAGE_NAME}.scram"
     state_path = work / f"{IMAGE_NAME}.state"
     size = _size(image_path, "image")
@@ -587,23 +592,13 @@ def _locate_tracks(work: Path, tracks: Sequence[_Track]) -> _Image:
                 hint = following - sizes[index]
                 if hint >= 0:
                     starts[index] = _find(image, work / tracks[index].file, hint)
-    for index, (track, start, length) in enumerate(
-        zip(tracks, starts, sizes, strict=True)
-    ):
+    for track, start, length in zip(tracks, starts, sizes, strict=True):
         if start is None:
-            message = (
+            raise AcquisitionError(
                 f"Failed: the bytes of {track.file}, track {track.number}, are found "
                 "nowhere in the image, or are a single repeated byte that no other "
                 "track places in it."
             )
-            unread = _unread_where(state_path, frames, starts, sizes, index)
-            if unread:
-                message += (
-                    f" The state marks {unread} frames where it would lie as not "
-                    f"read, and {READER} replaces unread sectors with generated ones "
-                    "when it splits the disc into track files."
-                )
-            raise AcquisitionError(message)
         track.first_frame = start // FRAME_BYTES
         track.frame_count = length // FRAME_BYTES
         with (work / track.file).open("rb") as data:
@@ -614,36 +609,26 @@ def _locate_tracks(work: Path, tracks: Sequence[_Track]) -> _Image:
             count=track.frame_count,
             offset=track.first_frame,
         )
-        track.error_frames = int(np.count_nonzero(state < _FIRST_SUCCESS_STATE))
+        track.error_ranges = _error_ranges(state)
     return _Image(frames)
 
 
-def _unread_where(
-    state_path: Path,
-    frames: int,
-    starts: Sequence[int | None],
-    sizes: Sequence[int],
-    index: int,
-) -> int:
-    """Count the frames not read well where a track that was not found would lie.
-
-    That is right after the previous track, else right before the next one; with
-    neither found, nothing tells where it would lie.
-    """
-    length = sizes[index] // FRAME_BYTES
-    previous = starts[index - 1] if index else None
-    following = starts[index + 1] if index + 1 < len(starts) else None
-    if previous is not None:
-        first = (previous + sizes[index - 1]) // FRAME_BYTES
-    elif following is not None:
-        first = following // FRAME_BYTES - length
-    else:
-        return 0
-    first, end = max(first, 0), min(first + length, frames)
-    if first >= end:
-        return 0
-    state = np.fromfile(state_path, dtype=np.uint8, count=end - first, offset=first)
-    return int(np.count_nonzero(state < _FIRST_SUCCESS_STATE))
+def _error_ranges(state: npt.NDArray[np.uint8]) -> list[dict[str, Any]]:
+    """Return the maximal runs of a track's frames with one state below success."""
+    # Every state of success is one value, so a change between two of them starts
+    # no run.
+    states = np.minimum(state, _FIRST_SUCCESS_STATE)
+    starts = np.concatenate(([0], np.flatnonzero(np.diff(states)) + 1))
+    ends = np.append(starts[1:], len(states))
+    return [
+        {
+            "offset_frames": int(start),
+            "frame_count": int(end - start),
+            "state": inspector.ERROR_STATES[states[start]],
+        }
+        for start, end in zip(starts, ends, strict=True)
+        if states[start] < _FIRST_SUCCESS_STATE
+    ]
 
 
 def _size(path: Path, what: str) -> int:

@@ -426,11 +426,9 @@ def _print_acquisition(result: AcquisitionResult) -> None:
             track["frame_count"], evidence_set.CD_SAMPLE_RATE
         )
         line = f"  {track['number']}: {duration}, {track['audio_digest']}"
-        if track["error_frames"]:
-            line = (
-                f"{line}, {_count(track['error_frames'], 'frame')} not read "
-                "successfully"
-            )
+        unread = sum(error["frame_count"] for error in track["error_ranges"])
+        if unread:
+            line = f"{line}, {_count(unread, 'frame')} not read successfully"
         print(line)
     print(f"Preserved {_count(result.files, 'file')}, {_count(result.bytes, 'byte')}")
 

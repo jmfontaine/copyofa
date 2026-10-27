@@ -105,6 +105,33 @@ class UnusableRecordError(Exception):
     """An Acquisition Record that cannot be used; the message says why."""
 
 
+NOT_READ = "not_read"
+C2_ERROR = "c2_error"
+ERROR_STATES = (NOT_READ, C2_ERROR)
+"""The states of an error range: not read, or read with C2 errors."""
+
+READABLE_RECORD_FORMAT_VERSIONS = (1, 2)
+"""The Acquisition Record format versions inspect, compare and export read."""
+
+
+@dataclass(frozen=True)
+class ErrorRange:
+    """A run of a track's frames not read successfully, as the record gives it."""
+
+    offset_frames: int
+    """The range's first frame, counted from the track's first frame."""
+    frame_count: int
+    state: str
+    """One of ERROR_STATES."""
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "offset_frames": self.offset_frames,
+            "frame_count": self.frame_count,
+            "state": self.state,
+        }
+
+
 @dataclass(frozen=True)
 class RecordedTrack:
     """A track as the Acquisition Record gives it."""
@@ -115,6 +142,9 @@ class RecordedTrack:
     frame_count: int
     audio_digest: str
     """The Audio Digest recorded at acquisition."""
+    error_ranges: tuple[ErrorRange, ...] | None
+    """The track's frames not read successfully, in order; None for a version 1
+    record, which gives none."""
 
 
 @dataclass(frozen=True)
@@ -289,15 +319,16 @@ def _acquired_disc(record: Any, manifest: dict[str, str]) -> AcquiredDisc:
     if not isinstance(record, dict):
         raise _unusable("it is not a JSON object")
     kind = evidence_set.ACQUISITION_RECORD_KIND
-    version = evidence_set.ACQUISITION_RECORD_FORMAT_VERSION
+    version = record.get("format_version")
     if (
         record.get("record_kind") != kind
-        or record.get("format_version") != version
+        or version not in READABLE_RECORD_FORMAT_VERSIONS
         # Not 1.0, nor true, which compare equal to 1.
-        or type(record.get("format_version")) is not int
+        or type(version) is not int
     ):
+        versions = " or ".join(map(str, READABLE_RECORD_FORMAT_VERSIONS))
         raise UnusableRecordError(
-            f"{_RECORD} is not format version {version} of {kind}"
+            f"{_RECORD} is not format version {versions} of {kind}"
         )
     disc = record.get("disc")
     image = disc.get("image") if isinstance(disc, dict) else None
@@ -329,10 +360,36 @@ def _acquired_disc(record: Any, manifest: dict[str, str]) -> AcquiredDisc:
         digest = entry.get("audio_digest")
         if not isinstance(digest, str) or not _CD_DIGEST.fullmatch(digest):
             raise _unusable(f"track {number} has no valid audio_digest")
+        ranges = None if version == 1 else _error_ranges(entry, number)
         tracks.append(
-            RecordedTrack(number, entry["first_frame"], entry["frame_count"], digest)
+            RecordedTrack(
+                number, entry["first_frame"], entry["frame_count"], digest, ranges
+            )
         )
     return AcquiredDisc(image["path"], manifest[image["path"]], tuple(tracks))
+
+
+def _error_ranges(entry: dict[str, Any], number: int) -> tuple[ErrorRange, ...]:
+    """Take a version 2 track's error ranges: in order, apart, inside the track."""
+    entries = entry.get("error_ranges")
+    if not isinstance(entries, list):
+        raise _unusable(f"track {number} has no valid error_ranges")
+    ranges: list[ErrorRange] = []
+    end = 0
+    for index, item in enumerate(entries, start=1):
+        if (
+            not isinstance(item, dict)
+            or not _is_count(item.get("offset_frames"), end)
+            or not _is_count(item.get("frame_count"), 1)
+            or item["offset_frames"] + item["frame_count"] > entry["frame_count"]
+            or item.get("state") not in ERROR_STATES
+        ):
+            raise _unusable(f"track {number} has no valid error range {index}")
+        ranges.append(
+            ErrorRange(item["offset_frames"], item["frame_count"], item["state"])
+        )
+        end = item["offset_frames"] + item["frame_count"]
+    return tuple(ranges)
 
 
 def _unusable(reason: str) -> UnusableRecordError:

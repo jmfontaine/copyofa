@@ -29,6 +29,9 @@ STORED = [
     "data/disc.toc",
 ]
 
+AS_READ = ["--force-split", "--leave-unchanged"]
+"""The options that make redumper split a disc with errors as read (ADR 0008)."""
+
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -87,7 +90,7 @@ def test_acquire_preserves_the_disc_without_track_files(
 
     assert outcome.code == 0, outcome.err
     assert disc_runs(redumper) == [
-        ["disc", "--image-name=disc", "--drive=disk7", "--retries=20"]
+        ["disc", "--image-name=disc", "--drive=disk7", "--retries=20", *AS_READ]
     ]
     assert sorted(path.name for path in destination.iterdir()) == [
         "bag-info.txt",
@@ -134,7 +137,7 @@ def test_acquire_preserves_the_disc_without_track_files(
     image_frames = len(disc.image) // 4
     assert record == {
         "record_kind": "copyofa.acquisition",
-        "format_version": 1,
+        "format_version": 2,
         "copyofa_version": copyofa.__version__,
         "acquired_at": record["acquired_at"],
         "note": "Bought new",
@@ -147,6 +150,8 @@ def test_acquire_preserves_the_disc_without_track_files(
                 "--image-name=disc",
                 "--drive=disk7",
                 "--retries=20",
+                "--force-split",
+                "--leave-unchanged",
             ],
         },
         "drive": {
@@ -177,7 +182,7 @@ def test_acquire_preserves_the_disc_without_track_files(
                 "audio_digest": digest_of(disc.tracks[0]),
                 "title": "FIRST",
                 "isrc": "USAAA2600001",
-                "error_frames": 0,
+                "error_ranges": [],
             },
             {
                 "number": 2,
@@ -187,7 +192,7 @@ def test_acquire_preserves_the_disc_without_track_files(
                 "title": "SECOND",
                 "performer": "A GUEST",
                 "isrc": "USAAA2600002",
-                "error_frames": 0,
+                "error_ranges": [],
             },
             {
                 "number": 3,
@@ -195,7 +200,7 @@ def test_acquire_preserves_the_disc_without_track_files(
                 "frame_count": len(disc.tracks[2]) // 4,
                 "audio_digest": digest_of(disc.tracks[2]),
                 "isrc": "USAAA2600003",
-                "error_frames": 0,
+                "error_ranges": [],
             },
         ],
     }
@@ -241,7 +246,9 @@ def test_acquire_prints_the_acquisition_result_as_json(
         "evidence_set": str(destination),
         "acquisition_record": record_of(destination),
     }
-    assert disc_runs(redumper) == [["disc", "--image-name=disc", "--retries=20"]]
+    assert disc_runs(redumper) == [
+        ["disc", "--image-name=disc", "--retries=20", *AS_READ]
+    ]
 
 
 def test_acquire_gives_redumper_the_retry_count_and_records_it(
@@ -252,7 +259,7 @@ def test_acquire_gives_redumper_the_retry_count_and_records_it(
     outcome = run("acquire", "--to", destination, "--retries", "0")
 
     assert outcome.code == 0, outcome.err
-    arguments = ["disc", "--image-name=disc", "--retries=0"]
+    arguments = ["disc", "--image-name=disc", "--retries=0", *AS_READ]
     assert disc_runs(redumper) == [arguments]
     assert record_of(destination)["reader"]["arguments"] == arguments
 
@@ -338,7 +345,7 @@ def test_acquire_reads_a_single_track_disc_and_absent_values(
             "first_frame": disc.first_frames[0],
             "frame_count": 6 * 588,
             "audio_digest": digest_of(disc.tracks[0]),
-            "error_frames": 0,
+            "error_ranges": [],
         }
     ]
 
@@ -422,24 +429,13 @@ FAILURES: dict[str, tuple[dict[str, Any], str]] = {
             "it.\n"
         ),
     ),
-    "track found nowhere where it was not read": (
-        {"corrupt_track_file": 2, "error_frames": {"2": [0, 588]}},
+    "last track past the end of the image": (
+        # The drive never read the lead-out nor the last track's last 10 frames.
+        {"unread_tail": 2 * 588 + 10},
         (
-            "Failed: the bytes of disc (Track 2).bin, track 2, are found nowhere in "
+            "Failed: the bytes of disc (Track 3).bin, track 3, are found nowhere in "
             "the image, or are a single repeated byte that no other track places in "
-            "it. The state marks 588 frames where it would lie as not read, and "
-            "redumper replaces unread sectors with generated ones when it splits the "
-            "disc into track files.\n"
-        ),
-    ),
-    "first track found nowhere where it was not read": (
-        {"corrupt_track_file": 1, "error_frames": {"1": [1000, 5]}},
-        (
-            "Failed: the bytes of disc (Track 1).bin, track 1, are found nowhere in "
-            "the image, or are a single repeated byte that no other track places in "
-            "it. The state marks 5 frames where it would lie as not read, and "
-            "redumper replaces unread sectors with generated ones when it splits the "
-            "disc into track files.\n"
+            "it.\n"
         ),
     ),
     "every track silent": (
@@ -500,24 +496,102 @@ def test_acquire_escapes_line_breaks_inside_a_shown_log_line(
 
 
 @pytest.mark.parametrize("output", [[], ["--json"]], ids=["text", "json"])
-def test_acquire_accepts_a_disc_read_with_errors_and_exits_1(
+def test_acquire_accepts_a_disc_read_with_errors_as_read_and_exits_1(
     run: Run, redumper: StandIn, tmp_path: Path, output: list[str]
 ) -> None:
-    redumper.configure(error_frames={"2": [100, 37]})
+    # Frames not read, read with C2 errors, two adjacent frames of different states,
+    # and two adjacent runs of one state, which make one range.
+    redumper.configure(
+        errors={
+            "2": [[100, 37, 0], [300, 1, 1], [301, 1, 0], [500, 20, 1], [520, 4, 1]]
+        }
+    )
     destination = tmp_path / "Album"
 
     outcome = run("acquire", "--to", destination, *output)
 
     assert outcome.code == 1
     assert "the disc was read with errors" in outcome.err
+    assert disc_runs(redumper)[0][-2:] == AS_READ
     record = record_of(destination)
-    assert [track["error_frames"] for track in record["tracks"]] == [0, 37, 0]
+    assert record["format_version"] == 2
+    assert [track["error_ranges"] for track in record["tracks"]] == [
+        [],
+        [
+            {"offset_frames": 100, "frame_count": 37, "state": "not_read"},
+            {"offset_frames": 300, "frame_count": 1, "state": "c2_error"},
+            {"offset_frames": 301, "frame_count": 1, "state": "not_read"},
+            {"offset_frames": 500, "frame_count": 24, "state": "c2_error"},
+        ],
+        [],
+    ]
+    # The track holds what the drive returned: zeros where it read nothing.
+    disc = synthetic_disc(redumper.config)
+    assert record["tracks"][1]["audio_digest"] == digest_of(disc.tracks[1])
+    assert disc.tracks[1][100 * 4 : 137 * 4] == bytes(37 * 4)
     assert acquirer.has_read_errors(record)
     if output:
         assert json.loads(outcome.out)["acquisition_record"] == record
     else:
         assert "Read errors: found (" in outcome.out
-        assert ", 37 frames not read successfully\n" in outcome.out
+        assert ", 63 frames not read successfully\n" in outcome.out
+
+
+def test_acquire_records_every_range_and_a_wholly_unread_track(
+    run: Run, redumper: StandIn, tmp_path: Path
+) -> None:
+    redumper.configure(
+        errors={
+            "1": [[1200 + 2 * index, 1, 1] for index in range(12)],
+            "3": [[0, 3 * 588, 0]],
+        }
+    )
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination)
+
+    assert outcome.code == 1, outcome.err
+    tracks = record_of(destination)["tracks"]
+    assert tracks[0]["error_ranges"] == [
+        {"offset_frames": 1200 + 2 * index, "frame_count": 1, "state": "c2_error"}
+        for index in range(12)
+    ]
+    assert tracks[2]["error_ranges"] == [
+        {"offset_frames": 0, "frame_count": 3 * 588, "state": "not_read"}
+    ]
+    assert tracks[2]["audio_digest"] == digest_of(bytes(3 * 588 * 4))
+    assert "  1: 0:00.053, " in outcome.out
+    assert ", 12 frames not read successfully\n" in outcome.out
+    assert ", 1764 frames not read successfully\n" in outcome.out
+
+
+@pytest.mark.parametrize(
+    ("changes", "code", "found"),
+    [
+        ({"lead_in_c2": 10, "media_errors": {"scsi": 0, "c2": 10, "q": 3}}, 1, True),
+        # The image ends before the lead-out's last 588 frames, which no track holds.
+        ({"unread_tail": 588}, 0, False),
+    ],
+    ids=["lead-in C2 errors", "unread lead-out"],
+)
+def test_acquire_records_no_range_for_errors_outside_the_tracks(
+    run: Run,
+    redumper: StandIn,
+    tmp_path: Path,
+    changes: dict[str, Any],
+    code: int,
+    found: bool,
+) -> None:
+    redumper.configure(**changes)
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination)
+
+    assert outcome.code == code, outcome.err
+    record = record_of(destination)
+    assert [track["error_ranges"] for track in record["tracks"]] == [[], [], []]
+    assert f"Read errors: {'found' if found else 'none'} (" in outcome.out
+    assert "not read successfully" not in outcome.out
 
 
 def test_acquire_counts_scsi_and_c2_errors_as_read_errors(

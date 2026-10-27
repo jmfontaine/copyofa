@@ -189,18 +189,24 @@ its fixed parameters, which each comparison Report states.
 
 `acquire` reads a plain audio CD with [redumper](https://github.com/superg/redumper),
 an external program needed only by acquire, never a Python dependency: build b768 or
-later on `PATH`, run once as `redumper disc` with a retry count, 20 by default, as
-[ADR 0005](docs/decisions/0005-acquire-audio-cds-with-redumper.md) and
-[ADR 0007](docs/decisions/0007-re-read-sectors-with-errors-when-acquiring.md) decide.
+later on `PATH`, run once as `redumper disc` with a retry count, 20 by default, and
+`--force-split --leave-unchanged`, so it splits every disc as read, as
+[ADR 0005](docs/decisions/0005-acquire-audio-cds-with-redumper.md),
+[ADR 0007](docs/decisions/0007-re-read-sectors-with-errors-when-acquiring.md) and
+[ADR 0008](docs/decisions/0008-keep-discs-with-read-errors-as-read.md) decide.
 Acquire reads the drive, the table of contents, the offsets and the error counts from
-redumper's log, and the tracks' files, ISRCs and CD-Text from its cue sheet. An
+redumper's log, the tracks' files, ISRCs and CD-Text from its cue sheet, and each
+track's error ranges from its state. An
 acquired set stores redumper's image as 16-bit stereo FLAC, written by libsndfile at
 its highest compression level, its state and subchannel as xz, written by Python's
 `lzma`, its other files as written, and no track file; each track is a range of the
-image the Acquisition Record gives. soundfile's minimum, 0.13, is its first release
+image the Acquisition Record gives. Acquire writes record format version 2;
+inspect, compare and export read versions 1 and 2 through
+`inspector.read_acquired_disc`. soundfile's minimum, 0.13, is its first release
 that sets a FLAC compression level. Tests run a stand-in `redumper`, defined in
 `tests/conftest.py`, that writes small synthetic files and a log in build b768's
-format.
+format, and refuses to split a disc with errors without `--force-split
+--leave-unchanged`.
 
 ### Command conventions
 
