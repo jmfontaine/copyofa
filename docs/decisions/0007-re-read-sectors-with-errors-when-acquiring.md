@@ -57,8 +57,8 @@ Alternatives considered:
 - **Keeping redumper's default and adding the option only.** Rejected: a lightly
   scratched disc would still fail by default, with a message that does not say what
   to do.
-- **Splitting with `--force-split` when errors remain.** Deferred to the Later outcome
-  Acquire More Kinds of Disc: it needs deciding what a track holds where the drive
+- **Splitting with `--force-split` when errors remain.** Deferred to the Product Map
+  outcome Acquire Damaged Discs: it needs deciding what a track holds where the drive
   read nothing.
 - **Running `redumper refine` as a further step after a failure.** Rejected: ADR 0005
   keeps acquire to one `redumper disc` run, and `--retries` gives that run the same
