@@ -685,7 +685,11 @@ copyofa view htf.json > htf.html
 
 View first validates the file as [`copyofa validate`](validation-result.md) does, and
 refuses a Report that is invalid, unsupported, or of another kind. It supports
-comparison Reports only, of format version 1, 2, 3 or 4.
+comparison Reports only, of format version 1, 2, 3 or 4, and renders each version
+with its own layout. It also refuses a valid comparison Report of any other format
+version, such as one a later CopyOfA printed, rather than show it with a layout that
+could leave fields out: it prints nothing on stdout and one line on stderr naming the
+file, its format version and the versions view supports, and exits 1.
 
 The page shows every field of the Report with its value as the Report records it, and
 adds only labels and units, for each track a duration computed from its frames and
@@ -731,9 +735,10 @@ override, or a lone surrogate for a path byte that is not valid UTF-8, appears a
 escape, such as `\udc80`; spaces such as U+00A0 appear as they are.
 
 View exits 0 when it printed the page, and 1 when the file cannot be read or the
-Report is invalid, unsupported or not a comparison Report, with the reason on stderr
-and nothing on stdout. It exits 2 for invalid arguments and 130 when canceled with
-Ctrl-C. It has no `--json` option and writes no file.
+Report is invalid, unsupported, not a comparison Report, or of a format version view
+does not render, with the reason on stderr and nothing on stdout. It exits 2 for
+invalid arguments and 130 when canceled with Ctrl-C. It has no `--json` option and
+writes no file.
 
 ## Exit codes
 

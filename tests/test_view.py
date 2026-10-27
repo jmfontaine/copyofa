@@ -687,6 +687,16 @@ def test_render_returns_text_that_encodes_as_utf8() -> None:
     assert "\\x00" in page
 
 
+def test_render_refuses_a_format_version_it_has_no_layout_for(
+    report_of: Callable[[str], tuple[Path, dict[str, Any]]],
+) -> None:
+    _, report = report_of("measured")
+    report["format_version"] = max(viewer.SUPPORTED_FORMAT_VERSIONS) + 1
+
+    with pytest.raises(ValueError, match="format version"):
+        viewer.render(report, "0" * 64)
+
+
 def test_view_writes_utf8_whatever_the_locale(
     report_of: Callable[[str], tuple[Path, dict[str, Any]]],
 ) -> None:
@@ -814,6 +824,24 @@ def test_view_refuses_a_valid_report_of_another_kind(
     assert outcome.code == 1
     assert outcome.out == ""
     assert "comparison Reports only" in outcome.err
+
+
+def test_view_refuses_a_comparison_report_of_a_version_it_does_not_render(
+    run: Run,
+    version_4: Callable[[str], tuple[Path, dict[str, Any]]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path, _ = version_4("identical")
+    monkeypatch.setattr(viewer, "SUPPORTED_FORMAT_VERSIONS", frozenset({1, 2, 3}))
+
+    outcome = run("view", path)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert outcome.err == (
+        f"copyofa: {path} is a comparison Report of format version 4; view supports "
+        "format versions 1, 2 and 3\n"
+    )
 
 
 def test_view_refuses_a_file_it_cannot_read(run: Run, tmp_path: Path) -> None:

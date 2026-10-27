@@ -257,8 +257,9 @@ a table of the portions with each one's residual windows, and the unmatched audi
 each track. [Comparison Report format][comparison-report] describes it.
 
 View exits 0 when it printed the page, 1 when the Report is invalid, unsupported, not a
-comparison Report, or cannot be read, 2 when the arguments are invalid, and 130 when
-canceled. It prints nothing on stdout otherwise, and writes no file.
+comparison Report, of a format version view does not render, or cannot be read, 2 when
+the arguments are invalid, and 130 when canceled. It prints nothing on stdout
+otherwise, and writes no file.
 
 ## Documents
 

@@ -7,6 +7,7 @@ Security Policy forbids both. See docs/formats/comparison-report.md.
 
 from __future__ import annotations
 
+import enum
 import html
 import json
 import unicodedata
@@ -20,6 +21,27 @@ if TYPE_CHECKING:
 
 SUPPORTED_KINDS = frozenset({comparator.REPORT_KIND})
 """The kinds of Report this module renders."""
+
+
+class _Layout(enum.Enum):
+    """How a page lays out the method and the measurements of a Report."""
+
+    ALIGNMENT = enum.auto()
+    """The method; one alignment, its overlap, and the values measured over it."""
+    PORTIONS = enum.auto()
+    """The method and its parameters; the portions and the unmatched audio."""
+
+
+_LAYOUTS = {
+    1: _Layout.ALIGNMENT,
+    2: _Layout.ALIGNMENT,
+    3: _Layout.ALIGNMENT,
+    4: _Layout.PORTIONS,
+}
+"""The layout of each comparison Report format version this module renders."""
+
+SUPPORTED_FORMAT_VERSIONS = frozenset(_LAYOUTS)
+"""The comparison Report format versions this module renders, each with its layout."""
 
 _ABSENT = "absent"
 _LEFT_OUT = "left out"
@@ -42,13 +64,18 @@ td ul, td ol { margin: 0; padding-left: 1.2rem; }
 
 
 def render(report: dict[str, Any], sha256: str) -> str:
-    """Return the HTML page of a valid comparison Report of format version 1 to 4.
+    """Return the HTML page of a valid comparison Report of a supported format version.
 
     sha256 is the SHA-256 of the exact bytes the Report was read from. Every text of
     the Report is escaped, and a character that is not printable, such as a lone
     surrogate (a path byte that is not valid UTF-8), is shown as its escape, such as
-    `\\udc80`, so the page is valid UTF-8 and inert.
+    `\\udc80`, so the page is valid UTF-8 and inert. Raises ValueError for a format
+    version not in SUPPORTED_FORMAT_VERSIONS.
     """
+    version = report["format_version"]
+    if version not in SUPPORTED_FORMAT_VERSIONS:
+        raise ValueError(f"cannot render comparison Report format version {version}")
+    layout = _LAYOUTS[version]
     inputs = report["inputs"]
     title = (
         f"Comparison of {comparator.input_name(inputs['a'])} and "
@@ -65,8 +92,8 @@ def render(report: dict[str, Any], sha256: str) -> str:
             "Report holds no value there.</p>"
         ),
         *_inputs_section(inputs),
-        *_method_section(report["method"]),
-        *_measurements_section(report.get("measurements"), report["method"]),
+        *_method_section(report["method"], layout),
+        *_measurements_section(report.get("measurements"), report["method"], layout),
         "<h2>Limitations</h2>",
         _items(report["limitations"]),
     ]
@@ -162,7 +189,7 @@ def _inputs_section(inputs: dict[str, Any]) -> list[str]:
     ]
 
 
-def _method_section(method: dict[str, Any]) -> list[str]:
+def _method_section(method: dict[str, Any], layout: _Layout) -> list[str]:
     fields = (
         ("Decoder", "decoder"),
         ("Decoder version", "decoder_version"),
@@ -176,7 +203,7 @@ def _method_section(method: dict[str, Any]) -> list[str]:
         "<h2>Method</h2>",
         _table(None, [(label, _show(method, key)) for label, key in fields]),
     ]
-    if "parameters" in method:
+    if layout is _Layout.PORTIONS:
         parts += [
             "<h3>Parameters</h3>",
             _table(
@@ -191,15 +218,16 @@ def _method_section(method: dict[str, Any]) -> list[str]:
 
 
 def _measurements_section(
-    measurements: dict[str, Any] | None, method: dict[str, Any]
+    measurements: dict[str, Any] | None, method: dict[str, Any], layout: _Layout
 ) -> list[str]:
     if measurements is None:
         return [
             "<h2>Measurements</h2>",
             "<p>The tracks were not measured: the Report holds no measurements.</p>",
         ]
-    if "portions" in measurements:
+    if layout is _Layout.PORTIONS:
         return _portions_section(measurements, method.get("common_sample_rate"))
+    # _Layout.ALIGNMENT: one alignment, its overlap, and the values measured over it.
     absent = measurements.get("absent", {})
     alignment = [("Identical audio", _show(measurements, "identical_audio"))]
     if "offset" in measurements:

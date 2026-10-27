@@ -150,7 +150,11 @@ the standard library only.
 The page shows every value as the Report records it and the SHA-256 of the file; it
 holds no script, no link and no external resource, a Content Security Policy forbids
 both, and every text of the Report is escaped, a lone surrogate as `\udcXX`. Each
-Report kind and format version `view` supports needs its own rendering.
+Report kind and format version `view` supports needs its own rendering:
+`copyofa.viewer` maps each comparison format version it renders to its layout,
+derives `SUPPORTED_FORMAT_VERSIONS` from that mapping, so a version cannot be
+supported without a layout, and `view` refuses a valid comparison Report of any other
+version.
 
 ### Audio decoding
 
