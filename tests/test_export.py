@@ -7,7 +7,14 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import soundfile
-from conftest import closed_stdout, edit_record, signal, synthetic_disc, write_audio
+from conftest import (
+    as_version_1,
+    closed_stdout,
+    edit_record,
+    signal,
+    synthetic_disc,
+    write_audio,
+)
 
 from copyofa import exporter, inspector, staging
 
@@ -129,6 +136,86 @@ def test_export_human_result(run: Run, acquired_set: Path, tmp_path: Path) -> No
         *(f"  {sentence}" for sentence in exporter.LEFT_OUT),
     ]
     assert "Exported track 1 to 01.flac" in outcome.err
+
+
+# The warnings for DAMAGED_ERRORS: a range's start is a duration in the track.
+DAMAGED_WARNINGS = [
+    (
+        "copyofa: warning: track 1 has 12 frames not read successfully: "
+        + ", ".join(["0:00.027+1 (C2 errors)"] * 10)
+        + ", and 2 more"
+    ),
+    (
+        "copyofa: warning: track 2 has 63 frames not read successfully: "
+        "0:00.002+37 (not read), 0:00.006+1 (C2 errors), 0:00.006+1 (not read), "
+        "0:00.011+24 (C2 errors)"
+    ),
+    (
+        "copyofa: warning: track 3 has 1 frame not read successfully: "
+        "0:00.000+1 (C2 errors)"
+    ),
+]
+
+
+@pytest.mark.parametrize("json_option", [(), ("--json",)], ids=["text", "json"])
+def test_export_warns_about_each_track_with_frames_not_read_successfully(
+    run: Run,
+    redumper: StandIn,
+    damaged_set: Path,
+    tmp_path: Path,
+    json_option: tuple[str, ...],
+) -> None:
+    destination = tmp_path / "Tracks"
+
+    outcome = run("export", damaged_set, "--to", destination, *json_option)
+
+    assert outcome.code == 0, outcome.err
+    warnings = [line for line in outcome.err.splitlines() if "warning" in line]
+    assert warnings == DAMAGED_WARNINGS
+    disc = synthetic_disc(redumper.config)
+    record = json.loads((damaged_set / "copyofa/acquisition-record.json").read_bytes())
+    for number, (data, recorded) in enumerate(
+        zip(disc.tracks, record["tracks"], strict=True), start=1
+    ):
+        samples, _ = soundfile.read(destination / f"0{number}.flac", dtype="int16")
+        assert samples.astype("<i2").tobytes() == data
+        assert recorded["audio_digest"].endswith(hashlib.sha256(data).hexdigest())
+    if json_option:
+        assert "warnings" not in json.loads(outcome.out)
+
+
+def test_export_warns_about_nothing_for_a_version_1_record(
+    run: Run, damaged_set: Path, tmp_path: Path
+) -> None:
+    as_version_1(damaged_set)
+
+    outcome = run("export", damaged_set, "--to", tmp_path / "Tracks")
+
+    assert outcome.code == 0, outcome.err
+    assert "warning" not in outcome.err
+
+
+def ranges(count: int) -> tuple[inspector.ErrorRange, ...]:
+    return tuple(
+        inspector.ErrorRange(index * 44100, 2, inspector.NOT_READ)
+        for index in range(count)
+    )
+
+
+@pytest.mark.parametrize(
+    ("count", "end"),
+    [(10, "0:09.000+2 (not read)"), (11, "0:09.000+2 (not read), and 1 more")],
+    ids=["10 ranges", "11 ranges"],
+)
+def test_error_ranges_list_at_most_10_ranges(count: int, end: str) -> None:
+    described = inspector.describe_error_ranges(ranges(count))
+
+    assert described.startswith(
+        f"{2 * count} frames not read successfully: 0:00.000+2 (not read), "
+        "0:01.000+2 (not read), "
+    )
+    assert described.endswith(f", {end}")
+    assert described.count("+") == 10
 
 
 def imported(make_set: MakeSet) -> Path:

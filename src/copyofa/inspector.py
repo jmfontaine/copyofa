@@ -21,7 +21,7 @@ import copyofa
 from copyofa import evidence_set, verifier
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterator
+    from collections.abc import Callable, Generator, Iterator, Sequence
     from io import FileIO
     from pathlib import Path
 
@@ -145,6 +145,33 @@ class RecordedTrack:
     error_ranges: tuple[ErrorRange, ...] | None
     """The track's frames not read successfully, in order; None for a version 1
     record, which gives none."""
+
+
+_LISTED_RANGES = 10
+_STATE_TEXT = {NOT_READ: "not read", C2_ERROR: "C2 errors"}
+
+
+def describe_error_ranges(ranges: Sequence[ErrorRange]) -> str:
+    """Describe a track's error ranges, as export's warning and inspect's text do.
+
+    Returns `<count> frame(s) not read successfully: <ranges>`, count being the
+    total of all the ranges. Each range is its start in the track as a duration,
+    then `+`, its frame count and its state, such as `3:12.093+7 (C2 errors)`; at
+    most 10 are listed, then `, and <n> more`.
+    """
+    # Imported here: viewer imports comparator, which imports this module.
+    from copyofa import viewer
+
+    count = sum(error.frame_count for error in ranges)
+    listed = [
+        f"{viewer.format_duration(error.offset_frames, evidence_set.CD_SAMPLE_RATE)}"
+        f"+{error.frame_count} ({_STATE_TEXT[error.state]})"
+        for error in ranges[:_LISTED_RANGES]
+    ]
+    if len(ranges) > _LISTED_RANGES:
+        listed.append(f"and {len(ranges) - _LISTED_RANGES} more")
+    frames = "frame" if count == 1 else "frames"
+    return f"{count} {frames} not read successfully: {', '.join(listed)}"
 
 
 @dataclass(frozen=True)

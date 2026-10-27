@@ -123,7 +123,17 @@ def export(
         return tuple(files)
 
     files, warnings = staging.accept(checked, "export", build)
-    return ExportResult(checked.target, root, manifest_sha256, files, warnings)
+    # A track with frames not read successfully is exported as acquired, with a
+    # warning; a version 1 record gives no error ranges.
+    describe = inspector.describe_error_ranges
+    unreliable = tuple(
+        f"track {track.number} has {describe(track.error_ranges)}"
+        for track in disc.tracks
+        if track.error_ranges
+    )
+    return ExportResult(
+        checked.target, root, manifest_sha256, files, unreliable + warnings
+    )
 
 
 def _write_track(
