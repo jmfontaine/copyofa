@@ -147,31 +147,55 @@ class RecordedTrack:
     record, which gives none."""
 
 
-_LISTED_RANGES = 10
-_STATE_TEXT = {NOT_READ: "not read", C2_ERROR: "C2 errors"}
+_LISTED_AREAS = 10
+_AREA_GAP_FRAMES = 588
+"""Ranges less than one sector apart belong to one area."""
 
 
 def describe_error_ranges(ranges: Sequence[ErrorRange]) -> str:
     """Describe a track's error ranges, as export's warning and inspect's text do.
 
-    Returns `<count> frame(s) not read successfully: <ranges>`, count being the
-    total of all the ranges. Each range is its start in the track as a duration,
-    then `+`, its frame count and its state, such as `3:12.093+7 (C2 errors)`; at
-    most 10 are listed, then `, and <n> more`.
+    Returns `<count> frame(s) not read successfully, in <n> area(s): <areas>`,
+    count being the total of all the ranges. Ranges less than one sector apart form
+    one area, written as its start and end in the track as durations, such as
+    `3:18.730-3:18.739 (24 frames with C2 errors)`; at most 10 areas are listed,
+    then `, and <n> more`.
     """
     # Imported here: viewer imports comparator, which imports this module.
     from copyofa import viewer
 
+    def duration(frames: int) -> str:
+        return viewer.format_duration(frames, evidence_set.CD_SAMPLE_RATE)
+
+    def counted(number: int, text: str) -> str:
+        return f"{number} {'frame' if number == 1 else 'frames'} {text}"
+
+    areas: list[tuple[int, int, dict[str, int]]] = []
+    for error in ranges:
+        end = error.offset_frames + error.frame_count
+        if areas and error.offset_frames - areas[-1][1] < _AREA_GAP_FRAMES:
+            start, _, frames = areas[-1]
+            areas[-1] = (start, end, frames)
+        else:
+            frames = dict.fromkeys(ERROR_STATES, 0)
+            areas.append((error.offset_frames, end, frames))
+        frames[error.state] += error.frame_count
+    listed = []
+    for start, end, frames in areas[:_LISTED_AREAS]:
+        span = duration(start)
+        if duration(end) != span:
+            span = f"{span}-{duration(end)}"
+        parts = [
+            counted(frames[state], text)
+            for state, text in ((NOT_READ, "not read"), (C2_ERROR, "with C2 errors"))
+            if frames[state]
+        ]
+        listed.append(f"{span} ({', '.join(parts)})")
+    if len(areas) > _LISTED_AREAS:
+        listed.append(f"and {len(areas) - _LISTED_AREAS} more")
     count = sum(error.frame_count for error in ranges)
-    listed = [
-        f"{viewer.format_duration(error.offset_frames, evidence_set.CD_SAMPLE_RATE)}"
-        f"+{error.frame_count} ({_STATE_TEXT[error.state]})"
-        for error in ranges[:_LISTED_RANGES]
-    ]
-    if len(ranges) > _LISTED_RANGES:
-        listed.append(f"and {len(ranges) - _LISTED_RANGES} more")
-    frames = "frame" if count == 1 else "frames"
-    return f"{count} {frames} not read successfully: {', '.join(listed)}"
+    where = f"{len(areas)} {'area' if len(areas) == 1 else 'areas'}"
+    return f"{counted(count, 'not read successfully')}, in {where}: {', '.join(listed)}"
 
 
 @dataclass(frozen=True)

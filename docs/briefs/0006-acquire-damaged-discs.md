@@ -135,9 +135,9 @@ Acquire writes version 2.
   version 1.
 - Inspect's exit status does not change: a track with error ranges that decodes to its
   recorded Audio Digest is `interpreted`, and the set is as acquired.
-- Inspect's text result adds to each affected track's line `, <count> frames not read
-  successfully:` and its ranges, exactly as export's warning gives the count and the
-  ranges, the singular for 1 and the limit of 10 ranges included.
+- Inspect's text result adds to each affected track's line `,` and the same text as
+  export's warning: the count, the number of areas and the areas, the singular for 1
+  and the limit of 10 areas included.
 
 ### Compare
 
@@ -149,16 +149,21 @@ Acquire writes version 2.
 ### Export
 
 - Export writes every track, as today, and its exit status stays 0 when every track was
-  exported. For each track with error ranges, stderr gets one line:
+  exported. For each track with error ranges, stderr gets one line, wrapped here at
+  each area:
 
   ```text
-  copyofa: warning: track 8 has 7 frames not read successfully: 3:12.093+7 (C2 errors)
+  copyofa: warning: track 8 has 32 frames not read successfully, in 2 areas:
+    3:18.515-3:18.517 (8 frames with C2 errors),
+    3:18.730-3:18.739 (24 frames with C2 errors)
   ```
 
-  `<count>` is the total of all the track's ranges; `frame` is singular for 1. Each
-  range is its start in the track as a duration, as the text results give durations,
-  then `+` and its frame count, then its state, `C2 errors` or `not read`; ranges are
-  separated by `, `. At most 10 ranges are listed; more end the line with
+  `<count>` is the total of all the track's ranges; `frame` is singular for 1. Ranges
+  less than one sector (588 frames) apart, from the end of one to the start of the
+  next, form one area. Each area is its start and end in the track as durations, as
+  the text results give durations, only the start when both read the same, then
+  `(<n> frames not read, <n> frames with C2 errors)`, each part only when non-zero.
+  Areas are separated by `, `. At most 10 areas are listed; more end the line with
   `, and <n> more`. The record and the Reports keep every range, with exact
   `offset_frames`.
 
@@ -221,7 +226,7 @@ asks.)
   whose input A's `track` holds the ranges, with the exit status of an unaffected track.
   View renders it with the ranges.
 - **AC6 — Export.** Export of AC1's set writes every track with its recorded Audio
-  Digest, warns on stderr for track 2 in the documented line, listing 10 ranges and
+  Digest, warns on stderr for track 2 in the documented line, listing 10 areas and
   `and <n> more` for a track with more, and exits 0.
 - **AC7 — Schemas.** The inspection Report version 3 and comparison Report version 5
   schemas ship in the package; validate and view accept them; every Report the test
@@ -272,3 +277,11 @@ their record and export's warning:
 1. This brief and ADR 0008, before implementation starts.
 2. AC9 and AC10, acquiring a disc that keeps errors by hand and restoring it.
 3. Merges and the release.
+
+## Delivery notes
+
+- **Amended during delivery (#154):** export's warning and inspect's text first listed
+  each range by its start in milliseconds and its frame count. A real disc's C2 errors
+  are scattered single frames, about 0.023 ms each, so its line repeated the same
+  start times and showed ten single frames. Grouping nearby ranges into areas shows
+  where the damage is.
