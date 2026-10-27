@@ -824,18 +824,18 @@ def test_inspect_does_not_inspect_tracks_after_the_image_changes(
     run: Run, acquired_set: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     image = acquired_set / "data/disc.scram.flac"
-    original = inspector._decode_range
+    decode_track = inspector.decode_track
     calls = []
 
     def touch_after_first(*args, **kwargs):
-        result = original(*args, **kwargs)
+        findings = decode_track(*args, **kwargs)
         calls.append(args)
         if len(calls) == 1:
             info = image.stat()
             os.utime(image, ns=(info.st_atime_ns, info.st_mtime_ns + 10**9))
-        return result
+        return findings
 
-    monkeypatch.setattr(inspector, "_decode_range", touch_after_first)
+    monkeypatch.setattr(inspector, "decode_track", touch_after_first)
 
     outcome, report = inspect(run, acquired_set)
 
@@ -846,8 +846,29 @@ def test_inspect_does_not_inspect_tracks_after_the_image_changes(
         "while it was inspected"
     )
     assert [
-        (track["outcome"], track["reason"]) for track in report["disc"]["tracks"]
-    ] == [("not_inspected", reason)] * 3
+        (track["outcome"], track.get("reason")) for track in report["disc"]["tracks"]
+    ] == [("interpreted", None), ("not_inspected", reason), ("not_inspected", reason)]
+
+
+def test_inspect_hashes_the_disc_image_once(
+    run: Run, acquired_set: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image = acquired_set / "data/disc.scram.flac"
+    file_digest = hashlib.file_digest
+    hashed = []
+
+    def counting(file, digest):
+        if os.path.samestat(os.fstat(file.fileno()), image.stat()):
+            hashed.append(digest)
+        return file_digest(file, digest)
+
+    monkeypatch.setattr(hashlib, "file_digest", counting)
+
+    outcome, report = inspect(run, acquired_set)
+
+    assert outcome.code == 0, outcome.err
+    assert len(report["disc"]["tracks"]) == 3
+    assert hashed == ["sha256"]
 
 
 def test_inspect_reports_a_track_the_image_cannot_be_decoded_over_as_failed(

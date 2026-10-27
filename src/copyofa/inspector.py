@@ -448,7 +448,7 @@ def open_accepted(
 
     Yields the file, open until the block ends, or, when it cannot be opened, is not
     a regular file, cannot be read or does not match expected, its problem. With
-    expected None, the file is not read and its SHA-256 is not checked.
+    expected None, the file is opened but not hashed: its SHA-256 is not checked.
     """
     problem = verifier.find_file(root, path)
     if problem is not None:

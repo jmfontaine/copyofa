@@ -353,6 +353,30 @@ def test_export_refuses_when_the_image_changes_after_a_track(
     assert len(calls) == 1
 
 
+def test_export_hashes_the_disc_image_once(
+    run: Run,
+    acquired_set: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = acquired_set / "data/disc.scram.flac"
+    file_digest = hashlib.file_digest
+    hashed = []
+
+    def counting(file: Any, digest: str) -> Any:
+        if os.path.samestat(os.fstat(file.fileno()), image.stat()):
+            hashed.append(digest)
+        return file_digest(file, digest)
+
+    monkeypatch.setattr(hashlib, "file_digest", counting)
+
+    outcome = run("export", acquired_set, "--to", tmp_path / "Tracks", "--json")
+
+    assert outcome.code == 0, outcome.err
+    assert len(json.loads(outcome.out)["files"]) == 3
+    assert hashed == ["sha256"]
+
+
 @pytest.mark.parametrize("step", ["open", "write"])
 def test_export_fails_when_a_file_cannot_be_written(
     run: Run,
