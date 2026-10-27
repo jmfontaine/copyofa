@@ -7,13 +7,14 @@ import os
 import shutil
 import zipfile
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
 import soundfile
 from conftest import (
     RATE,
+    as_version_1,
     edit_record,
     requires_permissions,
     reseal_file,
@@ -24,7 +25,7 @@ from conftest import (
 )
 
 import copyofa
-from copyofa import inspector
+from copyofa import inspector, verifier
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -717,6 +718,11 @@ def test_inspect_exits_1_when_a_track_differs_from_its_recorded_digest(
     assert "differs from the recorded one" in text.out
 
 
+OTHER_VERSION = (
+    "the Acquisition Record is not format version 1 or 2 of copyofa.acquisition"
+)
+
+
 def nest_record(evidence_set: Path, depth: int) -> None:
     """Replace the Acquisition Record with nested arrays, and reseal it."""
     path = evidence_set / "copyofa/acquisition-record.json"
@@ -739,15 +745,15 @@ def nest_record(evidence_set: Path, depth: int) -> None:
         ),
         (
             lambda bag: edit_record(
-                bag, lambda record: record.update(format_version=2), reseal=True
+                bag, lambda record: record.update(format_version=3), reseal=True
             ),
-            "the Acquisition Record is not format version 1 of copyofa.acquisition",
+            OTHER_VERSION,
         ),
         (
             lambda bag: edit_record(
                 bag, lambda record: record.update(format_version=1.0), reseal=True
             ),
-            "the Acquisition Record is not format version 1 of copyofa.acquisition",
+            OTHER_VERSION,
         ),
         (
             lambda bag: edit_record(
@@ -797,6 +803,148 @@ def test_inspect_decodes_no_track_of_a_record_nested_100_000_deep(
         "the Acquisition Record cannot be parsed: it is nested too deeply",
         "the Acquisition Record cannot be used: it is not a JSON object",
     }
+
+
+def test_the_record_reader_reads_format_versions_1_and_2(
+    make_acquired_set: Callable[..., Path],
+) -> None:
+    bag = make_acquired_set(code=1, errors={"2": [[100, 37, 0], [300, 1, 1]]})
+
+    disc = inspector.read_acquired_disc(bag, verifier.read_baseline(bag))
+
+    assert disc is not None
+    assert [track.error_ranges for track in disc.tracks] == [
+        (),
+        (
+            inspector.ErrorRange(100, 37, "not_read"),
+            inspector.ErrorRange(300, 1, "c2_error"),
+        ),
+        (),
+    ]
+    as_version_1(bag)
+    old = inspector.read_acquired_disc(bag, verifier.read_baseline(bag))
+    assert old is not None
+    assert [track.error_ranges for track in old.tracks] == [None] * 3
+    assert [
+        (track.number, track.first_frame, track.frame_count, track.audio_digest)
+        for track in old.tracks
+    ] == [
+        (track.number, track.first_frame, track.frame_count, track.audio_digest)
+        for track in disc.tracks
+    ]
+
+
+def test_inspect_reads_a_version_1_record(run: Run, acquired_set: Path) -> None:
+    as_version_1(acquired_set)
+
+    outcome, report = inspect(run, acquired_set)
+
+    assert outcome.code == 0, outcome.err
+    assert [track["outcome"] for track in report["disc"]["tracks"]] == [
+        "interpreted"
+    ] * 3
+
+
+def set_ranges(track: int, ranges: Any) -> Callable[[dict[str, Any]], None]:
+    """Return a change giving a track of the record these error_ranges."""
+
+    def change(record: dict[str, Any]) -> None:
+        record["tracks"][track - 1]["error_ranges"] = ranges
+
+    return change
+
+
+def no_ranges(record: dict[str, Any]) -> None:
+    del record["tracks"][1]["error_ranges"]
+
+
+# Track 2 of the synthetic disc has 2940 frames.
+INVALID_RANGES = {
+    "absent": (no_ranges, "track 2 has no valid error_ranges"),
+    "not a list": (set_ranges(2, {}), "track 2 has no valid error_ranges"),
+    "not an object": (set_ranges(2, [5]), "track 2 has no valid error range 1"),
+    "no state": (
+        set_ranges(2, [{"offset_frames": 0, "frame_count": 1}]),
+        "track 2 has no valid error range 1",
+    ),
+    "unknown state": (
+        set_ranges(2, [{"offset_frames": 0, "frame_count": 1, "state": "skipped"}]),
+        "track 2 has no valid error range 1",
+    ),
+    "empty": (
+        set_ranges(2, [{"offset_frames": 0, "frame_count": 0, "state": "not_read"}]),
+        "track 2 has no valid error range 1",
+    ),
+    "negative offset": (
+        set_ranges(2, [{"offset_frames": -1, "frame_count": 1, "state": "not_read"}]),
+        "track 2 has no valid error range 1",
+    ),
+    "offset as a float": (
+        set_ranges(2, [{"offset_frames": 1.0, "frame_count": 1, "state": "not_read"}]),
+        "track 2 has no valid error range 1",
+    ),
+    "past the track's end": (
+        set_ranges(
+            2, [{"offset_frames": 2900, "frame_count": 41, "state": "c2_error"}]
+        ),
+        "track 2 has no valid error range 1",
+    ),
+    "overlapping": (
+        set_ranges(
+            2,
+            [
+                {"offset_frames": 10, "frame_count": 5, "state": "c2_error"},
+                {"offset_frames": 14, "frame_count": 5, "state": "not_read"},
+            ],
+        ),
+        "track 2 has no valid error range 2",
+    ),
+    "out of order": (
+        set_ranges(
+            2,
+            [
+                {"offset_frames": 20, "frame_count": 5, "state": "c2_error"},
+                {"offset_frames": 10, "frame_count": 5, "state": "not_read"},
+            ],
+        ),
+        "track 2 has no valid error range 2",
+    ),
+}
+
+
+@pytest.mark.parametrize("case", INVALID_RANGES)
+def test_inspect_decodes_no_track_of_a_record_with_invalid_error_ranges(
+    run: Run, acquired_set: Path, case: str
+) -> None:
+    change, reason = INVALID_RANGES[case]
+    edit_record(acquired_set, change, reseal=True)
+
+    outcome, report = inspect(run, acquired_set)
+
+    assert outcome.code == 1
+    assert report["disc"] == {
+        "reason": f"the Acquisition Record cannot be used: {reason}"
+    }
+
+
+def test_the_record_reader_accepts_ranges_that_touch_and_end_the_track(
+    acquired_set: Path,
+) -> None:
+    ranges = [
+        {"offset_frames": 0, "frame_count": 5, "state": "c2_error"},
+        {"offset_frames": 5, "frame_count": 2935, "state": "not_read"},
+    ]
+    edit_record(acquired_set, set_ranges(2, ranges), reseal=True)
+
+    disc = inspector.read_acquired_disc(
+        acquired_set, verifier.read_baseline(acquired_set)
+    )
+
+    assert disc is not None
+    assert disc.tracks[1].error_ranges == (
+        inspector.ErrorRange(0, 5, "c2_error"),
+        inspector.ErrorRange(5, 2935, "not_read"),
+    )
 
 
 def test_inspect_does_not_inspect_tracks_of_an_image_that_is_not_accepted(

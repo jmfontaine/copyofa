@@ -14,7 +14,8 @@ ACQUISITION_RECORD = "copyofa/acquisition-record.json"
 DISC_IMAGE = "data/disc.scram.flac"
 """Where an acquired set stores its disc image."""
 ACQUISITION_RECORD_KIND = "copyofa.acquisition"
-ACQUISITION_RECORD_FORMAT_VERSION = 1
+ACQUISITION_RECORD_FORMAT_VERSION = 2
+"""The Acquisition Record format version acquire writes."""
 
 # The audio of an acquired set's disc image, as of any audio CD.
 CD_SAMPLE_RATE = 44100

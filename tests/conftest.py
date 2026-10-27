@@ -236,12 +236,17 @@ DISC: dict[str, Any] = {
     ],
     "media_errors": {"scsi": 0, "c2": 0, "q": 3},
     # Other keys, all optional: version_output, exit_status, sessions, data_track,
-    # omit_track_file, corrupt_track_file, unreadable_log, error_frames (track
-    # number to [first frame in the track, count]), corrected (the errors a refine
-    # stage corrected, as media_errors gives them), lead_track_files (write the
-    # lead-in and lead-out as tracks 0 and A), cd_text_languages (language codes
-    # after the first, each with a further cue sheet), cd_text_charset (the CD-Text
-    # character code) and hang. A track may also be silent.
+    # omit_track_file, corrupt_track_file, unreadable_log, errors (track number to
+    # a list of [first frame in the track, count, state]: state 0, not read, leaves
+    # zeros in the image and the track file; state 1, read with a C2 error, keeps the
+    # audio), lead_in_c2 (frames at the lead-in's end read with a C2 error),
+    # unread_tail (frames at the disc's end never read, which the image does not
+    # hold: the lead-out's, then the last track's, whose file redumper pads with
+    # zeros), corrected (the errors a refine stage corrected, as media_errors gives
+    # them), lead_track_files (write the lead-in and lead-out as tracks 0 and A),
+    # cd_text_languages (language codes after the first, each with a further cue
+    # sheet), cd_text_charset (the CD-Text character code) and hang. A track may
+    # also be silent.
 }
 
 _CD_TEXT_CODECS = {0x00: "latin-1", 0x01: "ascii", 0x80: "cp932"}
@@ -268,6 +273,7 @@ class SyntheticDisc:
 def synthetic_disc(config: dict[str, Any]) -> SyntheticDisc:
     """Build the image, state and tracks of a disc configuration, reproducibly."""
     tracks = []
+    errors = config.get("errors", {})
     for number, track in enumerate(config["tracks"], start=1):
         zeros = (
             track["frames"]
@@ -275,7 +281,12 @@ def synthetic_disc(config: dict[str, Any]) -> SyntheticDisc:
             else track.get("leading_zero_frames", 0)
         )
         noise = random.Random(number).randbytes((track["frames"] - zeros) * 4)
-        tracks.append(bytes(zeros * 4) + noise)
+        data = bytearray(bytes(zeros * 4) + noise)
+        # A sector the drive never read is never written to the image: zeros.
+        for first, count, value in errors.get(str(number), []):
+            if value == 0:
+                data[first * 4 : (first + count) * 4] = bytes(count * 4)
+        tracks.append(bytes(data))
     # The disc's write offset moves the tracks off sector boundaries in the image.
     lead_in = bytes((_LEAD_IN_SECTORS * SECTOR_FRAMES - config["write_offset"]) * 4)
     pregap = random.Random(0).randbytes(_PREGAP_SECTORS * SECTOR_FRAMES * 4)
@@ -287,10 +298,21 @@ def synthetic_disc(config: dict[str, Any]) -> SyntheticDisc:
         position += len(track) // 4
     image = lead_in + pregap + b"".join(tracks) + lead_out
     state = bytearray(b"\x04" * (len(image) // 4))
-    state[: len(lead_in) // 4] = bytes(len(lead_in) // 4)
-    for number, (first, count) in config.get("error_frames", {}).items():
-        start = first_frames[int(number) - 1] + first
-        state[start : start + count] = bytes(count)
+    lead_in_frames = len(lead_in) // 4
+    state[:lead_in_frames] = bytes(lead_in_frames)
+    c2 = config.get("lead_in_c2", 0)
+    state[lead_in_frames - c2 : lead_in_frames] = b"\x01" * c2
+    for number, ranges in errors.items():
+        for first, count, value in ranges:
+            start = first_frames[int(number) - 1] + first
+            state[start : start + count] = bytes([value]) * count
+    unread = config.get("unread_tail", 0)
+    if unread:
+        image, state = image[: -unread * 4], state[:-unread]
+        # redumper pads a track file with zeros past the image's end.
+        missing = first_frames[-1] + len(tracks[-1]) // 4 - len(image) // 4
+        if missing > 0:
+            tracks[-1] = tracks[-1][: -missing * 4] + bytes(missing * 4)
     sectors = len(image) // (SECTOR_FRAMES * 4) + 1
     subcode = random.Random(-1).randbytes(sectors * 96)
     width = len(str(len(tracks)))
@@ -300,6 +322,19 @@ def synthetic_disc(config: dict[str, Any]) -> SyntheticDisc:
         else ["disc.bin"]
     )
     return SyntheticDisc(image, bytes(state), subcode, tracks, first_frames, names)
+
+
+def _has_errors(disc: SyntheticDisc) -> bool:
+    """Tell whether b768 refuses to split a pressed CD read as the disc was.
+
+    That is a frame of a track not read successfully, which includes a track
+    extending past the image's end, or a C2 error anywhere.
+    """
+    return b"\x01" in disc.state or any(
+        first + len(track) // 4 > len(disc.state)
+        or min(disc.state[first : first + len(track) // 4]) < 2
+        for first, track in zip(disc.first_frames, disc.tracks, strict=True)
+    )
 
 
 def _msf(lba: int) -> str:
@@ -464,6 +499,18 @@ def stand_in_redumper(arguments: list[str]) -> int:
         _write_log(config_path, log.split("*** DUMP")[0].encode())
         print("error: drive not ready")
         return config["exit_status"]
+    # b768 refuses to split such a disc unless forced; forced alone, it would
+    # generate sectors, which acquire never asks for.
+    if _has_errors(disc) and not {"--force-split", "--leave-unchanged"} <= set(
+        arguments
+    ):
+        refused = "error: data errors detected, unable to continue"
+        _write_log(
+            config_path,
+            f"{log.split('checking tracks')[0]}checking tracks\n{refused}\n".encode(),
+        )
+        print(refused)
+        return 1
     for line in log.splitlines():
         print(line)
         if line.startswith("*** DUMP"):
@@ -563,16 +610,19 @@ def redumper(
 def make_acquired_set(
     run: Run, redumper: StandIn, tmp_path: Path
 ) -> Callable[..., Path]:
-    """Acquire a synthetic disc, DISC with changes, into a new Evidence Set."""
+    """Acquire a synthetic disc, DISC with changes, into a new Evidence Set.
+
+    The acquisition must exit with code: 1 for a disc read with errors.
+    """
     count = 0
 
-    def _make(**changes: Any) -> Path:
+    def _make(*, code: int = 0, **changes: Any) -> Path:
         nonlocal count
         count += 1
         redumper.configure(**changes)
         destination = tmp_path / f"acquired-{count}"
         outcome = run("acquire", "--to", destination)
-        assert outcome.code == 0, outcome.err
+        assert outcome.code == code, outcome.err
         return destination
 
     return _make
@@ -594,6 +644,18 @@ def edit_record(
     path.write_text(json.dumps(record, indent=2) + "\n")
     if reseal:
         reseal_file(evidence_set, "copyofa/acquisition-record.json")
+
+
+def as_version_1(evidence_set: Path) -> None:
+    """Rewrite an acquired set's record as format version 1, as v0.7.0 wrote it."""
+
+    def change(record: dict[str, Any]) -> None:
+        record["format_version"] = 1
+        for track in record["tracks"]:
+            ranges = track.pop("error_ranges")
+            track["error_frames"] = sum(error["frame_count"] for error in ranges)
+
+    edit_record(evidence_set, change, reseal=True)
 
 
 def reseal_file(evidence_set: Path, name: str) -> None:

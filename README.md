@@ -76,13 +76,16 @@ copyofa acquire --to /Volumes/Archive/add-violence-cd --drive disk6 --json \
   subchannel as xz, and the small files as written. Each compressed file is decoded
   and checked against redumper's original before the set is accepted.
 - The set's Acquisition Record gives the drive, the redumper build, the offsets, the
-  read errors, and each track's range in the image and Audio Digest.
+  read errors, and each track's range in the image, Audio Digest, and ranges of frames
+  not read successfully.
 - `--drive` names the drive as redumper does, such as `disk6`; without it, redumper
   reads the first drive holding a disc. `--note`, `--ref` and `--json` work as for
   import.
 - `--retries` sets how many times redumper re-reads a sector it read with an error,
-  20 by default. When a scratched disc fails with redumper's "data errors detected",
-  try a higher count, such as 100, or another drive.
+  20 by default.
+- A disc that keeps errors after the re-reads is kept as the drive read it: sectors
+  never read hold zeros, samples read with C2 errors hold what the drive returned, and
+  the record locates both in each track. Nothing is repaired or generated.
 - When the acquisition fails after redumper ran, stderr carries redumper's log before
   the failure message, so the cause is visible without reading the disc again.
 - A disc with more than one session or with a data track is refused.

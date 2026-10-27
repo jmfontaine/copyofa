@@ -217,12 +217,12 @@ redumper does not report are absent, never invented.
 | Field | Content |
 | --- | --- |
 | `record_kind` | Always `copyofa.acquisition`. |
-| `format_version` | The version of this record's format, `1`. A later change to the fields increments it. |
+| `format_version` | The version of this record's format, `2`. A later change to the fields increments it. Version 1, which CopyOfA wrote before 0.8.0, gives each track `error_frames`, the number of its frames not read successfully, instead of `error_ranges`; no version 1 set has a track with such frames, and CopyOfA still reads it. |
 | `copyofa_version` | The version of CopyOfA that acquired the set. |
 | `acquired_at` | When the acquisition started, in UTC, such as `2026-10-25T22:59:35Z`. |
 | `note` | The `--note` text, exactly as supplied. Absent when no note was given. |
 | `external_references` | The `--ref` values, exactly as supplied and in the order given. Absent when none was given. |
-| `reader` | The program that read the disc: `name`, always `redumper`; `build`, as `redumper --version` gives it, such as `b768`; `arguments`, the arguments CopyOfA gave it, in order. redumper ran in a directory inside the staging directory, so its image path is its default, `.`. |
+| `reader` | The program that read the disc: `name`, always `redumper`; `build`, as `redumper --version` gives it, such as `b768`; `arguments`, the arguments CopyOfA gave it, in order, which end with `--force-split --leave-unchanged`. redumper ran in a directory inside the staging directory, so its image path is its default, `.`. |
 | `drive` | The drive as redumper's log identifies it: `vendor`, `product`, `firmware_revision` (the revision level the drive reports), and `read_offset`, the read offset in samples redumper applied. |
 | `disc` | What the disc says about itself and its image: `write_offset`, the disc's write offset in samples redumper found; `catalog`, its catalog number; `title` and `performer`, the album's CD-Text; and `image`, with `path` (`data/disc.scram.flac`), `frames`, `sample_rate` (44100), `channels` (2) and `bits_per_sample` (16). |
 | `read_errors` | redumper's error counts for the whole disc, from its log: `scsi_samples`, the samples of sectors the drive failed to read; `c2_samples`, the samples the drive flagged with C2 errors; and `subchannel_q_sectors`, the sectors whose subchannel Q redumper found in error. Each is the count of the `media errors` redumper's dump stage logs; when its refine stage re-read sectors, the SCSI and C2 counts are less what its `correction statistics` give as corrected. Q is not reduced: the refine stage's Q count also holds sectors whose subchannel the dump stage never counted. The stored log keeps every count. |
@@ -239,7 +239,24 @@ Each track has:
 | `audio_digest` | The track's Audio Digest, as [ADR 0002](../decisions/0002-define-audio-digest-from-canonical-pcm.md) defines it: `pcm1:44100:2:16:` and the SHA-256 of redumper's track file, which is the track's canonical PCM. |
 | `isrc` | The track's ISRC, from the cue sheet. Absent when the disc gives none. |
 | `title`, `performer` | The track's CD-Text, from the cue sheet. Each is absent when the disc gives none. |
-| `error_frames` | The number of the track's frames redumper's state does not mark as read successfully: state 0, not read, or 1, read with a C2 error. |
+| `error_ranges` | The track's frames that redumper's state does not mark as read successfully, as a list of ranges (see below), in order; empty when the track has none. |
+
+Each error range is a maximal run of consecutive frames of the track with the same
+state: two adjacent frames of different states are in separate ranges. The ranges do
+not overlap and lie inside the track, and the record keeps every range, however many.
+Each has:
+
+| Field | Content |
+| --- | --- |
+| `offset_frames` | The range's first frame, counted from the track's first frame, not from the image's. |
+| `frame_count` | The range's length in frames, at least 1. |
+| `state` | `not_read`, state 0: the drive never returned the frames, so the image, and the track, hold zeros there; or `c2_error`, state 1: the drive flagged the frames with a C2 error, and the image holds the first read that returned them. |
+
+A frame here is one stereo sample, which redumper's log calls a sample. The audio is
+kept as read, never repaired: the Audio Digest of a track with error ranges identifies
+this reading, not the disc's audio, and another reading of the same disc may give
+another digest. A track never read at all is zeros, has one `not_read` range over the
+whole track, and shares its Audio Digest with any other such track of its length.
 
 Each stored file has:
 
@@ -264,8 +281,8 @@ The record of the *Add Violence* CD:
 ```json
 {
   "record_kind": "copyofa.acquisition",
-  "format_version": 1,
-  "copyofa_version": "0.5.0.dev0",
+  "format_version": 2,
+  "copyofa_version": "0.8.0.dev0",
   "acquired_at": "2026-10-25T22:59:35Z",
   "note": "Bought new",
   "reader": {
@@ -275,7 +292,9 @@ The record of the *Add Violence* CD:
       "disc",
       "--image-name=disc",
       "--drive=disk6",
-      "--retries=20"
+      "--retries=20",
+      "--force-split",
+      "--leave-unchanged"
     ]
   },
   "drive": {
@@ -310,7 +329,7 @@ The record of the *Add Violence* CD:
       "audio_digest": "pcm1:44100:2:16:1e9b66e1364ea7c6e7d1fbfa95bf3a77970aecf5670074994c404cd0baa9f942",
       "title": "LESS THAN",
       "isrc": "TCADE1704630",
-      "error_frames": 0
+      "error_ranges": []
     },
     {
       "number": 2,
@@ -319,7 +338,7 @@ The record of the *Add Violence* CD:
       "audio_digest": "pcm1:44100:2:16:7ce354106aff3aa7576b6d79b3690e598c1236127d1bfb79d77990c522ee379a",
       "title": "THE LOVERS",
       "isrc": "TCADE1704652",
-      "error_frames": 0
+      "error_ranges": []
     },
     {
       "number": 3,
@@ -328,7 +347,7 @@ The record of the *Add Violence* CD:
       "audio_digest": "pcm1:44100:2:16:ec9ef8df3a670ca4d403b8deee88cc191e0b970c200e5a0bd0685f1d41c1f1a6",
       "title": "THIS ISN'T THE PLACE",
       "isrc": "TCADE1704653",
-      "error_frames": 0
+      "error_ranges": []
     },
     {
       "number": 4,
@@ -337,7 +356,7 @@ The record of the *Add Violence* CD:
       "audio_digest": "pcm1:44100:2:16:a4c1115007e9541e58afc583e803addb25e76251e99a1dec77f6dd5512d9fee3",
       "title": "NOT ANYMORE",
       "isrc": "TCADE1704656",
-      "error_frames": 0
+      "error_ranges": []
     },
     {
       "number": 5,
@@ -346,7 +365,7 @@ The record of the *Add Violence* CD:
       "audio_digest": "pcm1:44100:2:16:7cb0b19d5310c6af4400746e4c24694dd8c593296157149249e9320c661b055a",
       "title": "THE BACKGROUND WORLD",
       "isrc": "TCADE1704659",
-      "error_frames": 0
+      "error_ranges": []
     }
   ],
   "stored_files": [
@@ -433,7 +452,9 @@ Before reading the disc, acquire refuses, exiting 1 and creating nothing, when:
 It then runs `redumper disc` once, in a directory inside the staging directory
 `<destination>.copyofa-staging`, with `--retries=20`, or the count `--retries` gives,
 so that redumper re-reads each sector it read with a SCSI or C2 error up to that many
-times ([ADR 0007](../decisions/0007-re-read-sectors-with-errors-when-acquiring.md)).
+times ([ADR 0007](../decisions/0007-re-read-sectors-with-errors-when-acquiring.md)),
+and with `--force-split --leave-unchanged`, so that it splits every disc as read
+([ADR 0008](../decisions/0008-keep-discs-with-read-errors-as-read.md)).
 redumper's console output is not relayed: stderr names each redumper stage, such as
 `redumper stage: dump`, and acquire's own steps.
 After reading, acquire refuses or fails, exiting 1 and deleting the staging directory,
@@ -448,8 +469,7 @@ when:
 - the image is missing or not a whole number of frames, or the state does not hold one
   byte per frame of the image;
 - a track file is missing, or its bytes are found nowhere in the image at a frame
-  boundary; the error also says when the state marks frames where the track would lie
-  as not read, which redumper replaces with generated sectors in the track file (see
+  boundary, as when the drive never read the last sectors of the last track (see
   below);
 - redumper wrote a file that is neither a track file nor named `disc.<extension>` or
   `disc_<language code>.cue`;
@@ -459,9 +479,9 @@ When acquire fails, its message starting with `Failed:`, after redumper wrote it
 stderr also carries that log: the line `copyofa: redumper's log:`, then the log,
 decoded as UTF-8 with undecodable bytes replaced and characters that break a line
 escaped, then the failure message last. The log gives what the failure message
-cannot, such as the error counts of the read and of the re-reads, and which track
-made redumper refuse to split the disc. A refusal, a cancellation, a destination that
-appears during the acquisition, and a system error such as a full disk print no log.
+cannot, such as the error counts of the read and of the re-reads. A refusal, a
+cancellation, a destination that appears during the acquisition, and a system error
+such as a full disk print no log.
 
 Each track's range is found where the previous track's ends, or else by searching the
 image for the track's bytes; a track of a single repeated byte, such as digital
@@ -481,26 +501,27 @@ does import: closed at the start, it reads nothing; closed while it prints the r
 it keeps the accepted set and names it on stderr.
 
 A disc read with errors is accepted, since the set is evidence of what the drive read,
-but acquire exits 1: when `read_errors` gives SCSI or C2 errors, or a track has
-`error_frames`. Subchannel errors alone do not count: the audio is read from the main
-channel.
+but acquire exits 1: when `read_errors` gives SCSI or C2 errors, or a track has an
+error range. Subchannel errors alone do not count: the audio is read from the main
+channel. Errors confined to the lead-in or the lead-out give no track an error range,
+but still make acquire exit 1, its result saying `Read errors: found`. The result's
+line for each track with error ranges ends with its count of frames not read
+successfully, the total of its ranges.
 
-Re-reading recovers many sectors that dust or a light scratch made unreadable. Few
-discs whose errors remain after the re-reads reach that point with redumper's other
-defaults, which acquire uses. redumper b768 checks the read status when it splits the
-image into track files (`cd/cd_split.ixx`):
+Re-reading recovers many sectors that dust or a light scratch made unreadable. For the
+errors that remain, redumper b768 (`cd/cd_split.ixx`) would refuse to split a pressed
+CD with an error inside a track or a C2 error in its lead-in or lead-out, and would
+replace a sector with an error at a track's edge on a CD-R with a generated one. With
+`--force-split`, it splits every disc despite its errors; with `--leave-unchanged`, it
+copies each sector of a track file from the image as the image holds it, so each
+track file is a range of the image and nothing is generated. A sector the drive never
+read is never written to the image, which holds zeros there, with state 0; a sample
+read with a C2 error holds the data of the first read that returned it, with state 1.
 
-- a pressed CD with a sector read with a C2 error, or skipped, inside a track, or with
-  a C2 error in the lead-in or the lead-out: redumper refuses to split it ("data errors
-  detected, unable to continue") and exits with an error status, so acquire fails;
-- a CD-R with C2 errors in a few sectors at a track's start or end (16 by default):
-  redumper splits it, but replaces each of those sectors in the track file with a
-  generated one filled with the byte 0x55, so the track's bytes are found nowhere in
-  the image and acquire fails; any other error inside a track makes it refuse as for a
-  pressed CD;
-- skipped sectors confined to the lead-in or the lead-out, on any disc, and C2 errors
-  confined to them on a CD-R: redumper splits the disc as read, so the set is accepted
-  and acquire exits 1.
+One case still fails: when the drive never read the last sectors of the last track,
+that track extends past the end of the image, redumper pads its track file with zeros,
+and the track's bytes are found nowhere in the image. Sectors of the lead-out never
+read do not cause it.
 
 ### Restoring redumper's files
 
@@ -517,16 +538,19 @@ shasum -a 256 ~/restored/*
 ```
 
 Each SHA-256 is the `original_sha256` the record gives for that name. Copy only the
-files the set holds. redumper can then split the image into track files again, whose
-SHA-256s are the hashes in the tracks' Audio Digests:
+files the set holds. redumper can then split the image into track files again, with
+`--force-split --leave-unchanged` as the record's `reader.arguments` give them; the
+SHA-256s of the track files are the hashes in the tracks' Audio Digests:
 
 ```bash
 cd ~/restored
-redumper split --image-name=disc --overwrite
+redumper split --image-name=disc --overwrite --force-split --leave-unchanged
 ```
 
 `--overwrite` lets it rewrite the cue sheet, which it writes again unchanged; it also
-appends to `disc.log`.
+appends to `disc.log`. Without `--force-split --leave-unchanged`, redumper refuses a
+disc read with errors, or generates sectors in place of those with errors, and the
+track files no longer match the Audio Digests.
 
 ## Checking a set without CopyOfA
 

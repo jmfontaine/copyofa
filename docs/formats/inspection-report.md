@@ -49,9 +49,11 @@ version.
 4. **Tracks of an acquired set.** When the tag manifest lists the Acquisition Record,
    inspect reads it once, and uses it only when the Integrity Baseline is usable and
    the bytes read have the SHA-256 the tag manifest records, parse as JSON, and give
-   format version 1 of `copyofa.acquisition`, a disc image that `manifest-sha256.txt`
-   lists, 16-bit stereo at 44.1 kHz, and a number, a range and an Audio Digest for
-   each track. Inspect then reads the disc image completely once, before any file is
+   format version 1 or 2 of `copyofa.acquisition`, a disc image that
+   `manifest-sha256.txt` lists, 16-bit stereo at 44.1 kHz, and a number, a range and
+   an Audio Digest for each track, with valid error ranges in a version 2 record (see
+   [Evidence Set format](evidence-set.md#acquisition-record)). Inspect then reads the
+   disc image completely once, before any file is
    decoded, and compares its SHA-256 with the manifest's as for a file. It decodes the
    image's own entry, then each track in the record's order, from that one opening of
    the image: a track is decoded over its range, from its first frame for its frame
