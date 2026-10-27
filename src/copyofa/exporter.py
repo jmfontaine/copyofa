@@ -111,13 +111,15 @@ def export(
 
     def build(directory: Path) -> tuple[ExportedFile, ...]:
         files = []
-        for track in disc.tracks:
-            name = f"{track.number:02}.flac"
-            _write_track(root, disc, track, directory / name)
-            staging.sync_file(directory / name)
-            files.append(ExportedFile(name, track.number, track.audio_digest))
-            if progress is not None:
-                progress(f"Exported track {track.number} to {name}")
+        # Read and checked once, for every track.
+        with inspector.open_accepted(root, disc.image, disc.image_digest) as image:
+            for track in disc.tracks:
+                name = f"{track.number:02}.flac"
+                _write_track(image, track, directory / name)
+                staging.sync_file(directory / name)
+                files.append(ExportedFile(name, track.number, track.audio_digest))
+                if progress is not None:
+                    progress(f"Exported track {track.number} to {name}")
         return tuple(files)
 
     files, warnings = staging.accept(checked, "export", build)
@@ -125,9 +127,9 @@ def export(
 
 
 def _write_track(
-    root: Path, disc: inspector.AcquiredDisc, track: inspector.RecordedTrack, path: Path
+    image: inspector.AcceptedFile, track: inspector.RecordedTrack, path: Path
 ) -> None:
-    """Decode a track from the image into a FLAC file, then check the file."""
+    """Decode a track from the opened image into a FLAC file, then check the file."""
     scale = np.float32(1 << (evidence_set.CD_BITS_PER_SAMPLE - 1))
 
     def cannot_write(error: soundfile.LibsndfileError) -> ExportError:
@@ -152,7 +154,7 @@ def _write_track(
                     # problem of the image.
                     raise cannot_write(error) from None
 
-            findings = inspector.decode_track(root, disc, track, write)
+            findings = inspector.decode_track(image, track, write)
     except soundfile.LibsndfileError as error:
         raise cannot_write(error) from None
     outcome = findings["outcome"]
@@ -165,7 +167,8 @@ def _write_track(
             f"Failed: track {track.number} of the image differs from its recorded "
             "Audio Digest."
         )
-    written = inspector.inspect_file(path.parent, path.name, staging.digest_file(path))
+    # Decoded only: the file was just written, so it has no digest to check.
+    written = inspector.inspect_file(path.parent, path.name, None)
     if written.get("audio_digest") != track.audio_digest:
         raise ExportError(
             f"Failed: {path.name} does not decode to the recorded Audio Digest of "

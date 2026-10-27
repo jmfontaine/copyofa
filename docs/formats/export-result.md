@@ -43,12 +43,14 @@ files hold the same audio as redumper's track files. Export writes nothing into 
    `<directory>.copyofa-staging` left beside it by an earlier import, acquire or
    export, as import does (see
    [How an Evidence Set is accepted](evidence-set.md#how-an-evidence-set-is-accepted)).
-3. **Writing.** For each track, export reads the image completely, checks its SHA-256
-   against the payload manifest, and decodes it over the track's range into a new
-   FLAC file in the staging directory, written by libsndfile. It fails when the
+3. **Writing.** Export reads the image completely once, checks its SHA-256 against
+   the payload manifest, then, for each track, decodes it over the track's range into
+   a new FLAC file in the staging directory, written by libsndfile. It refuses when
+   the image is not the accepted bytes, or when the image's size or modification time
+   changed between that check and the end of a track's decoding. It fails when the
    decoded range does not have the recorded Audio Digest.
-4. **Checking.** Each file is then decoded, and export fails when its Audio Digest is
-   not the recorded one.
+4. **Checking.** Each file is then decoded once, and export fails when its Audio
+   Digest is not the recorded one.
 5. **Acceptance.** Only when every file is written and checked does export rename the
    staging directory to the directory. It deletes the staging directory when it
    refuses, fails or is canceled. Export canceled with Ctrl-C before it has accepted

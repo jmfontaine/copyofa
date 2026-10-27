@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -317,6 +318,63 @@ def test_export_fails_when_a_written_file_decodes_to_another_digest(
         "track 1.\n"
     ) in outcome.err
     assert left_behind(destination) == []
+
+
+def test_export_refuses_when_the_image_changes_after_a_track(
+    run: Run,
+    acquired_set: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = acquired_set / "data/disc.scram.flac"
+    inspect_file = inspector.inspect_file
+    calls = []
+
+    def touch_after_first(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        findings = inspect_file(*args, **kwargs)
+        calls.append(args)
+        if len(calls) == 1:
+            info = image.stat()
+            os.utime(image, ns=(info.st_atime_ns, info.st_mtime_ns + 10**9))
+        return findings
+
+    monkeypatch.setattr(inspector, "inspect_file", touch_after_first)
+    destination = tmp_path / "Tracks"
+
+    outcome = run("export", acquired_set, "--to", destination)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert (
+        "copyofa: Refused: the disc image data/disc.scram.flac was not inspected: "
+        "the file changed while it was inspected.\n"
+    ) in outcome.err
+    assert left_behind(destination) == []
+    assert len(calls) == 1
+
+
+def test_export_hashes_the_disc_image_once(
+    run: Run,
+    acquired_set: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = acquired_set / "data/disc.scram.flac"
+    file_digest = hashlib.file_digest
+    hashed = []
+
+    def counting(file: Any, digest: str) -> Any:
+        if os.path.samestat(os.fstat(file.fileno()), image.stat()):
+            hashed.append(digest)
+        return file_digest(file, digest)
+
+    monkeypatch.setattr(hashlib, "file_digest", counting)
+
+    outcome = run("export", acquired_set, "--to", tmp_path / "Tracks", "--json")
+
+    assert outcome.code == 0, outcome.err
+    assert len(json.loads(outcome.out)["files"]) == 3
+    assert hashed == ["sha256"]
 
 
 @pytest.mark.parametrize("step", ["open", "write"])
