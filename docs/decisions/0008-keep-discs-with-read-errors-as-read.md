@@ -70,9 +70,9 @@ Alternatives considered:
   audio: another reading of the same disc may give another digest. A track never read
   at all is zeros, and shares its digest with any other such track of its length.
 - Acquire no longer fails because of redumper's generated sectors; its diagnostic for
-  that case goes. It still fails when the last track is never read through to the
-  image's end: the image is then shorter than the track, and redumper pads the track
-  file.
+  that case goes. It still fails when the drive never read the last sectors of the
+  last track: that track then extends past the end of the image, and redumper pads its
+  track file.
 - Splitting a restored set again, as the Evidence Set format shows, takes
   `--force-split --leave-unchanged`, which the record's `reader.arguments` lists:
   without them, redumper refuses the disc or generates sectors, and the track files no

@@ -54,8 +54,7 @@ Refines [S1](../product-map.md#s1-preserve-a-cd):
 - Changing the retry count's default, or other redumper options.
 - New fields in the export result; the warning is on stderr only.
 - Changing verify, import or validate.
-- A disc whose last track is never read through to the end of the image (see Known
-  limit).
+- A disc whose last track extends past the end of the image (see Known limit).
 - Discs other than plain audio CDs, which stay in the Later outcome Acquire More Kinds
   of Disc.
 
@@ -75,10 +74,10 @@ Confirmed in redumper b768's source; ADR 0008 relies on it.
 
 ### Known limit
 
-When the last track's sectors are never read through to the image's end, the image is
-shorter than the track, redumper pads the track file with zeros, and the track file is
-no longer a range of the image. Acquire then fails as today, with "found nowhere in the
-image". Unread lead-out sectors alone do not cause it.
+When the drive never read the last sectors of the last track, the last track extends
+past the end of the image, redumper pads its track file with zeros, and the track file
+is no longer a range of the image. Acquire then fails as today, with "found nowhere in
+the image". Unread lead-out sectors alone do not cause it.
 
 ## Requirements
 
@@ -137,7 +136,8 @@ Acquire writes version 2.
 - Inspect's exit status does not change: a track with error ranges that decodes to its
   recorded Audio Digest is `interpreted`, and the set is as acquired.
 - Inspect's text result adds to each affected track's line `, <count> frames not read
-  successfully:` and its ranges, written as export's warning writes them.
+  successfully:` and its ranges, exactly as export's warning gives the count and the
+  ranges, the singular for 1 and the limit of 10 ranges included.
 
 ### Compare
 
@@ -209,7 +209,7 @@ asks.)
 - **AC2 — Clean, edge-only and limit discs.** A disc read without error gives a version
   2 record whose tracks have empty `error_ranges`, and acquire exits 0. A disc whose
   only errors are in the lead-in gives empty `error_ranges` and exits 1 with "Read
-  errors: found". A disc whose last track is unread through the image's end fails with
+  errors: found". A disc whose last track extends past the end of the image fails with
   "found nowhere in the image", leaving nothing.
 - **AC3 — Old records.** For a set whose record is version 1, inspect and compare
   print Reports of versions 3 and 5 without `error_ranges`, export warns about nothing,
@@ -227,14 +227,15 @@ asks.)
   schemas ship in the package; validate and view accept them; every Report the test
   suite produces validates.
 - **AC8 — Documented.** `docs/formats/evidence-set.md` documents record version 2, the
-  new acceptance rules and the known limit, drops the generated-sector failure, and
-  says that splitting a restored set again takes `--force-split --leave-unchanged`, as
-  the record's `reader.arguments` shows. The inspection Report document names record
-  version 2 and documents Report version 3; the comparison Report document documents
-  version 5 and lists it among the versions view renders;
-  `docs/formats/export-result.md` documents the warning. The README no longer tells a
-  collector to raise the retry count for "data errors detected". AGENTS.md's
-  Architecture section gives acquire's new options and the view's versions 1 to 5.
+  new acceptance rules, the known limit, and that unread tracks of one length share an
+  Audio Digest; it drops the generated-sector failure, and says that splitting a
+  restored set again takes `--force-split --leave-unchanged`, as the record's
+  `reader.arguments` shows. The inspection Report document names record version 2 and
+  documents Report version 3; the comparison Report document documents version 5 and
+  lists it among the versions view renders; `docs/formats/export-result.md` documents
+  the warning. The README no longer tells a collector to raise the retry count for
+  "data errors detected". AGENTS.md's Architecture section gives acquire's new options
+  and the view's versions 1 to 5.
 - **AC9 — Restoring (by hand, once).** For the set of AC10, the files restored as the
   format document says are redumper's originals, and `redumper split` with the
   record's options rewrites track files with the SHA-256s in the recorded Audio
