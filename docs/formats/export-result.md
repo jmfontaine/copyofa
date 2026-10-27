@@ -37,20 +37,26 @@ A track whose Acquisition Record, of format version 2, gives error ranges holds 
 the drive did not read successfully (see
 [Evidence Set format](evidence-set.md#acquisition-record)). Export writes it as
 acquired, never repaired, and once the directory is accepted, stderr gets one line per
-such track, in track order:
+such track, in track order, such as this one, wrapped here at each area:
 
 ```text
-copyofa: warning: track 8 has 7 frames not read successfully: 3:12.093+7 (C2 errors)
+copyofa: warning: track 8 has 44 frames not read successfully, in 3 areas:
+  3:18.515-3:18.517 (8 frames with C2 errors),
+  3:18.730-3:18.739 (24 frames with C2 errors),
+  3:19.375-3:19.380 (12 frames with C2 errors)
 ```
 
-The count is the total of all the track's ranges, `frame` for 1. Each range is its
-start in the track, `offset_frames` as a duration at 44.1 kHz in the form the text
-results give durations, then `+` and its `frame_count`, then its state: `(C2 errors)`
-for `c2_error` or `(not read)` for `not_read`. Ranges are separated by `, `. At most 10
-are listed; a track with more ends its line with `, and <n> more`. The record keeps
-every range, with exact `offset_frames`. A set whose record is format version 1 gives
-no error ranges, so export warns about nothing. The warning changes neither the export
-result nor the exit code.
+The count is the total of all the track's ranges, `frame` for 1. Ranges less than one
+sector (588 frames) apart, from the end of one to the start of the next, form one
+area, so errors scattered over a few milliseconds read as one place. Each area is its
+start and end in the track, from its first frame to the frame after its last, as
+durations at 44.1 kHz in the form the text results give durations, or only its start
+when both read the same; then, in parentheses, `<n> frames not read` for `not_read`
+and `<n> frames with C2 errors` for `c2_error`, each only when non-zero, separated by
+`, `. Areas are separated by `, `. At most 10 are listed; a track with more ends its
+line with `, and <n> more`. The record keeps every range, with exact `offset_frames`.
+A set whose record is format version 1 gives no error ranges, so export warns about
+nothing. The warning changes neither the export result nor the exit code.
 
 ## How export works
 

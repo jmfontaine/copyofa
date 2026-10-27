@@ -873,18 +873,16 @@ def test_inspect_reports_each_track_s_error_ranges(run: Run, damaged_set: Path) 
     assert text.code == 0
     lines = [line for line in text.out.splitlines() if line.startswith("  track ")]
     assert lines[0].endswith(
-        ", Audio Digest matches the recorded one, 12 frames not read successfully: "
-        + ", ".join(["0:00.027+1 (C2 errors)"] * 10)
-        + ", and 2 more"
+        ", Audio Digest matches the recorded one, 12 frames not read successfully, in "
+        "1 area: 0:00.027 (12 frames with C2 errors)"
     )
     assert lines[1].endswith(
-        ", Audio Digest matches the recorded one, 63 frames not read successfully: "
-        "0:00.002+37 (not read), 0:00.006+1 (C2 errors), 0:00.006+1 (not read), "
-        "0:00.011+24 (C2 errors)"
+        ", Audio Digest matches the recorded one, 63 frames not read successfully, in "
+        "1 area: 0:00.002-0:00.011 (38 frames not read, 25 frames with C2 errors)"
     )
     assert lines[2].endswith(
-        ", Audio Digest matches the recorded one, 1 frame not read successfully: "
-        "0:00.000+1 (C2 errors)"
+        ", Audio Digest matches the recorded one, 1 frame not read successfully, in "
+        "1 area: 0:00.000 (1 frame with C2 errors)"
     )
 
 

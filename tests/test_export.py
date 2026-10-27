@@ -138,21 +138,20 @@ def test_export_human_result(run: Run, acquired_set: Path, tmp_path: Path) -> No
     assert "Exported track 1 to 01.flac" in outcome.err
 
 
-# The warnings for DAMAGED_ERRORS: a range's start is a duration in the track.
+# The warnings for DAMAGED_ERRORS: ranges less than a sector apart form one area, and
+# an area's start and end are durations in the track.
 DAMAGED_WARNINGS = [
     (
-        "copyofa: warning: track 1 has 12 frames not read successfully: "
-        + ", ".join(["0:00.027+1 (C2 errors)"] * 10)
-        + ", and 2 more"
+        "copyofa: warning: track 1 has 12 frames not read successfully, in 1 area: "
+        "0:00.027 (12 frames with C2 errors)"
     ),
     (
-        "copyofa: warning: track 2 has 63 frames not read successfully: "
-        "0:00.002+37 (not read), 0:00.006+1 (C2 errors), 0:00.006+1 (not read), "
-        "0:00.011+24 (C2 errors)"
+        "copyofa: warning: track 2 has 63 frames not read successfully, in 1 area: "
+        "0:00.002-0:00.011 (38 frames not read, 25 frames with C2 errors)"
     ),
     (
-        "copyofa: warning: track 3 has 1 frame not read successfully: "
-        "0:00.000+1 (C2 errors)"
+        "copyofa: warning: track 3 has 1 frame not read successfully, in 1 area: "
+        "0:00.000 (1 frame with C2 errors)"
     ),
 ]
 
@@ -195,27 +194,48 @@ def test_export_warns_about_nothing_for_a_version_1_record(
     assert "warning" not in outcome.err
 
 
-def ranges(count: int) -> tuple[inspector.ErrorRange, ...]:
+def ranges(count: int, gap: int = 44100) -> tuple[inspector.ErrorRange, ...]:
+    """Return count ranges of 2 frames not read, each starting gap frames apart."""
     return tuple(
-        inspector.ErrorRange(index * 44100, 2, inspector.NOT_READ)
+        inspector.ErrorRange(index * gap, 2, inspector.NOT_READ)
         for index in range(count)
     )
 
 
 @pytest.mark.parametrize(
     ("count", "end"),
-    [(10, "0:09.000+2 (not read)"), (11, "0:09.000+2 (not read), and 1 more")],
-    ids=["10 ranges", "11 ranges"],
+    [
+        (10, "0:09.000 (2 frames not read)"),
+        (11, "0:09.000 (2 frames not read), and 1 more"),
+    ],
+    ids=["10 areas", "11 areas"],
 )
-def test_error_ranges_list_at_most_10_ranges(count: int, end: str) -> None:
+def test_error_ranges_list_at_most_10_areas(count: int, end: str) -> None:
     described = inspector.describe_error_ranges(ranges(count))
 
     assert described.startswith(
-        f"{2 * count} frames not read successfully: 0:00.000+2 (not read), "
-        "0:01.000+2 (not read), "
+        f"{2 * count} frames not read successfully, in {count} areas: "
+        "0:00.000 (2 frames not read), 0:01.000 (2 frames not read), "
     )
     assert described.endswith(f", {end}")
-    assert described.count("+") == 10
+    assert described.count("(2 frames not read)") == 10
+
+
+@pytest.mark.parametrize(
+    ("gap", "areas"),
+    [
+        (589, "in 1 area: 0:00.000-0:00.013 (4 frames not read)"),
+        (590, "in 2 areas: 0:00.000 (2 frames not read), 0:00.013 (2 frames not read)"),
+    ],
+    ids=["less than a sector apart", "a sector apart"],
+)
+def test_error_ranges_less_than_a_sector_apart_form_one_area(
+    gap: int, areas: str
+) -> None:
+    # A range of 2 frames ends 2 frames after it starts: gap - 2 frames between them.
+    described = inspector.describe_error_ranges(ranges(2, gap))
+
+    assert described == f"4 frames not read successfully, {areas}"
 
 
 def imported(make_set: MakeSet) -> Path:

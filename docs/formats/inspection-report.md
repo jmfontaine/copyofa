@@ -169,13 +169,13 @@ A track whose `audio_digest` differs from its `recorded_audio_digest` is not the
 acquired, and makes inspect exit 1. A track with error ranges that decodes to its
 recorded Audio Digest is `interpreted`: the set is as acquired, and its ranges change
 neither the outcome nor the exit code. The text result ends the line of each such
-`interpreted` track with `, <count> frames not read successfully:` and its ranges, as
-export's warning gives them (see
+`interpreted` track with `,` and the same description of its ranges, grouped into
+areas, as export's warning gives (see
 [Export result format](export-result.md#frames-not-read-successfully)), such as, for
-track 8:
+track 14:
 
 ```text
-, 7 frames not read successfully: 3:12.093+7 (C2 errors)
+, 2 frames not read successfully, in 1 area: 4:05.389 (2 frames with C2 errors)
 ```
 
 ## Audio Digest
