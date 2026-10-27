@@ -159,16 +159,13 @@ Acquire writes version 2.
   ```
 
   `<count>` is the total of all the track's ranges; `frame` is singular for 1. Ranges
-  less than one sector (588 frames) apart form one area. Each area is its start and end
-  in the track as durations, as the text results give durations, only the start when
-  both read the same, then `(<n> frames not read, <n> frames with C2 errors)`, each part
-  only when non-zero. Areas are separated by `, `. At most 10 areas are listed; more end
-  the line with `, and <n> more`. The record and the Reports keep every range, with
-  exact `offset_frames`.
-- *Amended during delivery (#154):* the line first listed each range by its start in
-  milliseconds and its frame count. A real disc's C2 errors are scattered single
-  frames, about 0.023 ms each, so its line repeated the same start times and showed
-  ten single frames; areas show where the damage is.
+  less than one sector (588 frames) apart, from the end of one to the start of the
+  next, form one area. Each area is its start and end in the track as durations, as
+  the text results give durations, only the start when both read the same, then
+  `(<n> frames not read, <n> frames with C2 errors)`, each part only when non-zero.
+  Areas are separated by `, `. At most 10 areas are listed; more end the line with
+  `, and <n> more`. The record and the Reports keep every range, with exact
+  `offset_frames`.
 
 ## Design decisions
 
@@ -280,3 +277,11 @@ their record and export's warning:
 1. This brief and ADR 0008, before implementation starts.
 2. AC9 and AC10, acquiring a disc that keeps errors by hand and restoring it.
 3. Merges and the release.
+
+## Delivery notes
+
+- **Amended during delivery (#154):** export's warning and inspect's text first listed
+  each range by its start in milliseconds and its frame count. A real disc's C2 errors
+  are scattered single frames, about 0.023 ms each, so its line repeated the same
+  start times and showed ten single frames. Grouping nearby ranges into areas shows
+  where the damage is.
