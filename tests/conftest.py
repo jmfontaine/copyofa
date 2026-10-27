@@ -391,6 +391,39 @@ def _cue(config: dict[str, Any], disc: SyntheticDisc) -> str:
     return "".join(f"{line}\n" for line in lines)
 
 
+def _split_errors(disc: SyntheticDisc) -> list[str]:
+    """Return the line b768's split stage logs for each track with errors.
+
+    As `check_tracks` in cd/cd_split.ixx counts them: the sectors holding a frame not
+    read (SKIP, state 0, which past the image's end every frame is) or read with a
+    C2 error (state 1), and those frames. The stand-in's tracks start on sectors.
+    """
+    width = len(str(len(disc.tracks)))
+    lines = []
+    for number, (first, track) in enumerate(
+        zip(disc.first_frames, disc.tracks, strict=True), start=1
+    ):
+        frames = len(track) // 4
+        state = disc.state[first : first + frames]
+        state += bytes(frames - len(state))
+        sectors = [
+            state[start : start + SECTOR_FRAMES]
+            for start in range(0, frames, SECTOR_FRAMES)
+        ]
+        counts = [
+            (sum(sector.count(value) > 0 for sector in sectors), state.count(value))
+            for value in (0, 1)
+        ]
+        (skip_sectors, skip), (c2_sectors, c2) = counts
+        if skip_sectors or c2_sectors:
+            lines.append(
+                f"errors detected, track: {number:0{width}}, sectors: "
+                f"{{SKIP: {skip_sectors}, C2: {c2_sectors}}}, "
+                f"samples: {{SKIP: {skip}, C2: {c2}}}"
+            )
+    return lines
+
+
 def _log(config: dict[str, Any], disc: SyntheticDisc, arguments: list[str]) -> str:
     drive = config["drive"]
     errors = config["media_errors"]
@@ -442,6 +475,7 @@ def _log(config: dict[str, Any], disc: SyntheticDisc, arguments: list[str]) -> s
         f"disc write offset: {config['write_offset']:+}",
         "",
         "checking tracks",
+        *_split_errors(disc),
         "done",
         "",
         "writing tracks",
@@ -505,10 +539,8 @@ def stand_in_redumper(arguments: list[str]) -> int:
         arguments
     ):
         refused = "error: data errors detected, unable to continue"
-        _write_log(
-            config_path,
-            f"{log.split('checking tracks')[0]}checking tracks\n{refused}\n".encode(),
-        )
+        checked = log.split("done\n\nwriting tracks")[0]
+        _write_log(config_path, f"{checked}{refused}\n".encode())
         print(refused)
         return 1
     for line in log.splitlines():
