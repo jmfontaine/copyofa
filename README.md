@@ -18,6 +18,9 @@ it with redumper into an Evidence Set that stores the disc image compressed, `in
 and `compare` read its tracks from the image, and `export` writes them as FLAC files.
 The sixth, v0.6.0, locates matching portions: `compare` reports which portions of one
 track appear in the other, where and how alike, and which audio appears in only one.
+The seventh, v0.7.0, has `acquire` ask redumper to re-read sectors it read with
+errors, so a lightly scratched CD can be preserved, and show redumper's log when an
+acquisition fails.
 The roadmap in the Product Map lists what comes next.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
