@@ -244,16 +244,19 @@ the collector already owns.
 - **[v0.7.0](https://github.com/jmfontaine/copyofa/milestone/7): Acquire Scratched
   CDs and Tighten the Edges** — Acquire Audio and Record Its Origins; Preserve
   Evidence Throughout Its Lifetime; Share and Evaluate Findings. S1 and S5: acquire
-  re-reads sectors with errors, so a lightly scratched CD is preserved, with fixes
-  found in review. Specified by the milestone's issues, with re-reading decided in
+  re-reads sectors with errors, so a lightly scratched CD can be preserved, with fixes
+  found in a review of the repository. Specified by the milestone's issues, with
+  re-reading decided in
   [ADR 0007](decisions/0007-re-read-sectors-with-errors-when-acquiring.md).
 
 ### Next
 
 - **Acquire Damaged Discs** — Acquire Audio and Record Its Origins. S1 for a disc that
   keeps errors after acquire re-reads it: redumper refuses to split a pressed CD with
-  a read error left inside a track, or a C2 error left in its lead-in or lead-out, so
-  acquire keeps nothing. During v0.7.0, a pressed CD that looks undamaged kept 9 C2
+  a read error left inside a track, or a C2 error left in its lead-in or lead-out, and
+  a CD-R with C2 errors at a track's edges gets generated sectors that place the track
+  nowhere in the image, so acquire keeps nothing (only errors confined to the lead-in
+  or lead-out give a set). During v0.7.0, a pressed CD that looks undamaged kept 9 C2
   samples in two sectors of one track after 20 re-reads, and failed. Keeping such a
   disc means deciding what a track holds where the drive read nothing, how the record
   and the tracks say so, and whether to keep a disc redumper will not split.
