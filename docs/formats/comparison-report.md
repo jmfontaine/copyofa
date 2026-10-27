@@ -231,9 +231,11 @@ frames, with Python's `round`, which takes a half to the even integer:
 At 44.1 kHz, a window holds round(5 × 44100 / 16) = 13,781 decimated frames, so it is
 13,781 × 16 = 220,496 frames long, not 220,500, and the windows of A start every
 220,496 frames; two candidates lie at least round(0.5 × 44100 / 16) = 1,378 decimated
-frames apart. `core_seconds` and `minimum_portion_seconds` are not rounded: they are
-compared with frame counts as `core_seconds` × `common_sample_rate` and
-`minimum_portion_seconds` × `common_sample_rate`.
+frames apart. Three uses are not rounded. The search does not run, and finds no
+portion, when a track is shorter than `window_seconds` × `common_sample_rate` frames:
+220,500 at 44.1 kHz, though a window is 220,496. `core_seconds` and
+`minimum_portion_seconds` are compared with frame counts as `core_seconds` ×
+`common_sample_rate` and `minimum_portion_seconds` × `common_sample_rate`.
 
 | Parameter | Value | Unit | Meaning |
 | --- | --- | --- | --- |
