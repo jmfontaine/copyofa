@@ -308,7 +308,7 @@ wheels = [
 
 [[package]]
 name = "copyofa"
-version = "0.7.0"
+version = "0.8.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
