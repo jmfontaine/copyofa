@@ -316,5 +316,6 @@ When the Acquisition Record cannot be used, `disc` holds only the reason:
 set, the Acquisition Record can be used and every track is `interpreted` with its
 recorded Audio Digest. It exits 1 otherwise, and still prints its result or Report. It
 exits 2, printing nothing on stdout, when the target is not an Evidence Set or the
-arguments are invalid, and 130 when canceled with Ctrl-C. mpg123 may write notes about
-damaged MP3 frames to stderr.
+arguments are invalid, and 130 when canceled with Ctrl-C. It also exits 1, with
+`copyofa: stdout closed` on stderr, when stdout is closed before or while it prints its
+result or Report. mpg123 may write notes about damaged MP3 frames to stderr.

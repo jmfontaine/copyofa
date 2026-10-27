@@ -106,8 +106,9 @@ system metadata files that Finder adds while browsing the set are ignored. It wr
 nothing into the set. `--json` prints a verification Report, which
 [Verification Report format][verification-report] describes.
 
-Verify exits 0 when everything is intact, 1 when it found anything else, 2 when the
-target is not an Evidence Set or the arguments are invalid, and 130 when canceled.
+Verify exits 0 when everything is intact, 1 when it found anything else or stdout is
+closed, 2 when the target is not an Evidence Set or the arguments are invalid, and 130
+when canceled.
 
 Describe the audio the set holds:
 
@@ -134,8 +135,8 @@ the one recorded at acquisition.
 Inspect exits 0 when every file was decoded or is not a supported format, 1 when a file
 could not be inspected or decoded or its audio differs from its FLAC MD5 signature, or
 when a track of an acquired set could not be decoded or differs from its recorded Audio
-Digest, 2 when the target is not an Evidence Set or the arguments are invalid, and 130
-when canceled. It writes nothing into the set.
+Digest, or when stdout is closed, 2 when the target is not an Evidence Set or the
+arguments are invalid, and 130 when canceled. It writes nothing into the set.
 
 Find which portions of one preserved track appear in another, such as a FLAC track and
 the MP3 of the same song from another release:
@@ -195,9 +196,9 @@ stored, which names your disks and often your user account, and the Report says 
 did.
 
 Compare exits 0 when both tracks were compared, whether or not it found a portion, 1
-when a track could not be inspected or decoded or is not a supported format, 2 when an
-input is not inside an Evidence Set or the arguments are invalid, and 130 when
-canceled. It writes nothing into either set.
+when a track could not be inspected or decoded or is not a supported format, or when
+stdout is closed, 2 when an input is not inside an Evidence Set or the arguments are
+invalid, and 130 when canceled. It writes nothing into either set.
 
 Play a disc you acquired, or tag its tracks with other tools, from FLAC files that
 export writes:
@@ -237,9 +238,9 @@ findings are true, who produced it, or anything about the audio. The schemas shi
 the package, so other software can check a Report without CopyOfA. `--json` prints a
 validation result, which [Validation result format][validation-result] describes.
 
-Validate exits 0 when the Report is valid, 1 when it is invalid or unsupported or the
-file cannot be read, 2 when the arguments are invalid, and 130 when canceled. It
-writes nothing.
+Validate exits 0 when the Report is valid, 1 when it is invalid or unsupported, the
+file cannot be read, or stdout is closed, 2 when the arguments are invalid, and 130
+when canceled. It writes nothing.
 
 Read a comparison Report as a web page, without CopyOfA:
 
@@ -257,9 +258,9 @@ a table of the portions with each one's residual windows, and the unmatched audi
 each track. [Comparison Report format][comparison-report] describes it.
 
 View exits 0 when it printed the page, 1 when the Report is invalid, unsupported, not a
-comparison Report, of a format version view does not render, or cannot be read, 2 when
-the arguments are invalid, and 130 when canceled. It prints nothing on stdout
-otherwise, and writes no file.
+comparison Report, of a format version view does not render, or cannot be read, or
+when stdout is closed, 2 when the arguments are invalid, and 130 when canceled. It
+prints nothing on stdout otherwise, and writes no file.
 
 ## Documents
 

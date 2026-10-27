@@ -147,4 +147,6 @@ unexpected file was found, and every directory under `data/` could be listed. It
 stdout, when the target is not an Evidence Set (it does not exist, is not a directory,
 or has no `bagit.txt`) or the arguments are invalid, and 130 when canceled with Ctrl-C.
 A set it cannot reach, such as one behind a directory without search permission, gets
-a Report whose records cannot be read, and exit 1.
+a Report whose records cannot be read, and exit 1. Verify also exits 1, with
+`copyofa: stdout closed` on stderr, when stdout is closed before or while it prints its
+result or Report.

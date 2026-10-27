@@ -120,7 +120,8 @@ problem with its location, and the limitations.
 the reason on stderr, when the file cannot be read: it does not exist, is a directory
 or another file that is not a regular file, or cannot be read. It exits 2,
 printing nothing on stdout, when the arguments are invalid, and 130 when canceled with
-Ctrl-C.
+Ctrl-C. It also exits 1, with `copyofa: stdout closed` on stderr, when stdout is closed
+before or while it prints its result.
 
 ## Validate without CopyOfA
 

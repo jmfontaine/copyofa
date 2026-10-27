@@ -153,9 +153,12 @@ rename or while the destination's parent directory is synced deletes the set it 
 renamed, and import exits 130 with nothing on stdout. Accepting the set, which ends
 with that sync, is import's last step before it prints any warning and its result. A
 Ctrl-C after it, such as one while the result is printed, keeps the set, and import
-still exits 130. A staging directory left behind by a crash is never reused or deleted
-by CopyOfA: the next import, acquire or export to that destination refuses and names
-it.
+still exits 130. Import exits 1, with `copyofa: stdout closed` on stderr, when stdout
+is closed: closed at the start (`>&-`), it imports nothing; closed while it prints the
+result, such as by `| head`, it keeps the accepted set, and the line names it:
+`copyofa: stdout closed; <destination> was created`. A staging directory left behind
+by a crash is never reused or deleted by CopyOfA: the next import, acquire or export to
+that destination refuses and names it.
 
 ## Acquired sets
 
@@ -473,7 +476,9 @@ and deletes the staging directory. As with import, acquire canceled before it ha
 accepted the set leaves nothing at its destination, even when the cancellation arrives
 after the rename: it deletes the set it just renamed and exits 130 with nothing on
 stdout. A Ctrl-C once the set is accepted, such as one while the result is printed,
-keeps the set, and acquire still exits 130.
+keeps the set, and acquire still exits 130. A closed stdout makes acquire exit 1 as it
+does import: closed at the start, it reads nothing; closed while it prints the result,
+it keeps the accepted set and names it on stderr.
 
 A disc read with errors is accepted, since the set is evidence of what the drive read,
 but acquire exits 1: when `read_errors` gives SCSI or C2 errors, or a track has
