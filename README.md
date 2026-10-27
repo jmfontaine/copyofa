@@ -197,7 +197,9 @@ sections that better portions already cover, less well. The first 4.1 s of A, an
 first 4.9 s and the last 4.1 s of B, match nothing. When both tracks are lossless and
 their Audio Digests are equal, compare reports identical audio. It draws no conclusion
 such as "same master". `--json` prints a comparison Report, which
-[Comparison Report format][comparison-report] describes, with the method's parameters.
+[Comparison Report format][comparison-report] describes, with the method's parameters
+and, for a track of an acquired set, the ranges of its frames the drive did not read
+successfully.
 To share a Report, add `--omit-locations`: it leaves out where each Evidence Set is
 stored, which names your disks and often your user account, and the Report says that it
 did.
@@ -262,8 +264,9 @@ limitation. It gives the SHA-256 of the Report file it was generated from, so a
 recipient can check the page against the Report. The page runs no script and loads
 nothing, so it opens in any browser, offline. It draws no conclusion from the
 measurements. For a Report of the current format, it shows the method's parameters,
-a table of the portions with each one's residual windows, and the unmatched audio of
-each track. [Comparison Report format][comparison-report] describes it.
+a table of the portions with each one's residual windows, the unmatched audio of each
+track, and the error ranges of each track of an acquired set.
+[Comparison Report format][comparison-report] describes it.
 
 View exits 0 when it printed the page, 1 when the Report is invalid, unsupported, not a
 comparison Report, of a format version view does not render, or cannot be read, or

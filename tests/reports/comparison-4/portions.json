@@ -1,0 +1,566 @@
+{
+  "report_kind": "copyofa.comparison",
+  "format_version": 4,
+  "copyofa_version": "0.8.0.dev0",
+  "compared_at": "2026-10-27T02:27:19Z",
+  "omitted": [],
+  "inputs": {
+    "a": {
+      "evidence_set": "/Volumes/Archive/set-1",
+      "integrity_baseline": {
+        "manifest_sha256": "2f39111492dfc7045920f40eb0a9eb48374aa14d29076c685113c74fd105fc46",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/a.flac",
+      "outcome": "interpreted",
+      "expected_digest": "0c78c1f21488e1e3bbbc5c09f2f0ec814e57b2b2b710e14f75df677bf2553834",
+      "observed_digest": "0c78c1f21488e1e3bbbc5c09f2f0ec814e57b2b2b710e14f75df677bf2553834",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 617400,
+      "audio_digest": "pcm1:44100:2:16:5f9e5a51062ebbd0badd86043832b3f31825d38e25e21aa86a2e9472b0c6c6e3",
+      "peak": [
+        8192,
+        8192
+      ],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0,
+      "flac_md5_signature": "matching"
+    },
+    "b": {
+      "evidence_set": "/Volumes/Archive/set-2",
+      "integrity_baseline": {
+        "manifest_sha256": "8b0903dfe7913b84069f4534c04407abe007fa848ef412d8d7dd6d860954300c",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/b.flac",
+      "outcome": "interpreted",
+      "expected_digest": "05ba8bbe9cd9cffb605068e19fe94fe423adb6ceb1c3cbd2b1f76fe1ead00957",
+      "observed_digest": "05ba8bbe9cd9cffb605068e19fe94fe423adb6ceb1c3cbd2b1f76fe1ead00957",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 970200,
+      "audio_digest": "pcm1:44100:2:16:ef15f0e188ad55124f32e668ce5ee9a03c43c891268b94cbb7d8238ca52d99cc",
+      "peak": [
+        8698,
+        8699
+      ],
+      "leading_silence_frames": 44100,
+      "trailing_silence_frames": 0,
+      "flac_md5_signature": "matching"
+    }
+  },
+  "method": {
+    "decoder": "libsndfile",
+    "decoder_version": "1.2.2",
+    "resampler": "libsoxr",
+    "resampler_version": "0.1.3-14-ga66f3ee",
+    "resampler_quality": "VHQ",
+    "common_sample_rate": 44100,
+    "alignment": "windowed_portions",
+    "parameters": {
+      "decimation_factor": 16,
+      "decimation_quality": "HQ",
+      "first_difference_coefficient": 0.5,
+      "window_seconds": 5,
+      "hop_seconds": 5,
+      "silent_window_energy_ratio": 0.0001,
+      "b_position_energy_floor": 1e-10,
+      "candidate_threshold": 0.4,
+      "candidates_per_window": 3,
+      "candidate_separation_seconds": 0.5,
+      "skipped_windows": 1,
+      "chaining_tolerance_frames": 32,
+      "core_ratio": 0.85,
+      "core_seconds": 20,
+      "refinement_radius_frames": 32,
+      "block_frames": 2048,
+      "matched_block_residual_ratio": 0.2,
+      "core_confirming_ratio": 0.5,
+      "evidence_floor_dbfs": -80,
+      "silence_against_signal_dbfs": -60,
+      "end_range_inside_blocks": 8,
+      "end_range_outside_blocks": 1,
+      "acceptance_residual_db": -10,
+      "minimum_portion_seconds": 1,
+      "merge_tolerance_frames": 2,
+      "alternate_margin_db": 3,
+      "alternate_coverage_ratio": 0.9,
+      "equal_residual_floor_db": -60
+    }
+  },
+  "measurements": {
+    "portions": [
+      {
+        "rank": "primary",
+        "a": {
+          "start_frame": 0,
+          "frames": 529200
+        },
+        "b": {
+          "start_frame": 44100,
+          "frames": 529200
+        },
+        "offset": {
+          "frames": 44100,
+          "seconds": 1.0
+        },
+        "downmix": {
+          "correlation": 1.0,
+          "gain_db": 0.0,
+          "residual_windows": [
+            {
+              "start_frame": 0,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            },
+            {
+              "start_frame": 44100,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            },
+            {
+              "start_frame": 88200,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            },
+            {
+              "start_frame": 132300,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            },
+            {
+              "start_frame": 176400,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            },
+            {
+              "start_frame": 220500,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            },
+            {
+              "start_frame": 264600,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            },
+            {
+              "start_frame": 308700,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            },
+            {
+              "start_frame": 352800,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            },
+            {
+              "start_frame": 396900,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            },
+            {
+              "start_frame": 441000,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            },
+            {
+              "start_frame": 485100,
+              "frames": 44100,
+              "absent": {
+                "residual_db": "A minus B after the gain is zero throughout the window"
+              }
+            }
+          ],
+          "absent": {
+            "residual_db": "A minus B after the gain is zero throughout the portion"
+          }
+        },
+        "channels": [
+          {
+            "correlation": 1.0,
+            "gain_db": 0.0,
+            "residual_windows": [
+              {
+                "start_frame": 0,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 44100,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 88200,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 132300,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 176400,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 220500,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 264600,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 308700,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 352800,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 396900,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 441000,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 485100,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              }
+            ],
+            "absent": {
+              "residual_db": "A minus B after the gain is zero throughout the portion"
+            }
+          },
+          {
+            "correlation": 1.0,
+            "gain_db": 0.0,
+            "residual_windows": [
+              {
+                "start_frame": 0,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 44100,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 88200,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 132300,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 176400,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 220500,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 264600,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 308700,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 352800,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 396900,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 441000,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              },
+              {
+                "start_frame": 485100,
+                "frames": 44100,
+                "absent": {
+                  "residual_db": "A minus B after the gain is zero throughout the window"
+                }
+              }
+            ],
+            "absent": {
+              "residual_db": "A minus B after the gain is zero throughout the portion"
+            }
+          }
+        ],
+        "absent": {
+          "block_gain_residual_db": "A minus B after the per-block gains is zero throughout the portion"
+        }
+      },
+      {
+        "rank": "alternate",
+        "a": {
+          "start_frame": 176400,
+          "frames": 264600
+        },
+        "b": {
+          "start_frame": 705600,
+          "frames": 264600
+        },
+        "offset": {
+          "frames": 529200,
+          "seconds": 12.0
+        },
+        "block_gain_residual_db": -24.09473426853504,
+        "downmix": {
+          "correlation": 0.9980495825848201,
+          "gain_db": -0.03557782892117125,
+          "residual_db": -24.09265217970099,
+          "residual_windows": [
+            {
+              "start_frame": 0,
+              "frames": 44100,
+              "residual_db": -24.085921741099842
+            },
+            {
+              "start_frame": 44100,
+              "frames": 44100,
+              "residual_db": -24.13465334801028
+            },
+            {
+              "start_frame": 88200,
+              "frames": 44100,
+              "residual_db": -24.061685759405336
+            },
+            {
+              "start_frame": 132300,
+              "frames": 44100,
+              "residual_db": -24.087707261537812
+            },
+            {
+              "start_frame": 176400,
+              "frames": 44100,
+              "residual_db": -24.11520751573534
+            },
+            {
+              "start_frame": 220500,
+              "frames": 44100,
+              "residual_db": -24.070587002002565
+            }
+          ]
+        },
+        "channels": [
+          {
+            "correlation": 0.998050354623525,
+            "gain_db": -0.03282711770576674,
+            "residual_db": -24.094381143320156,
+            "residual_windows": [
+              {
+                "start_frame": 0,
+                "frames": 44100,
+                "residual_db": -24.089583028337668
+              },
+              {
+                "start_frame": 44100,
+                "frames": 44100,
+                "residual_db": -24.074174014674842
+              },
+              {
+                "start_frame": 88200,
+                "frames": 44100,
+                "residual_db": -24.101565732697004
+              },
+              {
+                "start_frame": 132300,
+                "frames": 44100,
+                "residual_db": -24.073041060899833
+              },
+              {
+                "start_frame": 176400,
+                "frames": 44100,
+                "residual_db": -24.105864609163838
+              },
+              {
+                "start_frame": 220500,
+                "frames": 44100,
+                "residual_db": -24.121819702341835
+              }
+            ]
+          },
+          {
+            "correlation": 0.9980563660052781,
+            "gain_db": -0.03571753283155278,
+            "residual_db": -24.10778564271643,
+            "residual_windows": [
+              {
+                "start_frame": 0,
+                "frames": 44100,
+                "residual_db": -24.117544310026027
+              },
+              {
+                "start_frame": 44100,
+                "frames": 44100,
+                "residual_db": -24.120580688262297
+              },
+              {
+                "start_frame": 88200,
+                "frames": 44100,
+                "residual_db": -24.137913550913538
+              },
+              {
+                "start_frame": 132300,
+                "frames": 44100,
+                "residual_db": -24.070651486390112
+              },
+              {
+                "start_frame": 176400,
+                "frames": 44100,
+                "residual_db": -24.09574756716618
+              },
+              {
+                "start_frame": 220500,
+                "frames": 44100,
+                "residual_db": -24.104138140367112
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "unmatched": {
+      "a": [
+        {
+          "start_frame": 529200,
+          "frames": 88200,
+          "digitally_silent": false,
+          "level_dbfs": -16.82014319715218
+        }
+      ],
+      "b": [
+        {
+          "start_frame": 0,
+          "frames": 44100,
+          "digitally_silent": true
+        },
+        {
+          "start_frame": 573300,
+          "frames": 396900,
+          "digitally_silent": false,
+          "level_dbfs": -16.800760882412362
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "No measurement says whether the tracks share a master, a mix or a source; the Report draws no such conclusion.",
+    "MP3 is lossy: the measurements of an MP3 depend on its decoder.",
+    "Tracks at different sample rates are compared at the lower rate, after resampling, so differences above that rate's band are not measured.",
+    "Portions shorter than about 2.5 s may be missed, and the search finds no portion in a track shorter than 5 s; identical audio still gets its portion.",
+    "Speed, pitch and drift differences give no portion.",
+    "A boundary inside audio below -80 dBFS is placed at the nearest frame with evidence, and the rest is reported as unmatched.",
+    "A boundary at a fade falls about three blocks of 2048 frames inside it, where the gain fitted over the eight blocks inside the edge stops fitting the faded audio, not where the fade gets quiet; a boundary at a crossfade falls where the other audio refutes the match.",
+    "In music that repeats a section, one range of a track can match several places in the other; each is reported as a portion.",
+    "Channels are paired in the order each file stores them."
+  ]
+}

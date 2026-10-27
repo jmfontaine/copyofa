@@ -25,9 +25,11 @@ records how the tracks are decoded and measured, and
 [ADR 0006](../decisions/0006-locate-matching-portions-between-tracks.md) how portions
 are located and why that method was chosen.
 
-It has four format versions, each with its JSON Schema:
+It has five format versions, each with its JSON Schema:
+[comparison-report-5.schema.json](../../src/copyofa/schemas/comparison-report-5.schema.json)
+for version 5, which this document describes and `compare` prints,
 [comparison-report-4.schema.json](../../src/copyofa/schemas/comparison-report-4.schema.json)
-for version 4, which this document describes and `compare` prints,
+for [version 4](#format-version-4),
 [comparison-report-3.schema.json](../../src/copyofa/schemas/comparison-report-3.schema.json)
 for [version 3](#format-version-3),
 [comparison-report-2.schema.json](../../src/copyofa/schemas/comparison-report-2.schema.json)
@@ -150,7 +152,7 @@ Compare writes nothing into either set.
 | Field | Content |
 | --- | --- |
 | `report_kind` | Always `copyofa.comparison`. |
-| `format_version` | The version of this format, `4`. A later change to the fields increments it. |
+| `format_version` | The version of this format, `5`. A later change to the fields increments it. |
 | `copyofa_version` | The version of CopyOfA that ran the comparison. |
 | `compared_at` | The comparison time in UTC, such as `2026-10-25T18:30:00Z`. |
 | `omitted` | The JSON Pointers of the values the Report leaves out, each of `/inputs/a/evidence_set` and `/inputs/b/evidence_set` at most once; `[]` when it leaves out nothing. See [Leaving out Evidence Set locations](#leaving-out-evidence-set-locations). |
@@ -182,7 +184,13 @@ absent when the manifest does not list the file.
 
 An input given with `--track-a` or `--track-b` also holds `track`: its `number`, and
 its `first_frame` and `frame_count` in the image when the Acquisition Record lists the
-track. In such an input:
+track. When that record is format version 2, `track` also holds `error_ranges`: the
+track's frames the drive did not read successfully, as the
+[inspection Report](inspection-report.md#fields) gives them for a track, a list,
+empty when there are none, of ranges with `offset_frames` from the track's first
+frame, `frame_count` and `state`, `not_read` or `c2_error`. It is absent for a record
+of format version 1, which gives no error ranges. The ranges change neither the
+measurements nor the exit code. In such an input:
 
 - `path`, `expected_digest` and `observed_digest` describe the disc image, such as
   `data/disc.scram.flac`; `path` and `expected_digest` are absent when no usable
@@ -366,6 +374,13 @@ Compare may still name a path given on the command line on stderr, such as in an
 The schema requires an input's `evidence_set` exactly when `omitted` does not list it.
 Without the option, compare prints `"omitted": []`.
 
+## Format version 4
+
+Compare printed format version 4 in CopyOfA 0.6 and 0.7. It is version 5 without error
+ranges: `format_version` is `4`, and no input's `track` holds `error_ranges`.
+`copyofa validate` and `copyofa view` still accept it, and the version 4 schema is
+unchanged. A Report with `error_ranges` is not valid at version 4.
+
 ## Format version 3
 
 Compare printed format version 3 in CopyOfA 0.5. It differs from version 4 in `method`
@@ -416,8 +431,8 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
 ```json
 {
   "report_kind": "copyofa.comparison",
-  "format_version": 4,
-  "copyofa_version": "0.6.0",
+  "format_version": 5,
+  "copyofa_version": "0.8.0",
   "compared_at": "2026-10-26T03:15:12Z",
   "omitted": [],
   "inputs": {
@@ -432,7 +447,8 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
       "track": {
         "number": 4,
         "first_frame": 59373288,
-        "frame_count": 8234940
+        "frame_count": 8234940,
+        "error_ranges": []
       },
       "outcome": "interpreted",
       "expected_digest": "4ad6…",
@@ -706,7 +722,7 @@ copyofa view htf.json > htf.html
 
 View first validates the file as [`copyofa validate`](validation-result.md) does, and
 refuses a Report that is invalid, unsupported, or of another kind. It supports
-comparison Reports only, of format version 1, 2, 3 or 4, and renders each version
+comparison Reports only, of format version 1, 2, 3, 4 or 5, and renders each version
 with its own layout. It also refuses a valid comparison Report of any other format
 version, such as one a later CopyOfA printed, rather than show it with a layout that
 could leave fields out: it prints nothing on stdout and one line on stderr naming the
@@ -714,8 +730,8 @@ file, its format version and the versions view supports, and exits 1.
 
 The page shows every field of the Report with its value as the Report records it, and
 adds only labels and units, for each track a duration computed from its frames and
-sample rate, and for version 4 each range also in seconds, computed from its frames
-and the common sample rate. It gives:
+sample rate, and for versions 4 and 5 each range also in seconds, computed from its
+frames and the common sample rate. It gives:
 
 - the SHA-256 of the exact bytes of the file it was generated from, the Report's kind
   and format version, and the CopyOfA version that generated the page, which is not
@@ -726,12 +742,15 @@ and the common sample rate. It gives:
   Baseline, path, track number, first frame and frame count, outcome and reason,
   properties, File Digests, Audio Digest, peak, silence, FLAC MD5 signature and
   limitations;
-- the method, and for version 4 a table of its parameters, each by its name in the
-  Report;
+- for version 5, for each track input, how many error ranges its `track` holds, or
+  that it holds none, and a table of them, one row each in the Report's order: offset
+  from the track's first frame, frames, and state;
+- the method, and for versions 4 and 5 a table of its parameters, each by its name in
+  the Report;
 - for versions 1 to 3, the measurements: identical audio, offset, overlap, and for the
   downmix and each channel the correlation, gain and residual, with one table of
   residual windows for each of them;
-- for version 4, the measurements:
+- for versions 4 and 5, the measurements:
   - identical audio, and how many portions the Report holds, or why it holds none;
   - a table of the portions, in the Report's order, one row each: rank, start frame
     and frames in A and in B, offset in frames and seconds, residual after the

@@ -150,7 +150,7 @@ CopyOfA prints; any other change to a Report's fields is a new format version wi
 own schema file. The test suite validates every Report it produces against its schema.
 
 `copyofa view` validates a file the same way, then `copyofa.viewer` renders a valid
-comparison Report, of any format version 1 to 4, as one self-contained HTML page, with
+comparison Report, of any format version 1 to 5, as one self-contained HTML page, with
 the standard library only.
 The page shows every value as the Report records it and the SHA-256 of the file; it
 holds no script, no link and no external resource, a Content Security Policy forbids

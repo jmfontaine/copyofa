@@ -1,0 +1,135 @@
+{
+  "report_kind": "copyofa.comparison",
+  "format_version": 4,
+  "copyofa_version": "0.8.0.dev0",
+  "compared_at": "2026-10-27T02:27:19Z",
+  "omitted": [],
+  "inputs": {
+    "a": {
+      "evidence_set": "/Volumes/Archive/set-3",
+      "integrity_baseline": {
+        "manifest_sha256": "2df48efb6a1b2f23b1dc22529b18f19f4e2a859c3c091adf8b5a901ee6e447bb",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/a.flac",
+      "outcome": "interpreted",
+      "expected_digest": "9bafc53fc526dc0b419d23c3b1ddfffa11573b6b0474f29c36bb98954344f325",
+      "observed_digest": "9bafc53fc526dc0b419d23c3b1ddfffa11573b6b0474f29c36bb98954344f325",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 264600,
+      "audio_digest": "pcm1:44100:2:16:c7bd27e7ed58f6bcfc469c610a1986b201c8d9fab39e9e87529b3b0738979aea",
+      "peak": [
+        32768,
+        32768
+      ],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0,
+      "flac_md5_signature": "matching"
+    },
+    "b": {
+      "evidence_set": "/Volumes/Archive/set-4",
+      "integrity_baseline": {
+        "manifest_sha256": "7e9e06702b672c36f94169db33ed052fe61ecaa97aed5822e4643c554f05ec1f",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/b.flac",
+      "outcome": "interpreted",
+      "expected_digest": "3cf19dbdd574c9ba15e66aa0528a439542baa8542fca0397d38b97d6c8070c99",
+      "observed_digest": "3cf19dbdd574c9ba15e66aa0528a439542baa8542fca0397d38b97d6c8070c99",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 264600,
+      "audio_digest": "pcm1:44100:2:16:d73b63803bbb0a9ce0f7bc768a719ada243ec37d60e57d5de58bf845f1d73633",
+      "peak": [
+        32768,
+        32768
+      ],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0,
+      "flac_md5_signature": "matching"
+    }
+  },
+  "method": {
+    "decoder": "libsndfile",
+    "decoder_version": "1.2.2",
+    "resampler": "libsoxr",
+    "resampler_version": "0.1.3-14-ga66f3ee",
+    "resampler_quality": "VHQ",
+    "common_sample_rate": 44100,
+    "alignment": "windowed_portions",
+    "parameters": {
+      "decimation_factor": 16,
+      "decimation_quality": "HQ",
+      "first_difference_coefficient": 0.5,
+      "window_seconds": 5,
+      "hop_seconds": 5,
+      "silent_window_energy_ratio": 0.0001,
+      "b_position_energy_floor": 1e-10,
+      "candidate_threshold": 0.4,
+      "candidates_per_window": 3,
+      "candidate_separation_seconds": 0.5,
+      "skipped_windows": 1,
+      "chaining_tolerance_frames": 32,
+      "core_ratio": 0.85,
+      "core_seconds": 20,
+      "refinement_radius_frames": 32,
+      "block_frames": 2048,
+      "matched_block_residual_ratio": 0.2,
+      "core_confirming_ratio": 0.5,
+      "evidence_floor_dbfs": -80,
+      "silence_against_signal_dbfs": -60,
+      "end_range_inside_blocks": 8,
+      "end_range_outside_blocks": 1,
+      "acceptance_residual_db": -10,
+      "minimum_portion_seconds": 1,
+      "merge_tolerance_frames": 2,
+      "alternate_margin_db": 3,
+      "alternate_coverage_ratio": 0.9,
+      "equal_residual_floor_db": -60
+    }
+  },
+  "measurements": {
+    "portions": [],
+    "unmatched": {
+      "a": [
+        {
+          "start_frame": 0,
+          "frames": 264600,
+          "digitally_silent": false,
+          "level_dbfs": -4.767210699287021
+        }
+      ],
+      "b": [
+        {
+          "start_frame": 0,
+          "frames": 264600,
+          "digitally_silent": false,
+          "level_dbfs": -4.768826504766001
+        }
+      ]
+    },
+    "absent": {
+      "portions": "no portion was found"
+    }
+  },
+  "limitations": [
+    "No measurement says whether the tracks share a master, a mix or a source; the Report draws no such conclusion.",
+    "MP3 is lossy: the measurements of an MP3 depend on its decoder.",
+    "Tracks at different sample rates are compared at the lower rate, after resampling, so differences above that rate's band are not measured.",
+    "Portions shorter than about 2.5 s may be missed, and the search finds no portion in a track shorter than 5 s; identical audio still gets its portion.",
+    "Speed, pitch and drift differences give no portion.",
+    "A boundary inside audio below -80 dBFS is placed at the nearest frame with evidence, and the rest is reported as unmatched.",
+    "A boundary at a fade falls about three blocks of 2048 frames inside it, where the gain fitted over the eight blocks inside the edge stops fitting the faded audio, not where the fade gets quiet; a boundary at a crossfade falls where the other audio refutes the match.",
+    "In music that repeats a section, one range of a track can match several places in the other; each is reported as a portion.",
+    "Channels are paired in the order each file stores them."
+  ]
+}
