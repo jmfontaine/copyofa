@@ -35,11 +35,11 @@ track file as the image holds it, instead of generating one.
 1. **Acquire splits every disc as read.** `copyofa acquire` runs `redumper disc` with
    `--force-split --leave-unchanged`, besides `--retries`, on every disc. On a disc read
    without error, neither option changes the track files.
-2. **A track holds what the drive returned.** Samples flagged with C2 errors are the
-   samples of the best read; sectors the drive never read are zeros, since redumper
-   never writes them to the image. Each track stays a range of the image that holds
-   exactly redumper's track file, as ADR 0005 requires, and its Audio Digest is the
-   digest of that range. Nothing is generated.
+2. **A track holds what the drive returned.** A sample flagged with a C2 error holds
+   the first read that returned it; sectors the drive never read are zeros, since
+   redumper never writes them to the image. Each track stays a range of the image that
+   holds exactly redumper's track file, as ADR 0005 requires, and its Audio Digest is
+   the digest of that range. Nothing is generated.
 3. **The record locates the errors.** The Acquisition Record, at a new format version
    2, gives each track the frame ranges its state does not mark as read successfully,
    each as not read or read with C2 errors. Brief 0006 specifies the fields.
@@ -70,9 +70,11 @@ Alternatives considered:
   audio: another reading of the same disc may give another digest. A track never read
   at all is zeros, and shares its digest with any other such track of its length.
 - Acquire no longer fails because of redumper's generated sectors; its diagnostic for
-  that case goes. It still fails when the never-read sectors are the last of the
-  image: the image is then shorter than the disc, and redumper pads the track file.
-- Splitting a restored set again, as the Evidence Set format shows, takes the options
-  the record's `reader.arguments` gives: without them, redumper refuses the disc or
-  generates sectors, and the track files no longer match the Audio Digests.
+  that case goes. It still fails when the last track is never read through to the
+  image's end: the image is then shorter than the track, and redumper pads the track
+  file.
+- Splitting a restored set again, as the Evidence Set format shows, takes
+  `--force-split --leave-unchanged`, which the record's `reader.arguments` lists:
+  without them, redumper refuses the disc or generates sectors, and the track files no
+  longer match the Audio Digests.
 - Inspect, compare and export read the new record format, and still read version 1.

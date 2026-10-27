@@ -54,7 +54,8 @@ Refines [S1](../product-map.md#s1-preserve-a-cd):
 - Changing the retry count's default, or other redumper options.
 - New fields in the export result; the warning is on stderr only.
 - Changing verify, import or validate.
-- A disc whose never-read sectors run to the end of the image (see Known limit).
+- A disc whose last track is never read through to the end of the image (see Known
+  limit).
 - Discs other than plain audio CDs, which stay in the Later outcome Acquire More Kinds
   of Disc.
 
@@ -69,14 +70,15 @@ Confirmed in redumper b768's source; ADR 0008 relies on it.
   track file is copied from the image with the same offset as the state, so each track
   file is a range of the image.
 - A sector the drive never read is never written to the image, so the image holds zeros
-  there, with state 0. A sample read with a C2 error holds the data of the best read,
-  with state 1.
+  there, with state 0. A sample read with a C2 error holds the data of the first read
+  that returned it, with state 1: redumper replaces a sample only with a better state.
 
 ### Known limit
 
-When the never-read sectors are the last ones of the image, the image is shorter than
-the disc, redumper pads the track file with zeros, and the track file is no longer a
-range of the image. Acquire then fails as today, with "found nowhere in the image".
+When the last track's sectors are never read through to the image's end, the image is
+shorter than the track, redumper pads the track file with zeros, and the track file is
+no longer a range of the image. Acquire then fails as today, with "found nowhere in the
+image". Unread lead-out sectors alone do not cause it.
 
 ## Requirements
 
@@ -103,7 +105,8 @@ range of the image. Acquire then fails as today, with "found nowhere in the imag
 ### Acquisition Record format version 2
 
 Version 1 with each track's `error_frames` replaced by `error_ranges`: a list, empty
-when the track has no error, of objects with:
+when the track has no error, of objects with the following fields. A frame is one
+stereo sample, 1/44,100 s, which redumper's log calls a sample.
 
 - `offset_frames`: the range's first frame, counted from the track's first frame;
 - `frame_count`: its length in frames, at least 1;
@@ -133,7 +136,8 @@ Acquire writes version 2.
   version 1.
 - Inspect's exit status does not change: a track with error ranges that decodes to its
   recorded Audio Digest is `interpreted`, and the set is as acquired.
-- Inspect's text result names each track with error ranges, as export's warning does.
+- Inspect's text result adds to each affected track's line `, <count> frames not read
+  successfully:` and its ranges, written as export's warning writes them.
 
 ### Compare
 
@@ -151,10 +155,12 @@ Acquire writes version 2.
   copyofa: warning: track 8 has 7 frames not read successfully: 3:12.093+7 (C2 errors)
   ```
 
-  Each range is its start in the track as a duration, as the text results give
-  durations, then `+` and its frame count, then its state, `C2 errors` or `not read`;
-  ranges are separated by `, `. At most 10 ranges are listed; more end the line with
-  `and <n> more`. The record and the Reports keep every range.
+  `<count>` is the total of all the track's ranges; `frame` is singular for 1. Each
+  range is its start in the track as a duration, as the text results give durations,
+  then `+` and its frame count, then its state, `C2 errors` or `not read`; ranges are
+  separated by `, `. At most 10 ranges are listed; more end the line with
+  `, and <n> more`. The record and the Reports keep every range, with exact
+  `offset_frames`.
 
 ## Design decisions
 
@@ -170,7 +176,7 @@ Acquire writes version 2.
   acquired. They warn instead.
 - **A wholly unread track is kept.** It is all zeros, gets one range over the whole
   track, and shares its Audio Digest with any other unread track of the same length;
-  the record says so.
+  the Evidence Set format says so.
 - **New format versions, not changed ones,** for the record and both Reports, as ADR
   0004 requires for Reports.
 
@@ -187,21 +193,24 @@ limit, or an image that holds anything but zeros where the state is 0.
 ## Acceptance criteria
 
 Each criterion is verified by an automated test unless stated otherwise. Tests of
-acquire run the stand-in `redumper`, extended to behave as b768 does with
-`--force-split --leave-unchanged`: it writes zeros in the image and the track file for
-frames of state 0, supports frames of state 1, and splits a disc with errors only when
-given both options.
+acquire run the stand-in `redumper`, extended for `--force-split --leave-unchanged`:
+it writes zeros in the image and the track file for frames of state 0, supports frames
+of state 1, and refuses to split a disc with errors unless given both options. (b768
+itself splits with `--force-split` alone, generating sectors, which acquire never
+asks.)
 
 - **AC1 — Acquired with errors.** A synthetic disc whose state marks frames of track 2
   as not read, others as read with C2 errors, and two adjacent frames of different
   states, is accepted; its version 2 record gives track 2's `error_ranges` exactly,
   split at each change of state, and other tracks empty lists; acquire exits 1; and
   redumper received `--force-split --leave-unchanged`. A track with more than 10 ranges
-  is recorded with all of them.
-- **AC2 — Clean and edge-only discs.** A disc read without error gives a version 2
-  record whose tracks have empty `error_ranges`, and acquire exits 0. A disc whose
+  is recorded with all of them, and a wholly unread track gets one range over the
+  track.
+- **AC2 — Clean, edge-only and limit discs.** A disc read without error gives a version
+  2 record whose tracks have empty `error_ranges`, and acquire exits 0. A disc whose
   only errors are in the lead-in gives empty `error_ranges` and exits 1 with "Read
-  errors: found".
+  errors: found". A disc whose last track is unread through the image's end fails with
+  "found nowhere in the image", leaving nothing.
 - **AC3 — Old records.** For a set whose record is version 1, inspect and compare
   print Reports of versions 3 and 5 without `error_ranges`, export warns about nothing,
   and their exit statuses are as before. A record of version 3, and a version 2 record
@@ -219,13 +228,13 @@ given both options.
   suite produces validates.
 - **AC8 — Documented.** `docs/formats/evidence-set.md` documents record version 2, the
   new acceptance rules and the known limit, drops the generated-sector failure, and
-  says that splitting a restored set again takes the options the record's
-  `reader.arguments` gives. The inspection Report document names record version 2 and
-  documents Report version 3; the comparison Report document documents version 5 and
-  lists it among the versions view renders; `docs/formats/export-result.md` documents
-  the warning. The README no longer tells a collector to raise the retry count for
-  "data errors detected". AGENTS.md's Architecture section gives acquire's new
-  options and the view's versions 1 to 5.
+  says that splitting a restored set again takes `--force-split --leave-unchanged`, as
+  the record's `reader.arguments` shows. The inspection Report document names record
+  version 2 and documents Report version 3; the comparison Report document documents
+  version 5 and lists it among the versions view renders;
+  `docs/formats/export-result.md` documents the warning. The README no longer tells a
+  collector to raise the retry count for "data errors detected". AGENTS.md's
+  Architecture section gives acquire's new options and the view's versions 1 to 5.
 - **AC9 — Restoring (by hand, once).** For the set of AC10, the files restored as the
   format document says are redumper's originals, and `redumper split` with the
   record's options rewrites track files with the SHA-256s in the recorded Audio
