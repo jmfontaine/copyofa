@@ -136,7 +136,8 @@ its encoder stored.
 
 For a set made by acquire, inspect also decodes each track of the disc from the image,
 over the range the Acquisition Record gives, and reports whether its Audio Digest is
-the one recorded at acquisition.
+the one recorded at acquisition, and which ranges of its frames the drive did not read
+successfully.
 
 Inspect exits 0 when every file was decoded or is not a supported format, 1 when a file
 could not be inspected or decoded or its audio differs from its FLAC MD5 signature, or

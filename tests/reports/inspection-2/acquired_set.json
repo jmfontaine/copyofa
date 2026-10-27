@@ -1,0 +1,147 @@
+{
+  "report_kind": "copyofa.inspection",
+  "format_version": 2,
+  "copyofa_version": "0.8.0.dev0",
+  "inspected_at": "2026-10-27T02:20:07Z",
+  "evidence_set": "/Volumes/Archive/acquired-1",
+  "integrity_baseline": {
+    "manifest_sha256": "103915156bec483202fddb2c77f6809d108870bd5a78c638cd05b21620c939a0",
+    "usable": true,
+    "problems": []
+  },
+  "method": {
+    "decoder": "libsndfile",
+    "decoder_version": "1.2.2"
+  },
+  "files": [
+    {
+      "path": "data/disc.cdtext",
+      "outcome": "not_interpreted",
+      "expected_digest": "315945065d38caadbd1f924dafcdef5f402301739b0183437de93b7a82884f6f",
+      "observed_digest": "315945065d38caadbd1f924dafcdef5f402301739b0183437de93b7a82884f6f",
+      "reason": "no supported audio format was recognized"
+    },
+    {
+      "path": "data/disc.cue",
+      "outcome": "not_interpreted",
+      "expected_digest": "cdbdcc57d6eecf5c18efcf9c9f6e625b300ec44c77e89c4ea1cef35b3c6efc9c",
+      "observed_digest": "cdbdcc57d6eecf5c18efcf9c9f6e625b300ec44c77e89c4ea1cef35b3c6efc9c",
+      "reason": "no supported audio format was recognized"
+    },
+    {
+      "path": "data/disc.fulltoc",
+      "outcome": "not_interpreted",
+      "expected_digest": "2d933f3c50180eb68ebc41891a30126fbfb98401f7ffd5f5cbc80c826c3a123c",
+      "observed_digest": "2d933f3c50180eb68ebc41891a30126fbfb98401f7ffd5f5cbc80c826c3a123c",
+      "reason": "no supported audio format was recognized"
+    },
+    {
+      "path": "data/disc.log",
+      "outcome": "not_interpreted",
+      "expected_digest": "3bac67ab4929136689a9ef34a40eb6b90728636ad9e688a202bb2c243f059f92",
+      "observed_digest": "3bac67ab4929136689a9ef34a40eb6b90728636ad9e688a202bb2c243f059f92",
+      "reason": "no supported audio format was recognized"
+    },
+    {
+      "path": "data/disc.scram.flac",
+      "outcome": "interpreted",
+      "expected_digest": "1fe04303ff33ed2b047b591a98df1b9b94f2db809c9ed1ddcf9fcde40f0d480f",
+      "observed_digest": "1fe04303ff33ed2b047b591a98df1b9b94f2db809c9ed1ddcf9fcde40f0d480f",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 11184,
+      "audio_digest": "pcm1:44100:2:16:c83df24578944e79afd66e1ff5277dc9aea1e57a895c1920dcece2b9f9c8bf28",
+      "peak": [
+        32766,
+        32768
+      ],
+      "leading_silence_frames": 1776,
+      "trailing_silence_frames": 1176,
+      "flac_md5_signature": "matching"
+    },
+    {
+      "path": "data/disc.state.xz",
+      "outcome": "not_interpreted",
+      "expected_digest": "5398713cdc733313d6b8c60672d3509891466b95e699f40cc0565e636883774a",
+      "observed_digest": "5398713cdc733313d6b8c60672d3509891466b95e699f40cc0565e636883774a",
+      "reason": "no supported audio format was recognized"
+    },
+    {
+      "path": "data/disc.subcode.xz",
+      "outcome": "not_interpreted",
+      "expected_digest": "f247815878f4fad89d4fb25a7d578b47f647796d62bffb5604e0b9e85097a30a",
+      "observed_digest": "f247815878f4fad89d4fb25a7d578b47f647796d62bffb5604e0b9e85097a30a",
+      "reason": "no supported audio format was recognized"
+    },
+    {
+      "path": "data/disc.toc",
+      "outcome": "not_interpreted",
+      "expected_digest": "c25e7b4493f17c46ed212423914328b875bed33220538f49696a4192729c873c",
+      "observed_digest": "c25e7b4493f17c46ed212423914328b875bed33220538f49696a4192729c873c",
+      "reason": "no supported audio format was recognized"
+    }
+  ],
+  "disc": {
+    "tracks": [
+      {
+        "number": 1,
+        "first_frame": 2952,
+        "frame_count": 2352,
+        "outcome": "interpreted",
+        "audio_digest": "pcm1:44100:2:16:901284f1570f8ab771dbee465c892659874364882761a67078a1240ad31c77d6",
+        "recorded_audio_digest": "pcm1:44100:2:16:901284f1570f8ab771dbee465c892659874364882761a67078a1240ad31c77d6",
+        "frames": 2352,
+        "peak": [
+          32747,
+          32754
+        ],
+        "leading_silence_frames": 1100,
+        "trailing_silence_frames": 0
+      },
+      {
+        "number": 2,
+        "first_frame": 5304,
+        "frame_count": 2940,
+        "outcome": "interpreted",
+        "audio_digest": "pcm1:44100:2:16:1b7bcf23df5d3165bd6369968bb8c03dfd963bc2919c25e49c2947ea0631273f",
+        "recorded_audio_digest": "pcm1:44100:2:16:1b7bcf23df5d3165bd6369968bb8c03dfd963bc2919c25e49c2947ea0631273f",
+        "frames": 2940,
+        "peak": [
+          32766,
+          32768
+        ],
+        "leading_silence_frames": 0,
+        "trailing_silence_frames": 0
+      },
+      {
+        "number": 3,
+        "first_frame": 8244,
+        "frame_count": 1764,
+        "outcome": "interpreted",
+        "audio_digest": "pcm1:44100:2:16:20a9c4e8c892bfc1cabe7e4494a1b6a82487213cc93521687d7fde6e0810e497",
+        "recorded_audio_digest": "pcm1:44100:2:16:20a9c4e8c892bfc1cabe7e4494a1b6a82487213cc93521687d7fde6e0810e497",
+        "frames": 1764,
+        "peak": [
+          32765,
+          32768
+        ],
+        "leading_silence_frames": 0,
+        "trailing_silence_frames": 0
+      }
+    ]
+  },
+  "counts": {
+    "interpreted": 1,
+    "not_interpreted": 7,
+    "failed": 0,
+    "not_inspected": 0
+  },
+  "limitations": [
+    "Only the files manifest-sha256.txt lists are inspected; verify reports unexpected files.",
+    "An Audio Digest recognizes identical decoded audio. It does not say what the audio is, and it establishes neither its source nor the accuracy of its acquisition.",
+    "A file that is not interpreted may still hold audio, in a format CopyOfA does not decode. Archives are not opened, and tags and embedded artwork are not read."
+  ]
+}

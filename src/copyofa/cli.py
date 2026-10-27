@@ -578,10 +578,14 @@ def _print_disc(disc: dict[str, Any]) -> None:
             else "differs from the recorded one"
         )
         duration = viewer.format_duration(track["frames"], evidence_set.CD_SAMPLE_RATE)
-        print(
+        line = (
             f"  track {track['number']}: {duration}, {track['audio_digest']}, "
             f"Audio Digest {agreement}"
         )
+        if track.get("error_ranges"):
+            ranges = [inspector.ErrorRange(**error) for error in track["error_ranges"]]
+            line = f"{line}, {inspector.describe_error_ranges(ranges)}"
+        print(line)
     for track in tracks:
         if track["outcome"] != inspector.INTERPRETED:
             outcome = track["outcome"].replace("_", " ")

@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     Sink = Callable[[npt.NDArray[np.float32]], None]
 
 REPORT_KIND = "copyofa.inspection"
-REPORT_FORMAT_VERSION = 2
+REPORT_FORMAT_VERSION = 3
 
 INTERPRETED = "interpreted"
 NOT_INTERPRETED = "not_interpreted"
@@ -294,6 +294,9 @@ def _inspect_disc(
                 "trailing_silence_frames",
             ):
                 entry[key] = findings[key]
+        # A version 1 record gives no error ranges, and its entries none.
+        if track.error_ranges is not None:
+            entry["error_ranges"] = [error.to_json() for error in track.error_ranges]
         if progress is not None:
             progress(entry)
         tracks.append(entry)

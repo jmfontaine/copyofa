@@ -39,6 +39,7 @@ _SCHEMAS = {
     ("copyofa.verification", 1): "verification-report-1.schema.json",
     ("copyofa.inspection", 1): "inspection-report-1.schema.json",
     ("copyofa.inspection", 2): "inspection-report-2.schema.json",
+    ("copyofa.inspection", 3): "inspection-report-3.schema.json",
     ("copyofa.comparison", 1): "comparison-report-1.schema.json",
     ("copyofa.comparison", 2): "comparison-report-2.schema.json",
     ("copyofa.comparison", 3): "comparison-report-3.schema.json",

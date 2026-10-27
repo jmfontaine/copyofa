@@ -453,7 +453,7 @@ def test_inspect_report_content(run: Run, make_set) -> None:
     entry = entries(report)["track.flac"]
     assert {key: value for key, value in report.items() if key != "files"} == {
         "report_kind": "copyofa.inspection",
-        "format_version": 2,
+        "format_version": 3,
         "copyofa_version": copyofa.__version__,
         "inspected_at": report["inspected_at"],
         "evidence_set": str(evidence_set),
@@ -667,7 +667,7 @@ def test_inspect_describes_each_track_of_an_acquired_set(
     outcome, report = inspect(run, acquired_set)
 
     assert outcome.code == 0, outcome.err
-    assert report["format_version"] == 2
+    assert report["format_version"] == 3
     disc = synthetic_disc(redumper.config)
     record = json.loads((acquired_set / "copyofa/acquisition-record.json").read_bytes())
     tracks = report["disc"]["tracks"]
@@ -690,6 +690,7 @@ def test_inspect_describes_each_track_of_an_acquired_set(
     # The first track starts with silence in the synthetic disc.
     leading = redumper.config["tracks"][0].get("leading_zero_frames", 0)
     assert tracks[0]["leading_silence_frames"] == leading
+    assert [track["error_ranges"] for track in tracks] == [[], [], []]
     image = next(
         entry for entry in report["files"] if entry["path"] == "data/disc.scram.flac"
     )
@@ -834,15 +835,57 @@ def test_the_record_reader_reads_format_versions_1_and_2(
     ]
 
 
-def test_inspect_reads_a_version_1_record(run: Run, acquired_set: Path) -> None:
-    as_version_1(acquired_set)
+def test_inspect_reads_a_version_1_record_without_error_ranges(
+    run: Run, damaged_set: Path
+) -> None:
+    as_version_1(damaged_set)
 
-    outcome, report = inspect(run, acquired_set)
+    outcome, report = inspect(run, damaged_set)
 
     assert outcome.code == 0, outcome.err
-    assert [track["outcome"] for track in report["disc"]["tracks"]] == [
-        "interpreted"
-    ] * 3
+    assert report["format_version"] == 3
+    tracks = report["disc"]["tracks"]
+    assert [track["outcome"] for track in tracks] == ["interpreted"] * 3
+    assert all("error_ranges" not in track for track in tracks)
+    text = run("inspect", damaged_set)
+    assert text.code == 0
+    assert "not read successfully" not in text.out
+
+
+def test_inspect_reports_each_track_s_error_ranges(run: Run, damaged_set: Path) -> None:
+    outcome, report = inspect(run, damaged_set)
+
+    assert outcome.code == 0, outcome.err
+    assert report["format_version"] == 3
+    record = json.loads((damaged_set / "copyofa/acquisition-record.json").read_bytes())
+    tracks = report["disc"]["tracks"]
+    assert [track["error_ranges"] for track in tracks] == [
+        track["error_ranges"] for track in record["tracks"]
+    ]
+    assert tracks[1]["error_ranges"] == [
+        {"offset_frames": 100, "frame_count": 37, "state": "not_read"},
+        {"offset_frames": 300, "frame_count": 1, "state": "c2_error"},
+        {"offset_frames": 301, "frame_count": 1, "state": "not_read"},
+        {"offset_frames": 500, "frame_count": 24, "state": "c2_error"},
+    ]
+    assert all(track["outcome"] == "interpreted" for track in tracks)
+    text = run("inspect", damaged_set)
+    assert text.code == 0
+    lines = [line for line in text.out.splitlines() if line.startswith("  track ")]
+    assert lines[0].endswith(
+        ", Audio Digest matches the recorded one, 12 frames not read successfully: "
+        + ", ".join(["0:00.027+1 (C2 errors)"] * 10)
+        + ", and 2 more"
+    )
+    assert lines[1].endswith(
+        ", Audio Digest matches the recorded one, 63 frames not read successfully: "
+        "0:00.002+37 (not read), 0:00.006+1 (C2 errors), 0:00.006+1 (not read), "
+        "0:00.011+24 (C2 errors)"
+    )
+    assert lines[2].endswith(
+        ", Audio Digest matches the recorded one, 1 frame not read successfully: "
+        "0:00.000+1 (C2 errors)"
+    )
 
 
 def set_ranges(track: int, ranges: Any) -> Callable[[dict[str, Any]], None]:
@@ -1049,7 +1092,7 @@ def test_inspect_prints_no_disc_for_an_imported_set(run: Run, make_set) -> None:
     outcome, report = inspect(run, make_set(fill))
 
     assert outcome.code == 0
-    assert report["format_version"] == 2
+    assert report["format_version"] == 3
     assert "disc" not in report
 
 
