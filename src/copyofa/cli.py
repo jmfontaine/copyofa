@@ -275,6 +275,10 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if sys.stdout is None:
+        # Python sets sys.stdout to None when stdout is closed at the start, as `>&-`
+        # leaves it: refuse before doing work whose result could not be printed.
+        return _stdout_closed()
     try:
         code = args.handler(args)
         sys.stdout.flush()

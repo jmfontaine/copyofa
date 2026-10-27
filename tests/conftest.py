@@ -10,6 +10,7 @@ import json
 import os
 import random
 import shlex
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -105,6 +106,18 @@ def closed_stdout() -> Generator[None]:
         # Let the wrapper flush what it still holds, so it closes without an error.
         pipe.reader_gone = False
         stdout.close()
+
+
+def run_without_stdout(
+    *args: str | os.PathLike[str],
+) -> subprocess.CompletedProcess[bytes]:
+    """Run the command line in a process whose stdout is closed, as `>&-` leaves it."""
+    main = "import sys; from copyofa.cli import main; sys.exit(main(sys.argv[1:]))"
+    return subprocess.run(
+        ["sh", "-c", 'exec "$0" "$@" >&-', sys.executable, "-c", main, *args],
+        stderr=subprocess.PIPE,
+        check=False,
+    )
 
 
 def snapshot(root: Path) -> dict[str, tuple[bytes, int]]:

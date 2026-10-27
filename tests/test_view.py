@@ -12,7 +12,14 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
-from conftest import RATE, closed_stdout, signal, snapshot, write_audio
+from conftest import (
+    RATE,
+    closed_stdout,
+    run_without_stdout,
+    signal,
+    snapshot,
+    write_audio,
+)
 
 import copyofa
 from copyofa import validator, viewer
@@ -742,6 +749,18 @@ def test_a_closed_stdout_ends_the_process_with_one_line(
         )
     finally:
         os.close(writer)
+
+    assert result.returncode == 1
+    assert result.stderr == b"copyofa: stdout closed\n"
+
+
+@pytest.mark.parametrize("command", [["view"], ["validate"], ["validate", "--json"]])
+def test_a_stdout_closed_before_the_start_ends_the_process_with_one_line(
+    report_of: Callable[[str], tuple[Path, dict[str, Any]]], command: list[str]
+) -> None:
+    path, _ = report_of("lossy")
+
+    result = run_without_stdout(*command, path)
 
     assert result.returncode == 1
     assert result.stderr == b"copyofa: stdout closed\n"
