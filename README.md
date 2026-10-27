@@ -20,7 +20,9 @@ The sixth, v0.6.0, locates matching portions: `compare` reports which portions o
 track appear in the other, where and how alike, and which audio appears in only one.
 The seventh, v0.7.0, has `acquire` ask redumper to re-read sectors it read with
 errors, so a lightly scratched CD can be preserved, and show redumper's log when an
-acquisition fails.
+acquisition fails. The eighth, v0.8.0, keeps a disc that still has errors as the
+drive read it, and inspect, compare and export report which frames were not read
+successfully.
 The roadmap in the Product Map lists what comes next.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is

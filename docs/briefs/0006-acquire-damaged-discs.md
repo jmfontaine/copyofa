@@ -280,8 +280,47 @@ their record and export's warning:
 
 ## Delivery notes
 
+Recorded at the v0.8.0 release review.
+
+- **Delivered within the appetite**, with no scope cut, as a stack of pull requests
+  from one unattended agent: acquire, record format version 2 and its reader in
+  [#149](https://github.com/jmfontaine/copyofa/pull/149), export's warning in
+  [#150](https://github.com/jmfontaine/copyofa/pull/150), inspection Report format
+  version 3 in [#151](https://github.com/jmfontaine/copyofa/pull/151), and comparison
+  Report format version 5 with its view in
+  [#152](https://github.com/jmfontaine/copyofa/pull/152); then the warning's areas in
+  [#155](https://github.com/jmfontaine/copyofa/pull/155). AC1–AC7 have tests against
+  the stand-in `redumper`, and the suite holds 629 tests; AC8 passed through the
+  pull requests' review of the documents.
+- **AC9 and AC10, on the maintainer's drive.** Recorded in #154 and #155: a pressed CD
+  acquired with `--retries 0`, so that the first read's errors stayed, kept 44
+  single-frame C2 ranges in track 8 and 2 frames in track 14, and inspect and export
+  reported them. Observed by hand in the session, not otherwise recorded: it is the
+  disc of the context; acquire exited 1; each track's ranges totaled redumper's
+  per-track counts; verify passed; track 8 played as the maintainer knows it; against
+  the same disc's clean reading with 100 re-reads, exactly the 44 frames inside track
+  8's ranges differed, none outside, by at most 815 of 32,768; and the restored files
+  matched their originals, and `redumper split --force-split --leave-unchanged`
+  rewrote track files with the recorded Audio Digests. Only C2 errors occurred: no
+  frame the drive never read was seen on a real disc.
 - **Amended during delivery (#154):** export's warning and inspect's text first listed
   each range by its start in milliseconds and its frame count. A real disc's C2 errors
   are scattered single frames, about 0.023 ms each, so its line repeated the same
   start times and showed ten single frames. Grouping nearby ranges into areas shows
-  where the damage is.
+  where the damage is; the maintainer chose to change it before the release.
+- **Clarified during delivery:** the record's ranges and the stand-in were checked
+  against redumper b768's source before implementation. A redumper sample is a frame,
+  a C2 sample keeps the first read that returned it, and a sector never read is zeros
+  in the image.
+- **Left as they are:**
+  - Inspect imports the HTML viewer at run time for `format_duration`, to avoid an
+    import cycle.
+  - Inspect's text shows ranges only for tracks it decoded; others give them in the
+    JSON.
+  - Three stored comparison Reports of version 4 (`delayed`, `too_short`,
+    `acquired_track`) cannot be regenerated from a scenario on `main`; they validate
+    and render as before.
+  - The stand-in gives no `errors detected` line for a lead-in with C2 errors, which
+    real logs may hold; acquire does not read those lines.
+- **Known limit, unchanged:** a disc whose last track extends past the end of the image
+  still fails, as the brief states.
