@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
 REPORT_KIND = "copyofa.comparison"
-REPORT_FORMAT_VERSION = 4
+REPORT_FORMAT_VERSION = 5
 
 RESAMPLER_QUALITY = "VHQ"
 """The soxr quality preset: libsoxr's very high quality."""
@@ -264,11 +264,16 @@ def _inspect_track(
             }
         )
         return entry, None
-    entry["track"] = {
+    recorded: dict[str, Any] = {
         "number": track.number,
         "first_frame": track.first_frame,
         "frame_count": track.frame_count,
     }
+    if track.error_ranges is not None:
+        recorded["error_ranges"] = [
+            error_range.to_json() for error_range in track.error_ranges
+        ]
+    entry["track"] = recorded
     blocks: list[npt.NDArray[np.float32]] = []
     with inspector.open_accepted(root, disc.image, disc.image_digest) as image:
         findings = inspector.decode_track(image, track, blocks.append)

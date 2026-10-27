@@ -7,6 +7,7 @@ Security Policy forbids both. See docs/formats/comparison-report.md.
 
 from __future__ import annotations
 
+import dataclasses
 import enum
 import html
 import json
@@ -23,7 +24,7 @@ SUPPORTED_KINDS = frozenset({comparator.REPORT_KIND})
 """The kinds of Report this module renders."""
 
 
-class _Layout(enum.Enum):
+class _Measurements(enum.Enum):
     """How a page lays out the method and the measurements of a Report."""
 
     ALIGNMENT = enum.auto()
@@ -32,11 +33,21 @@ class _Layout(enum.Enum):
     """The method and its parameters; the portions and the unmatched audio."""
 
 
+@dataclasses.dataclass(frozen=True)
+class _Layout:
+    """How a page lays out a Report of one format version."""
+
+    measurements: _Measurements
+    error_ranges: bool
+    """Whether the page shows the error ranges of each track input."""
+
+
 _LAYOUTS = {
-    1: _Layout.ALIGNMENT,
-    2: _Layout.ALIGNMENT,
-    3: _Layout.ALIGNMENT,
-    4: _Layout.PORTIONS,
+    1: _Layout(_Measurements.ALIGNMENT, error_ranges=False),
+    2: _Layout(_Measurements.ALIGNMENT, error_ranges=False),
+    3: _Layout(_Measurements.ALIGNMENT, error_ranges=False),
+    4: _Layout(_Measurements.PORTIONS, error_ranges=False),
+    5: _Layout(_Measurements.PORTIONS, error_ranges=True),
 }
 """The layout of each comparison Report format version this module renders."""
 
@@ -91,9 +102,11 @@ def render(report: dict[str, Any], sha256: str) -> str:
             "labels and units added and no conclusion drawn. Absent means that the "
             "Report holds no value there.</p>"
         ),
-        *_inputs_section(inputs),
-        *_method_section(report["method"], layout),
-        *_measurements_section(report.get("measurements"), report["method"], layout),
+        *_inputs_section(inputs, error_ranges=layout.error_ranges),
+        *_method_section(report["method"], layout.measurements),
+        *_measurements_section(
+            report.get("measurements"), report["method"], layout.measurements
+        ),
         "<h2>Limitations</h2>",
         _items(report["limitations"]),
     ]
@@ -137,7 +150,7 @@ def _report_section(report: dict[str, Any], sha256: str) -> list[str]:
     ]
 
 
-def _inputs_section(inputs: dict[str, Any]) -> list[str]:
+def _inputs_section(inputs: dict[str, Any], *, error_ranges: bool) -> list[str]:
     fields: list[tuple[str, Callable[[dict[str, Any]], str]]] = [
         ("Evidence Set location", lambda e: _show(e, "evidence_set", _LEFT_OUT)),
         (
@@ -162,6 +175,10 @@ def _inputs_section(inputs: dict[str, Any]) -> list[str]:
             "Frames of the track in the image",
             lambda e: _show(e.get("track", {}), "frame_count"),
         ),
+    ]
+    if error_ranges:
+        fields.append(("Error ranges of the track", _error_ranges_count))
+    fields += [
         ("Outcome", lambda e: _show(e, "outcome")),
         ("Reason", lambda e: _show(e, "reason")),
         ("Format", lambda e: _show(e, "format")),
@@ -180,16 +197,49 @@ def _inputs_section(inputs: dict[str, Any]) -> list[str]:
         ("FLAC MD5 signature", lambda e: _show(e, "flac_md5_signature")),
         ("Limitations", lambda e: _list(e, "limitations")),
     ]
-    return [
+    parts = [
         "<h2>Inputs</h2>",
         _table(
             ["", "Track A", "Track B"],
             [(label, show(inputs["a"]), show(inputs["b"])) for label, show in fields],
         ),
     ]
+    if error_ranges:
+        for name in ("a", "b"):
+            ranges = inputs[name].get("track", {}).get("error_ranges")
+            if ranges:
+                parts += [
+                    f"<h3>Error ranges: track {name.upper()}</h3>",
+                    _error_ranges_table(ranges),
+                ]
+    return parts
 
 
-def _method_section(method: dict[str, Any], layout: _Layout) -> list[str]:
+def _error_ranges_count(entry: dict[str, Any]) -> str:
+    """Return how many error ranges a track input holds, listed below the inputs."""
+    ranges = entry.get("track", {}).get("error_ranges")
+    if ranges is None:
+        return _absent(None)
+    if not ranges:
+        return "none"
+    return f"{len(ranges)} {'range' if len(ranges) == 1 else 'ranges'}, listed below"
+
+
+def _error_ranges_table(ranges: Sequence[dict[str, Any]]) -> str:
+    return _table(
+        ["Offset from the track's first frame (frames)", "Frames", "State"],
+        [
+            (
+                _show(extent, "offset_frames"),
+                _show(extent, "frame_count"),
+                _show(extent, "state"),
+            )
+            for extent in ranges
+        ],
+    )
+
+
+def _method_section(method: dict[str, Any], layout: _Measurements) -> list[str]:
     fields = (
         ("Decoder", "decoder"),
         ("Decoder version", "decoder_version"),
@@ -203,7 +253,7 @@ def _method_section(method: dict[str, Any], layout: _Layout) -> list[str]:
         "<h2>Method</h2>",
         _table(None, [(label, _show(method, key)) for label, key in fields]),
     ]
-    if layout is _Layout.PORTIONS:
+    if layout is _Measurements.PORTIONS:
         parts += [
             "<h3>Parameters</h3>",
             _table(
@@ -218,16 +268,17 @@ def _method_section(method: dict[str, Any], layout: _Layout) -> list[str]:
 
 
 def _measurements_section(
-    measurements: dict[str, Any] | None, method: dict[str, Any], layout: _Layout
+    measurements: dict[str, Any] | None, method: dict[str, Any], layout: _Measurements
 ) -> list[str]:
     if measurements is None:
         return [
             "<h2>Measurements</h2>",
             "<p>The tracks were not measured: the Report holds no measurements.</p>",
         ]
-    if layout is _Layout.PORTIONS:
+    if layout is _Measurements.PORTIONS:
         return _portions_section(measurements, method.get("common_sample_rate"))
-    # _Layout.ALIGNMENT: one alignment, its overlap, and the values measured over it.
+    # _Measurements.ALIGNMENT: one alignment, its overlap, and the values measured
+    # over it.
     absent = measurements.get("absent", {})
     alignment = [("Identical audio", _show(measurements, "identical_audio"))]
     if "offset" in measurements:

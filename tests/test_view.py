@@ -10,7 +10,6 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import numpy as np
 import pytest
 from conftest import (
     RATE,
@@ -122,17 +121,31 @@ class Page(HTMLParser):
 # MP3), `identical`, `silent_channel`, `silent_track`, `silent_window`, `mono`,
 # `not_interpreted`, `not_inspected`, `locations_omitted` (compared with
 # --omit-locations) and `acquired_track` (A is track 2 of an acquired set).
-REPORTS = Path(__file__).parent / "reports" / "comparison-3"
-CASES = sorted(path.stem for path in REPORTS.glob("*.json"))
+REPORTS = Path(__file__).parent / "reports"
+CASES = sorted(path.stem for path in (REPORTS / "comparison-3").glob("*.json"))
+# Version 4 comparison Reports that compare 0.8.0.dev0 printed, kept as they were so
+# the page keeps rendering version 4: `portions` (a primary and an alternate portion,
+# and unmatched audio in both tracks, digitally silent and not), `no_portion`
+# (unrelated tracks), `identical`, `mono` (A stereo, B its mono downmix, so a portion
+# has no channels), `delayed` (B is A's first 5 s, 2 s later, in 24-bit WAV),
+# `too_short` (tracks shorter than a window) and `acquired_track` (A is track 1 of an
+# acquired set, B its image).
+VERSION_4_CASES = sorted(
+    path.stem for path in (REPORTS / "comparison-4").glob("*.json")
+)
+VERSION_5_CASES = ["damaged_tracks", "files"]
+"""Version 5 Reports that the tests have compare print: `damaged_tracks` (tracks 1
+and 2 of an acquired set, each with error ranges) and `files` (two identical FLAC
+files, so no input is a track)."""
 
 
 @pytest.fixture
-def report_of(tmp_path: Path) -> Callable[[str], tuple[Path, dict[str, Any]]]:
-    """Copy a stored version 3 Report into the test's directory; return it."""
+def report_of(tmp_path: Path) -> Callable[..., tuple[Path, dict[str, Any]]]:
+    """Copy a stored Report, of version 3 unless given, into the test's directory."""
 
-    def _report_of(name: str) -> tuple[Path, dict[str, Any]]:
-        path = tmp_path / f"{name}.json"
-        shutil.copyfile(REPORTS / f"{name}.json", path)
+    def _report_of(name: str, version: int = 3) -> tuple[Path, dict[str, Any]]:
+        path = tmp_path / f"{name}-{version}.json"
+        shutil.copyfile(REPORTS / f"comparison-{version}" / f"{name}.json", path)
         return path, json.loads(path.read_text(encoding="utf-8"))
 
     return _report_of
@@ -152,73 +165,71 @@ def test_every_case_is_stored() -> None:
         "silent_track",
         "silent_window",
     ]
-
-
-def _version_4_signals(name: str) -> tuple[np.ndarray, np.ndarray]:
-    """Return tracks A and B of a version 4 case, as write_audio takes them."""
-    if name == "portions":
-        # A holds 12 s that B holds after 1 s of digital silence, then 2 s that B does
-        # not hold. B then holds 3 s that A does not, then a copy of 6 s of the shared
-        # audio with noise added about 24 dB below it: an alternate portion.
-        shared = signal(12 * RATE, 2, 16, seed=11) >> 2
-        only_a = signal(2 * RATE, 2, 16, seed=12) >> 2
-        only_b = signal(3 * RATE, 2, 16, seed=13) >> 2
-        hiss = signal(6 * RATE, 2, 16, seed=14) >> 6
-        silence = np.zeros((RATE, 2), np.int32)
-        noisy = shared[4 * RATE : 10 * RATE] + hiss
-        return np.vstack([shared, only_a]), np.vstack([silence, shared, only_b, noisy])
-    if name == "no_portion":
-        return signal(6 * RATE, 2, 16, seed=21), signal(6 * RATE, 2, 16, seed=22)
-    if name == "identical":
-        samples = signal(6 * RATE, 2, 16, seed=23)
-        return samples, samples
-    assert name == "mono"
-    stereo = signal(6 * RATE, 2, 16, seed=24) >> 1
-    return stereo, stereo.sum(axis=1, keepdims=True, dtype=np.int32) >> 1
-
-
-VERSION_4_CASES = ["portions", "no_portion", "identical", "mono"]
-"""Version 4 Reports that the tests have compare print: `portions` (a primary and an
-alternate portion, and unmatched audio in both tracks, digitally silent and not),
-`no_portion` (unrelated tracks), `identical`, and `mono` (A stereo, B its mono
-downmix, so a portion has no channels)."""
+    assert VERSION_4_CASES == [
+        "acquired_track",
+        "delayed",
+        "identical",
+        "mono",
+        "no_portion",
+        "portions",
+        "too_short",
+    ]
 
 
 @pytest.fixture
-def version_4(
-    run: Run, make_set: MakeSet, tmp_path: Path
+def version_5(
+    run: Run, make_set: MakeSet, damaged_set: Path, tmp_path: Path
 ) -> Callable[[str], tuple[Path, dict[str, Any]]]:
-    """Have compare print a version 4 Report of a case; return it."""
+    """Have compare print a version 5 Report of a case; return it."""
 
-    def _version_4(name: str) -> tuple[Path, dict[str, Any]]:
-        a, b = _version_4_signals(name)
-        first = make_set(lambda source: write_audio(source / "a.flac", a, 16, "FLAC"))
-        second = make_set(lambda source: write_audio(source / "b.flac", b, 16, "FLAC"))
-        outcome = run(
-            "compare",
-            first / "data/Album/a.flac",
-            second / "data/Album/b.flac",
-            "--json",
-        )
+    def _version_5(name: str) -> tuple[Path, dict[str, Any]]:
+        if name == "damaged_tracks":
+            arguments: tuple[str | Path, ...] = (
+                damaged_set,
+                damaged_set,
+                "--track-a",
+                "1",
+                "--track-b",
+                "2",
+            )
+        else:
+            assert name == "files"
+            samples = signal(6 * RATE, 2, 16, seed=23)
+            sets = [
+                make_set(
+                    lambda source: write_audio(source / "a.flac", samples, 16, "FLAC")
+                )
+                for _ in range(2)
+            ]
+            arguments = tuple(path / "data/Album/a.flac" for path in sets)
+        outcome = run("compare", *arguments, "--json")
         assert outcome.code == 0, outcome.err
-        path = tmp_path / f"{name}-4.json"
+        path = tmp_path / f"{name}-5.json"
         path.write_text(outcome.out, encoding="utf-8")
         report = json.loads(outcome.out)
-        assert report["format_version"] == 4
+        assert report["format_version"] == 5
         return path, report
 
-    return _version_4
+    return _version_5
 
 
-@pytest.fixture(params=[*CASES, *(f"version 4: {name}" for name in VERSION_4_CASES)])
+@pytest.fixture(
+    params=[
+        *CASES,
+        *(f"version 4: {name}" for name in VERSION_4_CASES),
+        *(f"version 5: {name}" for name in VERSION_5_CASES),
+    ]
+)
 def case(
     request: pytest.FixtureRequest,
-    report_of: Callable[[str], tuple[Path, dict[str, Any]]],
-    version_4: Callable[[str], tuple[Path, dict[str, Any]]],
+    report_of: Callable[..., tuple[Path, dict[str, Any]]],
+    version_5: Callable[[str], tuple[Path, dict[str, Any]]],
 ) -> tuple[Path, dict[str, Any]]:
     name = request.param
     if name.startswith("version 4: "):
-        return version_4(name.removeprefix("version 4: "))
+        return report_of(name.removeprefix("version 4: "), 4)
+    if name.startswith("version 5: "):
+        return version_5(name.removeprefix("version 5: "))
     return report_of(name)
 
 
@@ -828,10 +839,10 @@ def test_view_refuses_a_valid_report_of_another_kind(
 
 def test_view_refuses_a_comparison_report_of_a_version_it_does_not_render(
     run: Run,
-    version_4: Callable[[str], tuple[Path, dict[str, Any]]],
+    report_of: Callable[..., tuple[Path, dict[str, Any]]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    path, _ = version_4("identical")
+    path, _ = report_of("identical", 4)
     monkeypatch.setattr(viewer, "SUPPORTED_FORMAT_VERSIONS", frozenset({1, 2, 3}))
 
     outcome = run("view", path)
@@ -943,9 +954,9 @@ def test_view_shows_a_comparison_report_of_format_version_2(
 
 
 def test_view_shows_the_parameters_of_the_method(
-    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+    run: Run, report_of: Callable[..., tuple[Path, dict[str, Any]]]
 ) -> None:
-    path, report = version_4("identical")
+    path, report = report_of("identical", 4)
     parameters = report["method"]["parameters"]
 
     page = view(run, path)
@@ -962,9 +973,9 @@ def seconds(extent: dict[str, Any]) -> str:
 
 
 def test_view_shows_each_portion(
-    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+    run: Run, report_of: Callable[..., tuple[Path, dict[str, Any]]]
 ) -> None:
-    path, report = version_4("portions")
+    path, report = report_of("portions", 4)
     portions = report["measurements"]["portions"]
     assert [portion["rank"] for portion in portions] == ["primary", "alternate"]
 
@@ -1020,9 +1031,9 @@ def cell(values: dict[str, Any], key: str) -> str:
 
 
 def test_view_shows_the_unmatched_audio_of_each_track(
-    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+    run: Run, report_of: Callable[..., tuple[Path, dict[str, Any]]]
 ) -> None:
-    path, report = version_4("portions")
+    path, report = report_of("portions", 4)
     unmatched = report["measurements"]["unmatched"]
     # B's leading silence, and audio that only one track holds.
     assert [extent["digitally_silent"] for extent in unmatched["b"]] == [True, False]
@@ -1054,9 +1065,9 @@ def test_view_shows_the_unmatched_audio_of_each_track(
 
 
 def test_view_says_why_no_portion_was_found(
-    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+    run: Run, report_of: Callable[..., tuple[Path, dict[str, Any]]]
 ) -> None:
-    path, report = version_4("no_portion")
+    path, report = report_of("no_portion", 4)
     measurements = report["measurements"]
     assert measurements["portions"] == []
 
@@ -1073,9 +1084,9 @@ def test_view_says_why_no_portion_was_found(
 
 
 def test_view_shows_identical_audio_as_one_portion(
-    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+    run: Run, report_of: Callable[..., tuple[Path, dict[str, Any]]]
 ) -> None:
-    path, report = version_4("identical")
+    path, report = report_of("identical", 4)
     [portion] = report["measurements"]["portions"]
 
     page = view(run, path)
@@ -1088,9 +1099,9 @@ def test_view_shows_identical_audio_as_one_portion(
 
 
 def test_view_shows_why_a_portion_has_no_channels(
-    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+    run: Run, report_of: Callable[..., tuple[Path, dict[str, Any]]]
 ) -> None:
-    path, report = version_4("mono")
+    path, report = report_of("mono", 4)
     [portion] = report["measurements"]["portions"]
 
     page = view(run, path)
@@ -1100,11 +1111,11 @@ def test_view_shows_why_a_portion_has_no_channels(
 
 
 def test_view_shows_portions_of_a_report_without_a_common_sample_rate(
-    run: Run, version_4: Callable[[str], tuple[Path, dict[str, Any]]]
+    run: Run, report_of: Callable[..., tuple[Path, dict[str, Any]]]
 ) -> None:
     # The schema lets a Report leave the common sample rate out; the ranges in
     # seconds, which the page computes from it, are then absent.
-    path, report = version_4("portions")
+    path, report = report_of("portions", 4)
     edited = edit(path, lambda document: document["method"].pop("common_sample_rate"))
     assert validator.validate(str(edited)).result["outcome"] == validator.VALID
 
@@ -1119,3 +1130,52 @@ def test_view_shows_portions_of_a_report_without_a_common_sample_rate(
         unavailable,
     ]
     assert page.tables["Unmatched audio: track B"][1][2] == unavailable
+
+
+def test_view_shows_the_error_ranges_of_each_track_input(
+    run: Run, version_5: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = version_5("damaged_tracks")
+    ranges = {name: report["inputs"][name]["track"]["error_ranges"] for name in "ab"}
+    assert [len(ranges["a"]), len(ranges["b"])] == [12, 4]
+
+    page = view(run, path)
+
+    assert page.row("Inputs", "Error ranges of the track") == [
+        "12 ranges, listed below",
+        "4 ranges, listed below",
+    ]
+    for name in "ab":
+        rows = page.tables[f"Error ranges: track {name.upper()}"]
+        assert rows[0] == [
+            "Offset from the track's first frame (frames)",
+            "Frames",
+            "State",
+        ]
+        assert rows[1:] == [
+            [str(extent["offset_frames"]), str(extent["frame_count"]), extent["state"]]
+            for extent in ranges[name]
+        ]
+
+
+def test_view_shows_why_an_input_has_no_error_ranges(
+    run: Run,
+    make_set: MakeSet,
+    acquired_set: Path,
+    version_5: Callable[[str], tuple[Path, dict[str, Any]]],
+    tmp_path: Path,
+) -> None:
+    path, _ = version_5("files")
+    image = acquired_set / "data/disc.scram.flac"
+    outcome = run("compare", acquired_set, image, "--track-a", "1", "--json")
+    assert outcome.code == 0, outcome.err
+    clean = tmp_path / "clean.json"
+    clean.write_text(outcome.out, encoding="utf-8")
+
+    files = view(run, path)
+    tracks = view(run, clean)
+
+    assert files.row("Inputs", "Error ranges of the track") == ["absent", "absent"]
+    assert tracks.row("Inputs", "Error ranges of the track") == ["none", "absent"]
+    for page in (files, tracks):
+        assert not any(heading.startswith("Error ranges") for heading in page.tables)

@@ -12,6 +12,7 @@ import soundfile
 import soxr
 from conftest import (
     RATE,
+    as_version_1,
     edit_record,
     requires_permissions,
     signal,
@@ -426,7 +427,7 @@ def test_compare_report_content(run: Run, make_set: MakeSet) -> None:
         "Inspected data/Album/b.flac: interpreted",
     ]
     assert report["report_kind"] == "copyofa.comparison"
-    assert report["format_version"] == 4
+    assert report["format_version"] == 5
     assert report["omitted"] == []
     assert report["copyofa_version"] == copyofa.__version__
     compared_at = datetime.strptime(
@@ -481,7 +482,7 @@ def test_compare_omit_locations_leaves_out_where_each_set_is(
     outcome, report = compare(run, a / "a.flac", b / "b.flac", "--omit-locations")
 
     assert outcome.code == 0, outcome.err
-    assert report["format_version"] == 4
+    assert report["format_version"] == 5
     assert report["omitted"] == ["/inputs/a/evidence_set", "/inputs/b/evidence_set"]
     for name in "ab":
         entry = report["inputs"][name]
@@ -678,7 +679,7 @@ def test_compare_measures_a_track_of_an_acquired_set(
     )
 
     assert outcome.code == 0, outcome.err
-    assert report["format_version"] == 4
+    assert report["format_version"] == 5
     record = json.loads((acquired_set / "copyofa/acquisition-record.json").read_bytes())
     recorded = record["tracks"][1]
     a = report["inputs"]["a"]
@@ -693,6 +694,7 @@ def test_compare_measures_a_track_of_an_acquired_set(
             "number": 2,
             "first_frame": recorded["first_frame"],
             "frame_count": recorded["frame_count"],
+            "error_ranges": [],
         },
         "outcome": "interpreted",
         "expected_digest": image_digest,
@@ -717,6 +719,48 @@ def test_compare_measures_two_tracks_of_acquired_sets(
     assert outcome.code == 0, outcome.err
     assert [report["inputs"][name]["track"]["number"] for name in "ab"] == [1, 3]
     assert "identical_audio" not in report["measurements"]
+
+
+def test_compare_records_the_error_ranges_of_each_track(
+    run: Run, acquired_set: Path, damaged_set: Path
+) -> None:
+    outcome, report = compare(
+        run, damaged_set, acquired_set, "--track-a", "2", "--track-b", "2"
+    )
+    unaffected, _ = compare(
+        run, acquired_set, acquired_set, "--track-a", "2", "--track-b", "2"
+    )
+
+    assert outcome.code == unaffected.code == 0, outcome.err
+    assert report["format_version"] == 5
+    record = json.loads((damaged_set / "copyofa/acquisition-record.json").read_bytes())
+    assert report["inputs"]["a"]["track"]["error_ranges"] == [
+        {"offset_frames": 100, "frame_count": 37, "state": "not_read"},
+        {"offset_frames": 300, "frame_count": 1, "state": "c2_error"},
+        {"offset_frames": 301, "frame_count": 1, "state": "not_read"},
+        {"offset_frames": 500, "frame_count": 24, "state": "c2_error"},
+    ]
+    assert (
+        report["inputs"]["a"]["track"]["error_ranges"]
+        == (record["tracks"][1]["error_ranges"])
+    )
+    assert report["inputs"]["b"]["track"]["error_ranges"] == []
+
+
+def test_compare_records_no_error_ranges_from_a_version_1_record(
+    run: Run, damaged_set: Path
+) -> None:
+    as_version_1(damaged_set)
+
+    outcome, report = compare(
+        run, damaged_set, damaged_set, "--track-a", "1", "--track-b", "2"
+    )
+
+    assert outcome.code == 0, outcome.err
+    assert report["format_version"] == 5
+    for name in "ab":
+        assert report["inputs"][name]["outcome"] == "interpreted"
+        assert "error_ranges" not in report["inputs"][name]["track"]
 
 
 def test_compare_does_not_inspect_a_track_it_cannot_find(
