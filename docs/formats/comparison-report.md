@@ -383,8 +383,9 @@ unchanged. A Report with `error_ranges` is not valid at version 4.
 
 ## Format version 3
 
-Compare printed format version 3 in CopyOfA 0.5. It differs from version 4 in `method`
-and `measurements`; the inputs, `omitted`, and the other fields are the same.
+Compare printed format version 3 in CopyOfA 0.5. It differs from versions 4 and 5 in
+`method` and `measurements`, and from version 5 also in its inputs, whose `track`
+never holds `error_ranges`; `omitted` and the other fields are the same.
 `copyofa validate` and `copyofa view` still accept it, and the version 3 schema is
 unchanged. A Report with `portions` is not valid at version 3. In version 3:
 
@@ -403,8 +404,8 @@ unchanged. A Report with `portions` is not valid at version 3. In version 3:
 - `absent` holds a reason for each of `offset`, `overlap` and `channels` that is
   absent: `offset`, `overlap` and every value of `downmix` and `channels` are absent
   when a track has no frames or, for audio that is not identical, a downmix is zero
-  throughout. The reasons for the other values say "overlap" where version 4 says
-  "portion".
+  throughout. The reasons for the other values say "overlap" where versions 4 and 5
+  say "portion".
 - `limitations` state that one global offset aligns the tracks, and not the limits of
   the search for portions.
 
