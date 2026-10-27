@@ -99,8 +99,11 @@ def accept(
     """Create the staging directory, let build fill it, then rename it to the target.
 
     Returns what build returns, with the warnings that did not fail the command.
-    When build raises, or the command fails or is canceled before the result is
-    accepted, removes what it created, never a staging directory it did not create.
+    When build raises, or the command fails or is canceled at any point until the
+    target's parent is synced, removes what it created, the target included. That
+    sync is the last step during which a cancellation removes it: a Ctrl-C during
+    the rename is held until the rename completes, then removes the target, as does
+    one during the sync. Never removes a staging directory it did not create.
     """
     target, staging = destination.target, destination.staging
     try:

@@ -51,7 +51,12 @@ files hold the same audio as redumper's track files. Export writes nothing into 
    not the recorded one.
 5. **Acceptance.** Only when every file is written and checked does export rename the
    staging directory to the directory. It deletes the staging directory when it
-   refuses, fails or is canceled.
+   refuses, fails or is canceled. Export canceled with Ctrl-C before it has accepted
+   the directory, its last step before it prints any warning and its result, leaves
+   nothing at its destination, even when the cancellation arrives after the rename:
+   it deletes the directory it just renamed and exits 130 with nothing on stdout. A
+   Ctrl-C once the directory is accepted, such as one while the result is printed,
+   keeps the directory, and export still exits 130.
 
 ## Fields
 
