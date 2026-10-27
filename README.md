@@ -219,8 +219,9 @@ Export checks the set as inspect does, then writes each track of the disc from t
 image as a 16-bit stereo FLAC file at 44.1 kHz, `01.flac`, `02.flac` and so on, with no
 tag. It decodes each file and checks its Audio Digest against the recorded one before
 it accepts the directory. The first track's pregap, the lead-in and the lead-out stay
-only in the set. `--json` prints an export result, which
-[Export result format][export-result] describes.
+only in the set. A track holding frames the drive did not read successfully is
+written as acquired, and stderr warns about it with its ranges. `--json` prints an
+export result, which [Export result format][export-result] describes.
 
 Export exits 0 when every track was exported, 1 when the set is not an acquired set,
 cannot be trusted, or the export is refused or fails (the directory is then not

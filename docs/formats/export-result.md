@@ -31,6 +31,27 @@ Export leaves out what the image holds beyond the tracks:
 Each track's range is where acquire found redumper's track file in the image, so the
 files hold the same audio as redumper's track files. Export writes nothing into the set.
 
+## Frames not read successfully
+
+A track whose Acquisition Record, of format version 2, gives error ranges holds frames
+the drive did not read successfully (see
+[Evidence Set format](evidence-set.md#acquisition-record)). Export writes it as
+acquired, never repaired, and once the directory is accepted, stderr gets one line per
+such track, in track order:
+
+```text
+copyofa: warning: track 8 has 7 frames not read successfully: 3:12.093+7 (C2 errors)
+```
+
+The count is the total of all the track's ranges, `frame` for 1. Each range is its
+start in the track, `offset_frames` as a duration at 44.1 kHz in the form the text
+results give durations, then `+` and its `frame_count`, then its state: `(C2 errors)`
+for `c2_error` or `(not read)` for `not_read`. Ranges are separated by `, `. At most 10
+are listed; a track with more ends its line with `, and <n> more`. The record keeps
+every range, with exact `offset_frames`. A set whose record is format version 1 gives
+no error ranges, so export warns about nothing. The warning changes neither the export
+result nor the exit code.
+
 ## How export works
 
 1. **Integrity first.** Export checks the set as inspect does (see

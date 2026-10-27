@@ -634,6 +634,24 @@ def acquired_set(make_acquired_set: Callable[..., Path]) -> Path:
     return make_acquired_set()
 
 
+DAMAGED_ERRORS = {
+    "1": [[1200 + 2 * index, 1, 1] for index in range(12)],
+    "2": [[100, 37, 0], [300, 1, 1], [301, 1, 0], [500, 24, 1]],
+    "3": [[0, 1, 1]],
+}
+"""The errors of a disc read with errors, as the stand-in's `errors` gives them.
+
+Track 1 has 12 ranges of one frame read with C2 errors; track 2, frames not read and
+frames read with C2 errors, two of them adjacent; track 3, a single frame.
+"""
+
+
+@pytest.fixture
+def damaged_set(make_acquired_set: Callable[..., Path]) -> Path:
+    """An Evidence Set acquired from DISC read with DAMAGED_ERRORS."""
+    return make_acquired_set(code=1, errors=DAMAGED_ERRORS)
+
+
 def edit_record(
     evidence_set: Path, change: Callable[[dict[str, Any]], None], *, reseal: bool
 ) -> None:
