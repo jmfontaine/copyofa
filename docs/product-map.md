@@ -241,25 +241,16 @@ the collector already owns.
 
 ### Now
 
-- **[v0.7.0](https://github.com/jmfontaine/copyofa/milestone/7): Acquire Scratched
-  CDs and Tighten the Edges** — Acquire Audio and Record Its Origins; Preserve
-  Evidence Throughout Its Lifetime; Share and Evaluate Findings. S1 and S5: acquire
-  re-reads sectors with errors, so a lightly scratched CD can be preserved, with fixes
-  found in a review of the repository. Specified by the milestone's issues, with
-  re-reading decided in
-  [ADR 0007](decisions/0007-re-read-sectors-with-errors-when-acquiring.md).
+- **[v0.8.0](https://github.com/jmfontaine/copyofa/milestone/8): Acquire Damaged
+  Discs** — Acquire Audio and Record Its Origins; Preserve Evidence Throughout Its
+  Lifetime. S1 for a disc that keeps errors after acquire re-reads it: the disc is
+  kept as the drive read it, and the record, inspect, compare and export say which
+  frames of each track were not read successfully. Specified in
+  [brief 0006](briefs/0006-acquire-damaged-discs.md), with the reading decided in
+  [ADR 0008](decisions/0008-keep-discs-with-read-errors-as-read.md).
 
 ### Next
 
-- **Acquire Damaged Discs** — Acquire Audio and Record Its Origins. S1 for a disc that
-  keeps errors after acquire re-reads it: redumper refuses to split a pressed CD with
-  a read error left inside a track, or a C2 error left in its lead-in or lead-out, and
-  a CD-R with C2 errors at a track's edges gets generated sectors that place the track
-  nowhere in the image, so acquire keeps nothing. During v0.7.0, a pressed CD that
-  looks undamaged kept 9 C2 samples in two sectors of one track after 20 re-reads, and
-  failed. Keeping such a disc means deciding what a track holds where the drive read
-  nothing, how the record and the tracks say so, and whether to keep a disc redumper
-  will not split.
 - **Compare Editions** — Compare and Discover Relationships; Share and Evaluate
   Findings. S4, built on track comparison and the portions it locates since v0.6.0:
   the tracks of two editions can differ in length and content, as those of a CD and a
