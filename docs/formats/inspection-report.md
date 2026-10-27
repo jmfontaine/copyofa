@@ -15,7 +15,9 @@ audio, gives its Audio Digest. For an [acquired set](evidence-set.md#acquired-se
 also describes each track of the disc. It draws no conclusion about where the audio
 comes from or how well it was acquired.
 
-Inspect prints format version 2. Its JSON Schema is
+Inspect prints format version 3. Its JSON Schema is
+[inspection-report-3.schema.json](../../src/copyofa/schemas/inspection-report-3.schema.json);
+that of [format version 2](#format-version-2) is
 [inspection-report-2.schema.json](../../src/copyofa/schemas/inspection-report-2.schema.json),
 and that of [format version 1](#format-version-1) is
 [inspection-report-1.schema.json](../../src/copyofa/schemas/inspection-report-1.schema.json);
@@ -90,7 +92,7 @@ The image file itself keeps its entry in `files`, as any FLAC file.
 | Field | Content |
 | --- | --- |
 | `report_kind` | Always `copyofa.inspection`. |
-| `format_version` | The version of this format, `2`. A later change to the fields increments it. |
+| `format_version` | The version of this format, `3`. A later change to the fields increments it. |
 | `copyofa_version` | The version of CopyOfA that ran the inspection. |
 | `inspected_at` | The inspection time in UTC, such as `2026-10-25T18:30:00Z`. |
 | `evidence_set` | The Evidence Set's path, as the verification Report records it. |
@@ -156,9 +158,25 @@ Each entry of `tracks` holds:
   acquisition from redumper's track file.
 - `frames`, `peak`, `leading_silence_frames` and `trailing_silence_frames`: as for a
   file, measured over the range; present only when `interpreted`.
+- `error_ranges`: the track's frames the drive did not read successfully, copied from
+  an Acquisition Record of format version 2, whatever the track's outcome: a list,
+  empty when the track has none, of ranges with `offset_frames`, the range's first
+  frame counted from the track's first frame, `frame_count`, and `state`, `not_read`
+  or `c2_error` (see [Evidence Set format](evidence-set.md#acquisition-record)).
+  Absent when the record is format version 1, which gives no error ranges.
 
 A track whose `audio_digest` differs from its `recorded_audio_digest` is not the audio
-acquired, and makes inspect exit 1.
+acquired, and makes inspect exit 1. A track with error ranges that decodes to its
+recorded Audio Digest is `interpreted`: the set is as acquired, and its ranges change
+neither the outcome nor the exit code. The text result ends the line of each such
+`interpreted` track with `, <count> frames not read successfully:` and its ranges, as
+export's warning gives them (see
+[Export result format](export-result.md#frames-not-read-successfully)), such as, for
+track 8:
+
+```text
+, 7 frames not read successfully: 3:12.093+7 (C2 errors)
+```
 
 ## Audio Digest
 
@@ -185,6 +203,13 @@ flac -d --force-raw-format --endian=little --sign=signed -c 01.flac | shasum -a 
 ffmpeg -i 01.flac -f s24le - | shasum -a 256
 ```
 
+## Format version 2
+
+Inspect printed format version 2 from CopyOfA 0.5.0 to 0.7.0. It is version 3 without
+`error_ranges`, and `format_version` is `2`. `copyofa validate` still accepts it, and
+the version 2 schema is unchanged. A Report with `error_ranges` is not valid at
+version 2.
+
 ## Format version 1
 
 Inspect printed format version 1 before CopyOfA 0.5.0. It is version 2 without
@@ -196,8 +221,8 @@ version 1 schema is unchanged. A Report with `disc` is not valid at version 1.
 ```json
 {
   "report_kind": "copyofa.inspection",
-  "format_version": 2,
-  "copyofa_version": "0.5.0",
+  "format_version": 3,
+  "copyofa_version": "0.8.0",
   "inspected_at": "2026-10-25T18:30:00Z",
   "evidence_set": "/Volumes/Archive/Album",
   "integrity_baseline": {
@@ -285,7 +310,8 @@ of its five tracks; its image, `data/disc.scram.flac`, has its own entry in `fil
       "frames": 9285108,
       "peak": [28930, 28922],
       "leading_silence_frames": 0,
-      "trailing_silence_frames": 0
+      "trailing_silence_frames": 0,
+      "error_ranges": []
     },
     {
       "number": 5,
@@ -297,7 +323,8 @@ of its five tracks; its image, `data/disc.scram.flac`, has its own entry in `fil
       "frames": 31052868,
       "peak": [32768, 32768],
       "leading_silence_frames": 0,
-      "trailing_silence_frames": 356
+      "trailing_silence_frames": 356,
+      "error_ranges": []
     }
   ]
 }

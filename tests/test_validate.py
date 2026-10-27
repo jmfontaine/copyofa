@@ -951,6 +951,18 @@ def test_validate_accepts_an_inspection_report_of_format_version_1(
     assert result["format_version"] == 1
 
 
+def test_validate_accepts_a_stored_inspection_report_of_format_version_2(
+    run: Run,
+) -> None:
+    path = Path(__file__).parent / "reports/inspection-2/acquired_set.json"
+
+    outcome, result = validate(run, path)
+
+    assert outcome.code == 0, outcome.err
+    assert result["outcome"] == "valid"
+    assert result["format_version"] == 2
+
+
 DISC_EDITS: dict[str, tuple[Callable[[dict[str, Any]], None], str]] = {
     "disc at version 1": (lambda report: report.update(format_version=1), ""),
     "both a reason and tracks": (
@@ -972,6 +984,22 @@ DISC_EDITS: dict[str, tuple[Callable[[dict[str, Any]], None], str]] = {
             recorded_audio_digest="pcm1:48000:2:16:" + "0" * 64
         ),
         "/disc/tracks/0/recorded_audio_digest",
+    ),
+    "an error range of an unknown state": (
+        lambda report: report["disc"]["tracks"][0].update(
+            error_ranges=[{"offset_frames": 0, "frame_count": 1, "state": "skipped"}]
+        ),
+        "/disc/tracks/0/error_ranges/0/state",
+    ),
+    "an empty error range": (
+        lambda report: report["disc"]["tracks"][0].update(
+            error_ranges=[{"offset_frames": 0, "frame_count": 0, "state": "not_read"}]
+        ),
+        "/disc/tracks/0/error_ranges/0/frame_count",
+    ),
+    "error ranges at version 2": (
+        lambda report: report.update(format_version=2),
+        "/disc/tracks/0",
     ),
 }
 
