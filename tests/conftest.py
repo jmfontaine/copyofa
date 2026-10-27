@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import contextlib
 import copy
+import errno
 import functools
 import hashlib
+import io
 import json
 import os
 import random
 import shlex
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -21,7 +25,7 @@ from copyofa import comparator, inspector, validator, verifier
 from copyofa.cli import main
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
 
     Run = Callable[..., "Outcome"]
 
@@ -72,6 +76,48 @@ def run(capsys: pytest.CaptureFixture[str]) -> Run:
         return Outcome(code, captured.out, captured.err)
 
     return _run
+
+
+class _ClosedPipe(io.RawIOBase):
+    """The write end of a pipe whose reader has exited, as `| true` leaves stdout."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.reader_gone = True
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, data: Any, /) -> int:
+        if self.reader_gone:
+            raise BrokenPipeError(errno.EPIPE, os.strerror(errno.EPIPE))
+        return len(data)
+
+
+@contextlib.contextmanager
+def closed_stdout() -> Generator[None]:
+    """Make stdout, while the block runs, a pipe whose reader has exited."""
+    pipe = _ClosedPipe()
+    stdout = io.TextIOWrapper(io.BufferedWriter(pipe), encoding="utf-8")
+    try:
+        with contextlib.redirect_stdout(stdout):
+            yield
+    finally:
+        # Let the wrapper flush what it still holds, so it closes without an error.
+        pipe.reader_gone = False
+        stdout.close()
+
+
+def run_without_stdout(
+    *args: str | os.PathLike[str],
+) -> subprocess.CompletedProcess[bytes]:
+    """Run the command line in a process whose stdout is closed, as `>&-` leaves it."""
+    main = "import sys; from copyofa.cli import main; sys.exit(main(sys.argv[1:]))"
+    return subprocess.run(
+        ["sh", "-c", 'exec "$0" "$@" >&-', sys.executable, "-c", main, *args],
+        stderr=subprocess.PIPE,
+        check=False,
+    )
 
 
 def snapshot(root: Path) -> dict[str, tuple[bytes, int]]:

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import soundfile
-from conftest import edit_record, signal, synthetic_disc, write_audio
+from conftest import closed_stdout, edit_record, signal, synthetic_disc, write_audio
 
 from copyofa import exporter, inspector, staging
 
@@ -435,6 +435,42 @@ def test_export_exits_2_for_invalid_arguments(
     assert outcome.code == 2
     assert outcome.out == ""
     assert left_behind(destination) == []
+
+
+def test_export_refuses_a_repeated_destination(
+    run: Run, acquired_set: Path, tmp_path: Path
+) -> None:
+    outcome = run(
+        "export", acquired_set, "--to", tmp_path / "A", "--to", tmp_path / "B"
+    )
+
+    assert outcome.code == 2
+    assert outcome.out == ""
+    assert "--to may be given only once" in outcome.err
+    assert left_behind(tmp_path / "A") == []
+    assert left_behind(tmp_path / "B") == []
+
+
+@pytest.mark.parametrize("options", [(), ("--json",)])
+def test_export_keeps_the_directory_when_stdout_is_closed(
+    run: Run, acquired_set: Path, tmp_path: Path, options: tuple[str, ...]
+) -> None:
+    destination = tmp_path / "Tracks"
+
+    with closed_stdout():
+        outcome = run("export", acquired_set, "--to", destination, *options)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert outcome.err.endswith(
+        f"\ncopyofa: stdout closed; {destination} was created\n"
+    )
+    assert "Traceback" not in outcome.err
+    assert sorted(path.name for path in destination.iterdir()) == [
+        "01.flac",
+        "02.flac",
+        "03.flac",
+    ]
 
 
 def test_export_canceled_leaves_nothing(

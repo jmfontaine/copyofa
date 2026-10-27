@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import soundfile
-from conftest import DISC, snapshot, synthetic_disc
+from conftest import DISC, closed_stdout, snapshot, synthetic_disc
 
 import copyofa
 from copyofa import acquirer, staging
@@ -279,6 +279,38 @@ def test_acquire_exits_2_on_an_invalid_retry_count(
     assert "--retries" in outcome.err
     assert disc_runs(redumper) == []
     assert left_behind(destination) == []
+
+
+def test_acquire_refuses_a_repeated_destination(
+    run: Run, redumper: StandIn, tmp_path: Path
+) -> None:
+    outcome = run("acquire", "--to", tmp_path / "A", "--to", tmp_path / "B")
+
+    assert outcome.code == 2
+    assert outcome.out == ""
+    assert "--to may be given only once" in outcome.err
+    assert disc_runs(redumper) == []
+    assert left_behind(tmp_path / "A") == []
+    assert left_behind(tmp_path / "B") == []
+
+
+@pytest.mark.parametrize("options", [(), ("--json",)])
+def test_acquire_keeps_the_set_when_stdout_is_closed(
+    run: Run, redumper: StandIn, tmp_path: Path, options: tuple[str, ...]
+) -> None:
+    destination = tmp_path / "Album"
+
+    with closed_stdout():
+        outcome = run("acquire", "--to", destination, *options)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert outcome.err.endswith(
+        f"\ncopyofa: stdout closed; {destination} was created\n"
+    )
+    assert "Traceback" not in outcome.err
+    assert left_behind(destination) == [destination]
+    assert run("verify", destination).code == 0
 
 
 def test_acquire_reads_a_single_track_disc_and_absent_values(

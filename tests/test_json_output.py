@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
 from typing import TYPE_CHECKING
+
+import pytest
 
 from copyofa import cli
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    import pytest
     from conftest import Run
 
 
@@ -31,6 +33,16 @@ def test_json_escapes_names_that_are_not_valid_utf8(
         "path": name,
         "note": "café",
     }
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+def test_json_refuses_a_number_that_is_not_finite(
+    capsysbinary: pytest.CaptureFixture[bytes], value: float
+) -> None:
+    with pytest.raises(ValueError, match="not JSON compliant"):
+        cli._print_json({"measurements": [1.0, value]})
+
+    assert capsysbinary.readouterr().out == b""
 
 
 def test_json_is_utf8_whatever_the_locale(tmp_path: Path) -> None:

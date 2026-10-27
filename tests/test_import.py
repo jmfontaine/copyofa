@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from conftest import requires_permissions, snapshot
+from conftest import (
+    closed_stdout,
+    requires_permissions,
+    run_without_stdout,
+    snapshot,
+)
 
 import copyofa
 from copyofa import importer, staging
@@ -564,6 +569,46 @@ def test_import_prints_json_result(run: Run, album: Path, archive: Path) -> None
             "exclusions": 1,
         },
     }
+
+
+@pytest.mark.parametrize("options", [(), ("--json",)])
+def test_import_keeps_the_set_when_stdout_is_closed(
+    run: Run, album: Path, archive: Path, options: tuple[str, ...]
+) -> None:
+    destination = archive / "Album"
+
+    with closed_stdout():
+        outcome = run("import", album, "--to", destination, *options)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert outcome.err.endswith(
+        f"\ncopyofa: stdout closed; {destination} was created\n"
+    )
+    assert "Traceback" not in outcome.err
+    assert sorted(path.name for path in archive.iterdir()) == ["Album"]
+    assert run("verify", destination).code == 0
+
+
+def test_import_creates_nothing_when_stdout_is_closed_before_it_starts(
+    album: Path, archive: Path
+) -> None:
+    result = run_without_stdout("import", album, "--to", archive / "Album")
+
+    assert result.returncode == 1
+    assert result.stderr == b"copyofa: stdout closed\n"
+    assert list(archive.iterdir()) == []
+
+
+def test_import_refuses_a_repeated_destination(
+    run: Run, album: Path, archive: Path
+) -> None:
+    outcome = run("import", album, "--to", archive / "A", "--to", archive / "B")
+
+    assert outcome.code == 2
+    assert outcome.out == ""
+    assert "--to may be given only once" in outcome.err
+    assert list(archive.iterdir()) == []
 
 
 @pytest.mark.parametrize(

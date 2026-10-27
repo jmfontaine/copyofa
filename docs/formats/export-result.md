@@ -120,5 +120,8 @@ the whole of each sentence.
 
 `copyofa export` exits 0 when every track was exported. It exits 1, printing nothing
 on stdout and leaving no directory, when it refused or failed, and 130 when canceled
-with Ctrl-C. It exits 2, printing nothing on stdout, when the target is not an
-Evidence Set or the arguments are invalid.
+with Ctrl-C. It also exits 1 when stdout is closed: closed at the start (`>&-`), it
+exports nothing and stderr says `copyofa: stdout closed`; closed while it prints the
+result, such as by `| head`, the directory is kept, complete, and stderr ends with
+`copyofa: stdout closed; <directory> was created`. It exits 2, printing nothing
+on stdout, when the target is not an Evidence Set or the arguments are invalid.

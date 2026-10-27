@@ -12,7 +12,14 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
-from conftest import RATE, signal, snapshot, write_audio
+from conftest import (
+    RATE,
+    closed_stdout,
+    run_without_stdout,
+    signal,
+    snapshot,
+    write_audio,
+)
 
 import copyofa
 from copyofa import validator, viewer
@@ -699,6 +706,54 @@ def test_view_writes_utf8_whatever_the_locale(
     assert result.returncode == 0, result.stderr
     assert "data/Été \u2713.flac".encode() in result.stdout
     Page(result.stdout.decode("utf-8", errors="strict"))
+
+
+def test_view_reports_a_closed_stdout(
+    run: Run, report_of: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, _ = report_of("lossy")
+
+    with closed_stdout():
+        outcome = run("view", path)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert outcome.err == "copyofa: stdout closed\n"
+
+
+@pytest.mark.parametrize("command", [["view"], ["validate"], ["validate", "--json"]])
+def test_a_closed_stdout_ends_the_process_with_one_line(
+    report_of: Callable[[str], tuple[Path, dict[str, Any]]], command: list[str]
+) -> None:
+    path, _ = report_of("lossy")
+    main = "import sys; from copyofa.cli import main; sys.exit(main(sys.argv[1:]))"
+    reader, writer = os.pipe()
+    os.close(reader)
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", main, *command, path],
+            stdout=writer,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    finally:
+        os.close(writer)
+
+    assert result.returncode == 1
+    assert result.stderr == b"copyofa: stdout closed\n"
+
+
+@pytest.mark.parametrize("command", [["view"], ["validate"], ["validate", "--json"]])
+def test_a_stdout_closed_before_the_start_ends_the_process_with_one_line(
+    report_of: Callable[[str], tuple[Path, dict[str, Any]]], command: list[str]
+) -> None:
+    path, _ = report_of("lossy")
+
+    result = run_without_stdout(*command, path)
+
+    assert result.returncode == 1
+    assert result.stderr == b"copyofa: stdout closed\n"
 
 
 def test_view_refuses_an_invalid_report(
