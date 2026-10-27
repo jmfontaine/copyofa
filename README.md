@@ -52,9 +52,9 @@ copyofa import ~/Downloads/Album --to /Volumes/Archive/Album \
 - `--json` prints the result as JSON. Progress and errors go to stderr.
 
 The command exits 0 when the set is accepted, 1 when the import is refused or fails or
-when stdout is closed before or while the result is printed, such as by `| head` (the
-set is then kept, and stderr names it), 2 for invalid arguments, and 130 when canceled
-with Ctrl-C.
+when stdout is closed (closed by the time the result is printed, such as by `| head`,
+the set is kept and stderr names it; closed at the start, nothing is imported), 2 for
+invalid arguments, and 130 when canceled with Ctrl-C.
 [Evidence Set format][evidence-set] describes the set and how to check
 it without CopyOfA.
 
@@ -86,10 +86,11 @@ copyofa acquire --to /Volumes/Archive/add-violence-cd --drive disk6 --json \
 
 Acquire exits 0 when the set is accepted from a disc read without error, 1 when it is
 accepted from a disc read with errors (the set is kept, as evidence of what the drive
-read), when stdout is closed before or while the result is printed (the set is kept,
-and stderr names it), or when the acquisition is refused or fails, 2 for invalid
-arguments, and 130 when canceled. [Evidence Set format][evidence-set] describes
-acquired sets and how to restore redumper's files with `flac` and `xz`.
+read), when stdout is closed (closed by the time the result is printed, the set is
+kept and stderr names it; closed at the start, the disc is not read), or when the
+acquisition is refused or fails, 2 for invalid arguments, and 130 when canceled.
+[Evidence Set format][evidence-set] describes acquired sets and how to restore
+redumper's files with `flac` and `xz`.
 
 Later, after moving the set or just to check it, verify it against its Integrity
 Baseline:
@@ -216,9 +217,10 @@ only in the set. `--json` prints an export result, which
 
 Export exits 0 when every track was exported, 1 when the set is not an acquired set,
 cannot be trusted, or the export is refused or fails (the directory is then not
-created) or when stdout is closed before or while the result is printed (the directory
-is then kept, and stderr names it), 2 when the target is not an Evidence Set or the
-arguments are invalid, and 130 when canceled. It writes nothing into the set.
+created) or when stdout is closed (closed by the time the result is printed, the
+directory is kept and stderr names it; closed at the start, nothing is exported), 2
+when the target is not an Evidence Set or the arguments are invalid, and 130 when
+canceled. It writes nothing into the set.
 
 Check that a Report, such as one you received, is well formed:
 

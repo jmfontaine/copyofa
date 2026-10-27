@@ -209,9 +209,11 @@ Every command follows the conventions `import` and `verify` set in v0.1.0, as
   read, and view for a Report it refuses. View prints an HTML page, not JSON, and has no
   `--json`
 - Every command also exits 1 when stdout is closed before or while it writes its
-  result, such as by `| head`, printing `copyofa: stdout closed` on stderr and no
-  traceback. Import, acquire and export have then kept the set or directory they
-  accepted, and the line names it: `copyofa: stdout closed; <destination> was created`
+  result, printing `copyofa: stdout closed` on stderr and no traceback. Stdout closed
+  at the start (`>&-`) is refused before the command does anything. Closed later, such
+  as by `| head`, import, acquire and export have already accepted the set or
+  directory: they keep it, and the line names it:
+  `copyofa: stdout closed; <destination> was created`
 - Stdout stays empty whenever no result is produced
 - No interactive prompts
 
