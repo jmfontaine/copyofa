@@ -1,7 +1,8 @@
 # Re-read sectors with errors when acquiring a CD
 
 - **Date:** 2026-10-26
-- **Status:** Accepted
+- **Status:** Accepted; decision 4 superseded by
+  [ADR 0008](0008-keep-discs-with-read-errors-as-read.md)
 - **Supersedes:** in decision 1 of
   [ADR 0005](0005-acquire-audio-cds-with-redumper.md), redumper's default retry count;
   its other decisions stand
