@@ -12,7 +12,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from conftest import closed_stdout, requires_permissions, snapshot
+from conftest import (
+    closed_stdout,
+    requires_permissions,
+    run_without_stdout,
+    snapshot,
+)
 
 import copyofa
 from copyofa import importer, staging
@@ -583,6 +588,16 @@ def test_import_keeps_the_set_when_stdout_is_closed(
     assert "Traceback" not in outcome.err
     assert sorted(path.name for path in archive.iterdir()) == ["Album"]
     assert run("verify", destination).code == 0
+
+
+def test_import_creates_nothing_when_stdout_is_closed_before_it_starts(
+    album: Path, archive: Path
+) -> None:
+    result = run_without_stdout("import", album, "--to", archive / "Album")
+
+    assert result.returncode == 1
+    assert result.stderr == b"copyofa: stdout closed\n"
+    assert list(archive.iterdir()) == []
 
 
 def test_import_refuses_a_repeated_destination(
