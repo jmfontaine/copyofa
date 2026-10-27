@@ -4,7 +4,7 @@ requires = [ "uv-build>=0.13,<0.14" ]
 
 [project]
 name = "copyofa"
-version = "0.7.0"
+version = "0.8.0.dev0"
 description = "Preservation and forensic toolkit for music collectors"
 readme = "README.md"
 license = "Apache-2.0"
