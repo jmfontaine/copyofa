@@ -758,8 +758,9 @@ escape, such as `\udc80`; spaces such as U+00A0 appear as they are.
 View exits 0 when it printed the page, and 1 when the file cannot be read or the
 Report is invalid, unsupported, not a comparison Report, or of a format version view
 does not render, with the reason on stderr and nothing on stdout. It exits 2 for
-invalid arguments and 130 when canceled with Ctrl-C. It has no `--json` option and
-writes no file.
+invalid arguments and 130 when canceled with Ctrl-C. It also exits 1, with
+`copyofa: stdout closed` on stderr, when stdout is closed before or while it prints the
+page. It has no `--json` option and writes no file.
 
 ## Exit codes
 
@@ -770,5 +771,6 @@ or not it found a portion, even when a value is absent. It exits 1 when either i
 exits 2, printing nothing on stdout, when a file is not under the `data/` directory
 of an Evidence Set, an input given with `--track-a` or `--track-b` is not an Evidence
 Set, or the arguments are invalid, such as a track number that is not a whole number
-from 1, and 130 when canceled with Ctrl-C.
-mpg123 may write notes about damaged MP3 frames to stderr.
+from 1, and 130 when canceled with Ctrl-C. It also exits 1, with
+`copyofa: stdout closed` on stderr, when stdout is closed before or while it prints its
+result or Report. mpg123 may write notes about damaged MP3 frames to stderr.
