@@ -255,9 +255,9 @@ the collector already owns.
   keeps errors after acquire re-reads it: redumper refuses to split a pressed CD with
   a read error left inside a track, or a C2 error left in its lead-in or lead-out, and
   a CD-R with C2 errors at a track's edges gets generated sectors that place the track
-  nowhere in the image, so acquire keeps nothing (only errors confined to the lead-in
-  or lead-out give a set). During v0.7.0, a pressed CD that looks undamaged kept 9 C2
-  samples in two sectors of one track after 20 re-reads, and failed. Keeping such a
+  nowhere in the image, so acquire keeps nothing. During v0.7.0, a pressed CD that
+  looks undamaged kept 9 C2 samples in two sectors of one track after 20 re-reads, and
+  failed. Keeping such a
   disc means deciding what a track holds where the drive read nothing, how the record
   and the tracks say so, and whether to keep a disc redumper will not split.
 - **Compare Editions** — Compare and Discover Relationships; Share and Evaluate
