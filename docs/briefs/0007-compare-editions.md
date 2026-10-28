@@ -89,9 +89,10 @@ Refines [S4](../product-map.md#s4-compare-two-editions):
 
 As ADR 0009 decides:
 
-- **Common rate** is the lowest sample rate of all tracks of both editions. Every track
-  at a higher rate is resampled to it as compare resamples a track today, as soon as
-  it is decoded; its samples at its own rate are not kept.
+- **Common rate** is the lowest sample rate of all tracks of both editions, known
+  before any track is decoded: an acquired set is 44,100 Hz, and a file's rate is in
+  its header. Every track at a higher rate is resampled to it as compare resamples a
+  track today, as soon as it is decoded; its samples at its own rate are not kept.
 - **Sequences.** Each edition's tracks, mixed down, are joined in order without gap,
   and portions are located on the two sequences with ADR 0006's method and parameters.
   No search is skipped for equal Audio Digests.
@@ -140,9 +141,9 @@ Exact field names and the schema are settled in implementation and documented in
 
 An edition comparison prints, after the progress of each track on stderr:
 
-- each edition: what it is (the image of an acquired set, or the number of files of an
-  imported one), its number of tracks and its duration, never the set's location, as
-  today's text result names a track by its path in its set;
+- each edition: its set's location, or with `--omit-locations` the image of an
+  acquired set or the number of files of an imported one, as today's text result
+  names a track; its number of tracks; and its duration;
 - the common rate;
 - the coverage of each edition, as time found and percentage;
 - one line per track of A: the time of it found in B, of its duration, and the tracks
@@ -224,7 +225,7 @@ criteria need it to take the audio and the track boundaries of a disc as given.
   version 6 of both scopes, the edition layout with the coverage, correspondences,
   segments and unmatched ranges, and with every text escaped.
 - **AC8 — Locations.** `--omit-locations` leaves out both editions' `evidence_set`,
-  listed in `omitted`; the text result names no set's location with or without it.
+  listed in `omitted`, and the text result then names no set's location.
 - **AC9 — Documented.** `docs/formats/comparison-report.md` documents version 6 of both
   scopes, how editions are formed and compared, the known limit, view's layout and
   refusal by version and scope, and version 5 among the earlier versions; the README

@@ -34,9 +34,10 @@ sets of *The Downward Spiral* CD and a 24-bit, 96 kHz download of its 2017 editi
   disc, at a residual of −96.6 dB.
 - **The 2017 download, whose audio differs from the CD's:** 133 primary portions
   covering 60 % of the CD, each in the track of the same title or across its boundary
-  with the next. Within each track, the offset drifts by about 100 frames over 4 to 5
+  with a neighbor. In five tracks the offset drifts by about 100 frames over 4 to 5
   minutes (8 to 9 parts per million), more than the 32 frames a portion tolerates, so
-  the portions are short.
+  their portions are short; the others hold one offset in portions of up to 5
+  minutes.
 - **An unrelated release:** no portion.
 
 Each run took 117 s to 172 s to locate the portions of two editions of about 65 min,

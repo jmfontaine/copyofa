@@ -267,8 +267,9 @@ None planned; the v0.9.0 release review chooses it from Later.
   S7.
 - **Compare Masters That Differ in Speed** — Compare and Discover Relationships. S3
   and S4 for audio whose speed differs by a few parts per million: ADR 0006's portions
-  hold one offset, so such audio gives many short portions. In ADR 0009's spike, the
-  2017 download of *The Downward Spiral* covered 60 % of its CD in 133 portions.
+  hold one offset, so such audio gives many short portions. In ADR 0009's spike, five
+  tracks of the 2017 download of *The Downward Spiral* drift against its CD and match
+  it only in short portions.
 - **Repair Limited Archive Damage Using Optional Recovery Information** — Preserve
   Evidence Throughout Its Lifetime. S6.
 
