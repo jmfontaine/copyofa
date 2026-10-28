@@ -29,7 +29,7 @@ Refines [S4](../product-map.md#s4-compare-two-editions):
 1. A collector has acquired a CD into `~/Archive/tds-cd` and imported a download of
    another edition into `~/Archive/tds-2017`.
 2. `copyofa compare ~/Archive/tds-cd ~/Archive/tds-2017` compares the two editions:
-   every track of the CD with every audio file of the download, in order.
+   the CD's tracks, joined in order, with the download's audio files, joined in order.
 3. The text result gives how much of each edition was found in the other, a line per
    track of A naming the tracks of B that hold its audio and how much, and the audio
    only one edition holds, per track.
@@ -56,8 +56,8 @@ Refines [S4](../product-map.md#s4-compare-two-editions):
 - Comparing a track with an edition.
 - Interpreting the findings: naming a relationship ("same master", "remaster", "bonus
   track"), or a score for the editions.
-- Reducing the memory or time of the search (Parking Lot: "Bound compare's memory on
-  long tracks").
+- Reducing the memory or time of the search (Parking Lot:
+  ["Bound compare's memory on long tracks"](https://github.com/jmfontaine/copyofa/discussions/76)).
 - Changing inspect, verify, import, export or validate, apart from validate accepting
   version 6.
 
@@ -67,18 +67,20 @@ Refines [S4](../product-map.md#s4-compare-two-editions):
 
 - **Choosing the comparison.** Two inputs that are both Evidence Set roots, without
   `--track-a` or `--track-b`, are an edition comparison. Two tracks are compared as
-  today. Any other combination, such as a set root and a file, or one track option
-  without the other while both inputs are set roots, exits 2 with a message saying
-  compare takes two tracks or two editions. A root that is not an Evidence Set exits 2,
-  as today.
+  today. Any other combination, such as a set root without its track option and a
+  file, or one track option without the other while both inputs are set roots, exits 2
+  with a message saying compare takes two tracks or two editions. A root that is not
+  an Evidence Set exits 2, as today.
 - **An acquired set's edition** is its tracks in the order of its Acquisition Record,
   each checked and decoded as compare checks a track input today, with its error
   ranges.
-- **An imported set's edition** is its files that inspect interprets as audio, in the
-  order of their paths from the set's root, compared by Unicode code point. Each is
-  checked and decoded as compare checks a file input today. Files inspect does not
-  interpret as audio, such as a cover image, are excluded and listed with their
-  outcome and reason.
+- **An imported set's edition** is the files its manifest lists, in the order of their
+  paths from the set's root, compared by Unicode code point, each checked and decoded
+  as compare checks a file input today, except the files inspect reports
+  `not_interpreted`, such as a cover image or a format CopyOfA does not decode: those
+  are excluded and listed with their outcome and reason. A file that is `failed` or
+  `not_inspected`, such as an audio file modified since import, stays a track of the
+  edition, one that is not `interpreted`.
 - **Nothing measured.** When a track of either edition is not `interpreted`, or an
   edition has no track, the Report has no `measurements`, gives the reason, and compare
   exits 1, as it does today when a track input is not `interpreted`.
@@ -88,7 +90,8 @@ Refines [S4](../product-map.md#s4-compare-two-editions):
 As ADR 0009 decides:
 
 - **Common rate** is the lowest sample rate of all tracks of both editions. Every track
-  at a higher rate is resampled to it as compare resamples a track today.
+  at a higher rate is resampled to it as compare resamples a track today, as soon as
+  it is decoded; its samples at its own rate are not kept.
 - **Sequences.** Each edition's tracks, mixed down, are joined in order without gap,
   and portions are located on the two sequences with ADR 0006's method and parameters.
   No search is skipped for equal Audio Digests.
@@ -98,13 +101,15 @@ As ADR 0009 decides:
   tracks have the same channel count, with the residual of each one-second window. The
   block-gain residual stays per portion.
 - **Correspondences.** For each pair of a track of A and a track of B that share
-  primary segments: the frames they share, the share of each track that is, and
-  `identical_audio` when both tracks have the same Audio Digest.
+  primary segments: for each of the two tracks, the frames of it those segments cover,
+  counted once, and the share of the track that is; and `identical_audio` when both
+  tracks have the same Audio Digest. Primary portions can overlap where audio repeats,
+  so every count of matched audio counts a frame once.
 - **Unmatched audio** is reported per track, as ranges of that track that no primary
   portion covers, with whether each is digitally silent and otherwise its level, as
   today.
 - **Coverage.** For each edition, the frames of its sequence that primary portions
-  cover, and its total frames.
+  cover, counted once, and its total frames.
 
 ### Comparison Report format version 6
 
@@ -135,7 +140,9 @@ Exact field names and the schema are settled in implementation and documented in
 
 An edition comparison prints, after the progress of each track on stderr:
 
-- each edition: its set, its number of tracks and its duration;
+- each edition: what it is (the image of an acquired set, or the number of files of an
+  imported one), its number of tracks and its duration, never the set's location, as
+  today's text result names a track by its path in its set;
 - the common rate;
 - the coverage of each edition, as time found and percentage;
 - one line per track of A: the time of it found in B, of its duration, and the tracks
@@ -149,7 +156,8 @@ View renders comparison Report version 6: a track comparison with version 5's la
 plus its `scope`; an edition comparison with its own layout, giving the inputs and
 their tracks, the coverage, the correspondences, the unmatched ranges per track, and
 every portion with its segments and their measurements, under the same rules as
-today's page.
+today's page. The viewer maps each format version and, from version 6, each scope to
+its layout, and refuses a Report of any other version or scope.
 
 ## Design decisions
 
@@ -166,9 +174,10 @@ today's page.
 ## Known limit
 
 Time grows with the product of the editions' lengths, and memory with their sum: the
-spike's search over two CDs of about 65 min took about 2.5 minutes at a peak of 5.6 GB,
-before the per-channel measurements. Editions much longer than a CD, such as a box set
-imported as one set, may exhaust memory. The comparison Report document states it.
+spike's search over two CDs of about 65 min took about 2.5 minutes at a peak of 4.9 GB
+to 5.3 GB, and 5.6 GB for a CD against a 96 kHz download, before the per-channel
+measurements. Editions much longer than a CD, such as a box set imported as one set,
+may exhaust memory. The comparison Report document states it.
 
 ## Blocking questions
 
@@ -176,15 +185,16 @@ None.
 
 ## Stop rule
 
-Stop and report if compare on the maintainer's two CD pressings (AC10) does not give the
-spike's single primary portion at −37,634 frames, or if any by-hand comparison of AC10
-needs more than 12 GB.
+Stop and report if compare on the maintainer's two CD pressings (AC10), in AC10's
+order, does not give the spike's single primary portion at −37,634 frames, or if any
+by-hand comparison of AC10 takes 5 minutes or more, or 10 GB or more at its peak.
 
 ## Acceptance criteria
 
 Each criterion is verified by an automated test unless stated otherwise. Synthetic
 editions are acquired sets made with the stand-in `redumper` and imported sets of small
-generated files.
+generated files. The stand-in derives each track's audio from its number today; these
+criteria need it to take the audio and the track boundaries of a disc as given.
 
 - **AC1 — Moved boundaries.** Two acquired editions of the same audio whose track
   boundaries differ give a version 6 Report with `scope` `editions`: one primary
@@ -192,17 +202,19 @@ generated files.
   track with its neighbors as the boundaries place them, nothing unmatched but the
   audio outside the shared range, full coverage within it, and exit 0.
 - **AC2 — Inserted and changed audio.** Against AC1's edition A, an edition with a
-  track inserted and the start of a later track replaced gives two primary portions;
-  the inserted track and the replaced start are unmatched in that edition's tracks, the
-  original start is unmatched in A's, and the correspondences give each track's share.
+  track inserted and the start of the track that follows it replaced gives two primary
+  portions; the inserted track and the replaced start are unmatched in that edition's
+  tracks, the original start is unmatched in A's, and the correspondences give each
+  track's share.
 - **AC3 — Imported edition.** An imported set of 48 kHz files, with a cover image,
   against an acquired edition: the files form the edition in path order, the image is
   in `excluded`, the common rate is 44,100 Hz, and correspondences pair the tracks of
   the same audio.
-- **AC4 — Refusals and failures.** A set root against a file, and a set root against a
-  set root with only `--track-a`, exit 2 with the message. A track that is not
-  `interpreted` in either edition, and an edition with no track, give a Report without
-  `measurements`, with the reason, and exit 1.
+- **AC4 — Refusals and failures.** A set root without its track option against a file,
+  and a set root against a set root with only `--track-a`, exit 2 with the message. A
+  track that is not `interpreted` in either edition, including an audio file of an
+  imported set modified since import, and an edition with no track, give a Report
+  without `measurements`, with the reason, and exit 1.
 - **AC5 — Track comparisons.** A track comparison prints version 6 with `scope`
   `tracks`, and otherwise the fields and values version 5 gave.
 - **AC6 — Text result.** AC2's comparison prints the coverage, one line per track of A
@@ -212,17 +224,20 @@ generated files.
   version 6 of both scopes, the edition layout with the coverage, correspondences,
   segments and unmatched ranges, and with every text escaped.
 - **AC8 — Locations.** `--omit-locations` leaves out both editions' `evidence_set`,
-  listed in `omitted`.
+  listed in `omitted`; the text result names no set's location with or without it.
 - **AC9 — Documented.** `docs/formats/comparison-report.md` documents version 6 of both
-  scopes, how editions are formed and compared, the known limit, and version 5 among
-  the earlier versions; the README says compare compares editions; AGENTS.md's
-  Architecture section gives edition comparison, ADR 0009 and view's versions 1 to 6.
+  scopes, how editions are formed and compared, the known limit, view's layout and
+  refusal by version and scope, and version 5 among the earlier versions; the README
+  says compare compares editions; AGENTS.md's Architecture section gives edition
+  comparison, ADR 0009, and view's versions 1 to 6 with its mapping by version and
+  scope.
 - **AC10 — Real editions (by hand, once).** On the maintainer's Mac, from the sets of
-  ADR 0009's spike: the two CD pressings give one primary portion at −37,634 frames;
-  the 15-track edition gives two primary portions with its bonus track unmatched; the
-  CD against the 2017 download, imported, gives correspondences between the tracks of
-  the same title. Each comparison takes under 5 minutes and under 10 GB at its peak, and
-  its view opens in a browser.
+  ADR 0009's spike, with input A the 14-track pressing that was A in every run of the
+  spike: the other pressing gives one primary portion at −37,634 frames; the 15-track
+  edition gives two primary portions with its bonus track unmatched; the 2017
+  download, imported, gives correspondences between the tracks of the same title. Each
+  comparison takes under 5 minutes and under 10 GB at its peak, and its view opens in
+  a browser.
 
 ## Manifesto alignment
 
@@ -242,8 +257,9 @@ Appetite: about a day.
 If the work outgrows it, cut in this order, keeping edition comparisons with their
 Report, schema and text result:
 
-1. View's edition layout: view refuses a version 6 edition comparison with a reason;
-   step 5 of the scenario goes.
+1. View's edition layout: view renders version 6 track comparisons only, and refuses
+   one of `scope` `editions` with a reason, as it refuses an unsupported version; step
+   5 of the scenario goes.
 2. Per-channel measurements of segments: segments are measured on the downmix only.
 
 ## What needs the maintainer
