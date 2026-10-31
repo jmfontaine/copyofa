@@ -278,6 +278,30 @@ def test_compare_takes_an_imported_set_as_its_files_in_path_order(
         assert "identical_audio" not in entry
 
 
+def test_compare_keeps_the_rate_of_two_editions_at_48_khz(
+    run: Run, make_set: MakeSet
+) -> None:
+    a = make_set(write_files)
+    b = make_set(write_files)
+
+    code, report = compare(run, a, b)
+
+    assert code == 0
+    assert report["method"]["common_sample_rate"] == 48000
+    measurements = report["measurements"]
+    for name in "ab":
+        assert [entry["frames"] for entry in measurements["sequences"][name]] == [
+            10 * 48000,
+            10 * 48000,
+        ]
+        coverage = measurements["coverage"][name]
+        assert coverage["frames"] == 20 * 48000
+        assert near(coverage["matched_frames"], 20 * 48000)
+    correspondences = measurements["correspondences"]
+    assert pairs(correspondences) == [(1, 1), (2, 2)]
+    assert all(entry["identical_audio"] for entry in correspondences)
+
+
 def test_compare_omits_the_locations_of_editions(
     run: Run,
     make_acquired_set: MakeAcquired,
@@ -334,26 +358,32 @@ def test_compare_counts_audio_another_edition_repeats_once(
     assert near(entry["b"]["matched_frames"], 20 * SECOND)
 
 
-@pytest.mark.parametrize("track", [False, True], ids=["file", "track number"])
-def test_compare_refuses_a_set_root_beside_a_track(
-    run: Run, make_set: MakeSet, track: bool
+@pytest.mark.parametrize(
+    "case", ["file", "--track-a only", "--track-b only", "plain directory"]
+)
+def test_compare_refuses_a_set_root_beside_another_input(
+    run: Run, make_set: MakeSet, tmp_path: Path, case: str
 ) -> None:
     first = make_set(write_files)
     second = make_set(write_files)
-    if track:
-        arguments: tuple[str | Path, ...] = (first, second, "--track-a", "1")
-    else:
-        arguments = (first, second / "data/Album/a.flac")
+    plain = tmp_path / "plain"
+    (plain / "data").mkdir(parents=True)
+    arguments, root = {
+        "file": ((first, second / "data/Album/a.flac"), first),
+        "--track-a only": ((first, second, "--track-a", "1"), second),
+        "--track-b only": ((first, second, "--track-b", "1"), first),
+        "plain directory": ((first, plain), first),
+    }[case]
 
     outcome = run("compare", *arguments)
 
     assert outcome.code == 2
     assert outcome.out == ""
-    root = second if track else first
     assert outcome.err == (
         f"copyofa: compare takes two tracks or two editions: {root} is the root of "
-        "an Evidence Set, given without a track number, and the other input is "
-        "not.\n"
+        "an Evidence Set given without a track number, but the other input is not a "
+        "set root given without one. Give two set roots without track numbers to "
+        "compare editions, or a track number with each set root to compare tracks.\n"
     )
 
 
