@@ -2,12 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/jmfontaine/copyofa/main/src/copyofa/schemas/comparison-report-6.schema.json",
   "title": "CopyOfA comparison Report, format version 6",
-  "description": "The Report that `copyofa compare --json` prints: measurements of how the audio of two preserved tracks relates. See docs/formats/comparison-report.md.",
+  "description": "The Report that `copyofa compare --json` prints: measurements of how the audio of two preserved tracks, or of two editions, relates. See docs/formats/comparison-report.md.",
   "type": "object",
   "properties": {
     "report_kind": { "const": "copyofa.comparison" },
     "format_version": { "const": 6 },
-    "scope": { "const": "tracks" },
+    "scope": { "enum": ["tracks", "editions"] },
     "copyofa_version": { "type": "string" },
     "compared_at": { "$ref": "#/$defs/timestamp" },
     "omitted": {
@@ -20,8 +20,8 @@
     "inputs": {
       "type": "object",
       "properties": {
-        "a": { "$ref": "#/$defs/input" },
-        "b": { "$ref": "#/$defs/input" }
+        "a": { "type": "object" },
+        "b": { "type": "object" }
       },
       "required": ["a", "b"],
       "additionalProperties": false
@@ -49,7 +49,13 @@
       ],
       "additionalProperties": false
     },
-    "measurements": { "$ref": "#/$defs/measurements" },
+    "measurements": { "type": "object" },
+    "absent": {
+      "type": "object",
+      "properties": { "measurements": { "type": "string" } },
+      "required": ["measurements"],
+      "additionalProperties": false
+    },
     "limitations": { "$ref": "#/$defs/sentences" }
   },
   "required": [
@@ -65,6 +71,43 @@
   ],
   "additionalProperties": false,
   "allOf": [
+    {
+      "if": { "properties": { "scope": { "const": "tracks" } } },
+      "then": {
+        "properties": {
+          "inputs": {
+            "properties": {
+              "a": { "$ref": "#/$defs/input" },
+              "b": { "$ref": "#/$defs/input" }
+            }
+          },
+          "measurements": { "$ref": "#/$defs/measurements" },
+          "absent": false
+        }
+      },
+      "else": {
+        "properties": {
+          "inputs": {
+            "properties": {
+              "a": { "$ref": "#/$defs/edition_input" },
+              "b": { "$ref": "#/$defs/edition_input" }
+            }
+          },
+          "measurements": { "$ref": "#/$defs/edition_measurements" }
+        },
+        "if": { "required": ["absent"] },
+        "then": {
+          "properties": {
+            "measurements": false,
+            "method": { "properties": { "common_sample_rate": false } }
+          }
+        },
+        "else": {
+          "required": ["measurements"],
+          "properties": { "method": { "required": ["common_sample_rate"] } }
+        }
+      }
+    },
     {
       "if": {
         "properties": {
@@ -636,6 +679,405 @@
       "additionalProperties": false,
       "if": { "not": { "required": ["absent"] } },
       "then": { "required": ["residual_db"] }
+    },
+    "edition_input": {
+      "type": "object",
+      "properties": {
+        "evidence_set": { "type": "string" },
+        "integrity_baseline": { "$ref": "#/$defs/integrity_baseline" },
+        "tracks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/edition_track" }
+        },
+        "excluded": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/excluded" }
+        },
+        "reason": { "type": "string" }
+      },
+      "required": ["integrity_baseline", "tracks", "excluded"],
+      "additionalProperties": false,
+      "if": { "required": ["reason"] },
+      "then": {
+        "properties": {
+          "tracks": { "maxItems": 0 },
+          "excluded": { "maxItems": 0 }
+        }
+      }
+    },
+    "edition_track": {
+      "type": "object",
+      "properties": {
+        "position": { "type": "integer", "minimum": 1 },
+        "path": { "type": "string" },
+        "track": { "$ref": "#/$defs/track" },
+        "outcome": { "enum": ["interpreted", "failed", "not_inspected"] },
+        "expected_digest": { "$ref": "#/$defs/digest" },
+        "observed_digest": { "$ref": "#/$defs/digest" },
+        "reason": { "type": "string" },
+        "format": { "enum": ["flac", "wav", "mp3"] },
+        "encoding": {
+          "enum": [
+            "pcm_s8",
+            "pcm_u8",
+            "pcm_16",
+            "pcm_24",
+            "pcm_32",
+            "mpeg_layer_iii"
+          ]
+        },
+        "sample_rate": { "type": "integer", "minimum": 1 },
+        "channels": { "type": "integer", "minimum": 1 },
+        "bits_per_sample": { "type": "integer", "enum": [8, 16, 24, 32] },
+        "frames": { "$ref": "#/$defs/count" },
+        "audio_digest": { "$ref": "#/$defs/audio_digest" },
+        "peak": { "type": "array", "items": { "type": "number" } },
+        "leading_silence_frames": { "$ref": "#/$defs/count" },
+        "trailing_silence_frames": { "$ref": "#/$defs/count" },
+        "flac_md5_signature": { "enum": ["matching", "differs", "absent"] },
+        "limitations": { "$ref": "#/$defs/sentences" }
+      },
+      "required": ["position", "path", "outcome"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "required": ["track"] },
+          "then": {
+            "properties": {
+              "outcome": { "enum": ["interpreted", "failed", "not_inspected"] },
+              "flac_md5_signature": false
+            }
+          }
+        },
+        {
+          "if": { "required": ["track", "path"] },
+          "then": { "required": ["expected_digest"] }
+        },
+        {
+          "if": {
+            "properties": { "outcome": { "enum": ["interpreted", "failed"] } },
+            "required": ["track", "outcome"]
+          },
+          "then": {
+            "properties": {
+              "track": { "required": ["first_frame", "frame_count"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "outcome": { "const": "interpreted" } },
+            "required": ["track", "outcome"]
+          },
+          "then": {
+            "properties": {
+              "format": { "const": "flac" },
+              "encoding": { "const": "pcm_16" },
+              "sample_rate": { "const": 44100 },
+              "channels": { "const": 2 },
+              "bits_per_sample": { "const": 16 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "outcome": { "const": "interpreted" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": [
+              "expected_digest",
+              "observed_digest",
+              "format",
+              "encoding",
+              "sample_rate",
+              "channels",
+              "frames",
+              "peak",
+              "leading_silence_frames",
+              "trailing_silence_frames"
+            ],
+            "properties": { "reason": false }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": { "enum": ["not_interpreted", "failed"] }
+            },
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": ["expected_digest", "observed_digest", "reason"],
+            "propertyNames": {
+              "enum": [
+                "position",
+                "path",
+                "track",
+                "outcome",
+                "expected_digest",
+                "observed_digest",
+                "reason"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "outcome": { "const": "not_inspected" } },
+            "required": ["outcome"]
+          },
+          "then": {
+            "required": ["reason"],
+            "propertyNames": {
+              "enum": [
+                "position",
+                "path",
+                "track",
+                "outcome",
+                "expected_digest",
+                "observed_digest",
+                "reason"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "format": { "enum": ["flac", "wav"] } },
+            "required": ["format"]
+          },
+          "then": { "required": ["bits_per_sample", "audio_digest"] }
+        },
+        {
+          "if": {
+            "properties": { "format": { "const": "mp3" } },
+            "required": ["format"]
+          },
+          "then": {
+            "required": ["limitations"],
+            "properties": {
+              "bits_per_sample": false,
+              "audio_digest": false,
+              "flac_md5_signature": false
+            }
+          }
+        }
+      ]
+    },
+    "excluded": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "outcome": { "const": "not_interpreted" },
+        "reason": { "type": "string" }
+      },
+      "required": ["path", "outcome", "reason"],
+      "additionalProperties": false
+    },
+    "edition_measurements": {
+      "type": "object",
+      "properties": {
+        "sequences": {
+          "type": "object",
+          "properties": {
+            "a": { "$ref": "#/$defs/sequence" },
+            "b": { "$ref": "#/$defs/sequence" }
+          },
+          "required": ["a", "b"],
+          "additionalProperties": false
+        },
+        "portions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/edition_portion" }
+        },
+        "correspondences": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/correspondence" }
+        },
+        "unmatched": {
+          "type": "object",
+          "properties": {
+            "a": { "$ref": "#/$defs/edition_unmatched" },
+            "b": { "$ref": "#/$defs/edition_unmatched" }
+          },
+          "required": ["a", "b"],
+          "additionalProperties": false
+        },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "a": { "$ref": "#/$defs/coverage" },
+            "b": { "$ref": "#/$defs/coverage" }
+          },
+          "required": ["a", "b"],
+          "additionalProperties": false
+        },
+        "absent": {
+          "type": "object",
+          "properties": { "portions": { "type": "string" } },
+          "required": ["portions"],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "sequences",
+        "portions",
+        "correspondences",
+        "unmatched",
+        "coverage"
+      ],
+      "additionalProperties": false,
+      "if": { "required": ["absent"] },
+      "then": {
+        "properties": {
+          "portions": { "maxItems": 0 },
+          "correspondences": { "maxItems": 0 }
+        }
+      },
+      "else": { "properties": { "portions": { "minItems": 1 } } }
+    },
+    "sequence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "position": { "type": "integer", "minimum": 1 },
+          "start_frame": { "$ref": "#/$defs/count" },
+          "frames": { "$ref": "#/$defs/count" }
+        },
+        "required": ["position", "start_frame", "frames"],
+        "additionalProperties": false
+      }
+    },
+    "edition_portion": {
+      "type": "object",
+      "properties": {
+        "rank": { "enum": ["primary", "alternate"] },
+        "a": { "$ref": "#/$defs/range" },
+        "b": { "$ref": "#/$defs/range" },
+        "offset": {
+          "type": "object",
+          "properties": {
+            "frames": { "type": "integer" },
+            "seconds": { "type": "number" }
+          },
+          "required": ["frames", "seconds"],
+          "additionalProperties": false
+        },
+        "block_gain_residual_db": { "type": "number" },
+        "segments": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/segment" }
+        },
+        "absent": {
+          "type": "object",
+          "properties": { "block_gain_residual_db": { "type": "string" } },
+          "additionalProperties": false
+        }
+      },
+      "required": ["rank", "a", "b", "offset", "segments"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "not": {
+              "required": ["absent"],
+              "properties": {
+                "absent": {
+                  "type": "object",
+                  "required": ["block_gain_residual_db"]
+                }
+              }
+            }
+          },
+          "then": { "required": ["block_gain_residual_db"] }
+        }
+      ]
+    },
+    "segment": {
+      "type": "object",
+      "properties": {
+        "a": { "$ref": "#/$defs/track_range" },
+        "b": { "$ref": "#/$defs/track_range" },
+        "downmix": { "$ref": "#/$defs/values" },
+        "channels": { "type": "array", "items": { "$ref": "#/$defs/values" } },
+        "absent": {
+          "type": "object",
+          "properties": { "channels": { "type": "string" } },
+          "additionalProperties": false
+        }
+      },
+      "required": ["a", "b", "downmix"],
+      "additionalProperties": false,
+      "if": {
+        "not": {
+          "required": ["absent"],
+          "properties": {
+            "absent": { "type": "object", "required": ["channels"] }
+          }
+        }
+      },
+      "then": { "required": ["channels"] }
+    },
+    "track_range": {
+      "type": "object",
+      "properties": {
+        "position": { "type": "integer", "minimum": 1 },
+        "start_frame": { "$ref": "#/$defs/count" },
+        "frames": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["position", "start_frame", "frames"],
+      "additionalProperties": false
+    },
+    "correspondence": {
+      "type": "object",
+      "properties": {
+        "a": { "$ref": "#/$defs/share" },
+        "b": { "$ref": "#/$defs/share" },
+        "identical_audio": { "const": true }
+      },
+      "required": ["a", "b"],
+      "additionalProperties": false
+    },
+    "share": {
+      "type": "object",
+      "properties": {
+        "position": { "type": "integer", "minimum": 1 },
+        "matched_frames": { "type": "integer", "minimum": 1 },
+        "fraction": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      },
+      "required": ["position", "matched_frames", "fraction"],
+      "additionalProperties": false
+    },
+    "edition_unmatched": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "position": { "type": "integer", "minimum": 1 },
+          "start_frame": { "$ref": "#/$defs/count" },
+          "frames": { "type": "integer", "minimum": 1 },
+          "digitally_silent": { "type": "boolean" },
+          "level_dbfs": { "type": "number" }
+        },
+        "required": ["position", "start_frame", "frames", "digitally_silent"],
+        "additionalProperties": false,
+        "if": { "properties": { "digitally_silent": { "const": false } } },
+        "then": { "required": ["level_dbfs"] },
+        "else": { "properties": { "level_dbfs": false } }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "matched_frames": { "$ref": "#/$defs/count" },
+        "frames": { "$ref": "#/$defs/count" }
+      },
+      "required": ["matched_frames", "frames"],
+      "additionalProperties": false
     }
   }
 }

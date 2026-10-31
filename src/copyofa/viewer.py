@@ -58,6 +58,11 @@ SUPPORTED_FORMAT_VERSIONS: frozenset[int] = frozenset(
 )
 """The comparison Report format versions this module renders, each with its layout."""
 
+SUPPORTED_SCOPES: frozenset[str] = frozenset(
+    scope for _, scope in _LAYOUTS if scope is not None
+)
+"""The scopes of comparison Reports from format version 6 this module renders."""
+
 _ABSENT = "absent"
 _LEFT_OUT = "left out"
 

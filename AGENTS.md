@@ -158,8 +158,10 @@ both, and every text of the Report is escaped, a lone surrogate as `\udcXX`. Eac
 Report kind and format version `view` supports needs its own rendering:
 `copyofa.viewer` maps each comparison format version it renders and, from version 6,
 each scope (`scope`, which a Report states from version 6) to its layout, derives
-`SUPPORTED_FORMAT_VERSIONS` from that mapping, so a version cannot be supported
-without a layout, and `view` refuses a valid comparison Report of any other version.
+`SUPPORTED_FORMAT_VERSIONS` and `SUPPORTED_SCOPES` from that mapping, so a version or
+a scope cannot be supported without a layout, and `view` refuses a valid comparison
+Report of any other version or scope: it renders scope `tracks` only, and refuses
+`editions`.
 
 ### Audio decoding
 
@@ -183,7 +185,16 @@ comparison method is decided in
 [ADR 0006](docs/decisions/0006-locate-matching-portions-between-tracks.md): compare
 locates matching portions with the windowed method of ADR 0006, which supersedes ADR
 0003's single global offset and overlap. `src/copyofa/locator.py` holds the method and
-its fixed parameters, which each comparison Report states.
+its fixed parameters, which each comparison Report states. Given the roots of two
+Evidence Sets without track numbers, compare compares two editions, as
+[ADR 0009](docs/decisions/0009-compare-editions-as-sequences-of-their-tracks.md)
+decides: each edition is its tracks joined in order (an acquired set's in the order of
+its Acquisition Record, an imported set's audio files in the order of their paths), the
+locator runs unchanged on the two sequences, and each portion is split at both
+editions' track boundaries into segments, measured as portions are, from which the
+Report's `scope` `editions` derives track correspondences, unmatched audio per track
+and coverage. Each track is resampled to the common rate, read from the headers
+before decoding, as soon as it is decoded.
 
 ### Disc acquisition
 

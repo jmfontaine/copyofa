@@ -206,13 +206,16 @@ def _parser() -> argparse.ArgumentParser:
 
     comparing = commands.add_parser(
         "compare",
-        help="measure how the audio of two preserved tracks relates",
+        help="measure how the audio of two preserved tracks or two editions relates",
         description=(
             "Check two tracks preserved in Evidence Sets against their Integrity "
             "Baselines, decode them, find the portions of track A that track B "
             "holds, each with its offset and measurements, and the audio of each "
-            "track that no portion covers. Exits 0 when both were compared and 1 "
-            "otherwise."
+            "track that no portion covers. Given the roots of two Evidence Sets "
+            "without track numbers, compare two editions instead, each the tracks "
+            "of its set in order: an acquired set's in the order of its Acquisition "
+            "Record, an imported set's audio files in the order of their paths. "
+            "Exits 0 when both were compared and 1 otherwise."
         ),
     )
     for name in ("input-a", "input-b"):
@@ -221,7 +224,8 @@ def _parser() -> argparse.ArgumentParser:
             metavar=name,
             help=(
                 "a FLAC, WAV or MP3 file under the data/ directory of an Evidence "
-                f"Set or, with --track-{name[-1]}, an acquired set"
+                f"Set, with --track-{name[-1]} an acquired set, or the root of an "
+                "Evidence Set as an edition"
             ),
         )
     for name in ("input-a", "input-b"):
@@ -660,12 +664,12 @@ def _retry_count(value: str) -> int:
 
 
 def _compare(args: argparse.Namespace) -> int:
-    def progress(entry: dict[str, Any]) -> None:
+    def progress(edition: str | None, entry: dict[str, Any]) -> None:
         outcome = entry["outcome"].replace("_", " ")
-        print(
-            f"Inspected {_printable(comparator.input_name(entry))}: {outcome}",
-            file=sys.stderr,
-        )
+        name = _printable(comparator.input_name(entry))
+        if edition is not None:
+            name = f"edition {edition.upper()}, {name}"
+        print(f"Inspected {name}: {outcome}", file=sys.stderr)
 
     try:
         report = comparator.compare(
@@ -676,14 +680,117 @@ def _compare(args: argparse.Namespace) -> int:
             track_b=args.track_b,
             omit_locations=args.omit_locations,
         )
-    except verifier.NotAnEvidenceSetError as error:
+    except (verifier.NotAnEvidenceSetError, comparator.InputsError) as error:
         print(f"copyofa: {error}", file=sys.stderr)
         return EXIT_USAGE
     if args.json:
         _print_json(report)
+    elif report["scope"] == comparator.EDITIONS:
+        _print_edition_comparison(report)
     else:
         _print_comparison(report)
     return EXIT_PROBLEM if comparator.found_problems(report) else EXIT_OK
+
+
+def _print_edition_comparison(report: dict[str, Any]) -> None:
+    measurements = report.get("measurements")
+    rate = report["method"].get("common_sample_rate")
+    labels: dict[str, dict[int, str]] = {}
+    for name in ("a", "b"):
+        entry = report["inputs"][name]
+        tracks = entry["tracks"]
+        labels[name] = {track["position"]: _edition_track(track) for track in tracks}
+        if "evidence_set" in entry:
+            location = entry["evidence_set"]
+        elif tracks and "track" in tracks[0]:
+            location = tracks[0]["path"]
+        elif tracks or entry["excluded"]:
+            location = _count(len(tracks) + len(entry["excluded"]), "file")
+        else:
+            location = "an Evidence Set"
+        line = f"Edition {name.upper()}: {location}, {_count(len(tracks), 'track')}"
+        if measurements is not None:
+            frames = measurements["coverage"][name]["frames"]
+            line += f", {viewer.format_duration(frames, rate)}"
+        print(_printable(line))
+        if "reason" in entry:
+            print(_printable(f"  no track: {entry['reason']}"))
+        for track in tracks:
+            if track["outcome"] != inspector.INTERPRETED:
+                outcome = track["outcome"].replace("_", " ")
+                print(
+                    _printable(
+                        f"  {labels[name][track['position']]}: {outcome}: "
+                        f"{track['reason']}"
+                    )
+                )
+        for excluded in entry["excluded"]:
+            outcome = excluded["outcome"].replace("_", " ")
+            print(
+                _printable(
+                    f"  excluded {excluded['path']}: {outcome}: {excluded['reason']}"
+                )
+            )
+    if measurements is None:
+        print(_printable(f"Not compared: {report['absent']['measurements']}"))
+        return
+    print(f"Common sample rate: {rate} Hz")
+    ranks = [portion["rank"] for portion in measurements["portions"]]
+    print(
+        f"Portions: {ranks.count(comparator.PRIMARY)} primary, "
+        f"{ranks.count(comparator.ALTERNATE)} alternate"
+    )
+    if "portions" in measurements.get("absent", {}):
+        print(f"No portion found: {measurements['absent']['portions']}")
+    for name, other in (("a", "b"), ("b", "a")):
+        coverage = measurements["coverage"][name]
+        matched, frames = coverage["matched_frames"], coverage["frames"]
+        share = f" ({_rounded(100 * matched / frames, 1):.1f}%)" if frames else ""
+        print(
+            f"Coverage of {name.upper()}: {viewer.format_duration(matched, rate)} of "
+            f"{viewer.format_duration(frames, rate)} found in {other.upper()}{share}"
+        )
+    unmatched = measurements["unmatched"]["a"]
+    for track in measurements["sequences"]["a"]:
+        position = track["position"]
+        missing = sum(
+            part["frames"] for part in unmatched if part["position"] == position
+        )
+        holders = [
+            f"{labels['b'][pair['b']['position']]} "
+            f"{viewer.format_duration(pair['a']['matched_frames'], rate)}"
+            + (", identical audio" if pair.get("identical_audio") else "")
+            for pair in measurements["correspondences"]
+            if pair["a"]["position"] == position
+        ]
+        found = viewer.format_duration(track["frames"] - missing, rate)
+        line = (
+            f"A {labels['a'][position]}: {found} of "
+            f"{viewer.format_duration(track['frames'], rate)} found in B"
+        )
+        print(_printable(line + (f": {'; '.join(holders)}" if holders else "")))
+    for name in ("a", "b"):
+        for part in measurements["unmatched"][name]:
+            print(
+                _printable(
+                    f"Unmatched in {name.upper()}, {labels[name][part['position']]}: "
+                    f"{_seconds(part, rate)}, {_level(part)}"
+                )
+            )
+
+
+def _edition_track(track: dict[str, Any]) -> str:
+    """Name a track of an edition: by number in an acquired set, else by path."""
+    if "track" in track:
+        return f"track {track['track']['number']}"
+    return track["path"]
+
+
+def _level(extent: dict[str, Any]) -> str:
+    """Format the level of an unmatched range, or say it is digital silence."""
+    if extent["digitally_silent"]:
+        return "digital silence"
+    return f"{_rounded(extent['level_dbfs'], 1):.1f} dBFS"
 
 
 def _print_comparison(report: dict[str, Any]) -> None:
@@ -724,12 +831,10 @@ def _print_comparison(report: dict[str, Any]) -> None:
         print(f"No portion found: {measurements['absent']['portions']}")
     for name in ("a", "b"):
         for unmatched in measurements["unmatched"][name]:
-            level = (
-                "digital silence"
-                if unmatched["digitally_silent"]
-                else f"{_rounded(unmatched['level_dbfs'], 1):.1f} dBFS"
+            print(
+                f"Unmatched in {name.upper()}: {_seconds(unmatched, rate)}, "
+                f"{_level(unmatched)}"
             )
-            print(f"Unmatched in {name.upper()}: {_seconds(unmatched, rate)}, {level}")
 
 
 def _seconds(extent: dict[str, Any], rate: int) -> str:
@@ -815,6 +920,15 @@ def _view(args: argparse.Namespace) -> int:
         print(
             f"copyofa: {report} is a comparison Report of format version {version}; "
             f"view supports format {supported}",
+            file=sys.stderr,
+        )
+        return EXIT_PROBLEM
+    scope = validation.document.get("scope")
+    if scope is not None and scope not in viewer.SUPPORTED_SCOPES:
+        scopes = " and ".join(sorted(viewer.SUPPORTED_SCOPES))
+        print(
+            f"copyofa: {report} is a comparison Report of scope {scope}; view "
+            f"supports comparisons of {scopes} only",
             file=sys.stderr,
         )
         return EXIT_PROBLEM

@@ -4,10 +4,12 @@
 prints a comparison Report: a JSON document measuring how the audio of two tracks
 preserved in [Evidence Sets](evidence-set.md) relates. Each input is a file in a set,
 or, with `--track-a` or `--track-b`, a track of an
-[acquired set](evidence-set.md#acquired-sets). Like every `--json` output of CopyOfA, it
-is UTF-8, whatever the locale; a path that is not valid UTF-8 keeps each invalid byte as
-a `\udcXX` escape (see [Import result](evidence-set.md#import-result)). Save it with a
-shell redirect:
+[acquired set](evidence-set.md#acquired-sets). Given the roots of two sets without
+either option, compare measures how two editions relate instead, each the tracks of
+its set (see [Comparing editions](#comparing-editions)). Like every `--json` output of
+CopyOfA, it is UTF-8, whatever the locale; a path that is not valid UTF-8 keeps each
+invalid byte as a `\udcXX` escape (see [Import result](evidence-set.md#import-result)).
+Save it with a shell redirect:
 
 ```bash
 copyofa compare "/Volumes/Archive/With Teeth/data/04 The Hand That Feeds.flac" \
@@ -15,6 +17,8 @@ copyofa compare "/Volumes/Archive/With Teeth/data/04 The Hand That Feeds.flac" \
 copyofa compare "/Volumes/Archive/Add Violence CD" \
   "/Volumes/Archive/Add Violence/data/01-01 Less Than.flac" --track-a 1 --json \
   > less-than.json
+copyofa compare "/Volumes/Archive/TDS CD" "/Volumes/Archive/TDS 2017" --json \
+  > tds.json
 ```
 
 A Report holds measurements: the portions of track A found in track B, each with its
@@ -24,6 +28,8 @@ draws no conclusion from them, such as "same master" or "match".
 records how the tracks are decoded and measured, and
 [ADR 0006](../decisions/0006-locate-matching-portions-between-tracks.md) how portions
 are located and why that method was chosen.
+[ADR 0009](../decisions/0009-compare-editions-as-sequences-of-their-tracks.md) records
+why two editions are compared as sequences of their tracks.
 
 It has six format versions, each with its JSON Schema:
 [comparison-report-6.schema.json](../../src/copyofa/schemas/comparison-report-6.schema.json)
@@ -59,8 +65,12 @@ copyofa compare <input-a> <input-b> --json --omit-locations > htf.json
 
    With `--track-a <number>`, input A is instead that track of the acquired set whose
    root is input A, and likewise `--track-b` for input B. The root must be an Evidence
-   Set, else compare exits 2. A set root given without the option is refused as any
-   path outside `data/`: compare exits 2.
+   Set, else compare exits 2. Two set roots given without either option are two
+   editions, compared as [Comparing editions](#comparing-editions) describes. A set
+   root given without its option beside any other input, such as a file or a set root
+   given with its option, exits 2 with the message
+   `compare takes two tracks or two editions: <root> is the root of an Evidence Set,
+   given without a track number, and the other input is not.`
 2. **Integrity first.** Each input is checked as `inspect` checks a file (see
    [Inspection Report format](inspection-report.md#how-inspect-works)): the Integrity
    Baseline must be usable, `manifest-sha256.txt` must list the file, and the file must
@@ -149,19 +159,73 @@ and each is a portion. The Report's `limitations` state this.
 
 Compare writes nothing into either set.
 
+## Comparing editions
+
+Given the roots of two Evidence Sets, and neither `--track-a` nor `--track-b`, compare
+compares two editions, as
+[ADR 0009](../decisions/0009-compare-editions-as-sequences-of-their-tracks.md)
+decides: each edition is the tracks of its set, joined into one sequence, and portions
+are located on the two sequences, so a portion that crosses a track boundary is found
+whole. The Report's `scope` is `editions`, and its fields are those
+[Edition comparisons](#edition-comparisons) describes.
+
+1. **Forming each edition.** An acquired set's edition is its tracks in the order of
+   its Acquisition Record, each checked and decoded as a track input is. An imported
+   set's edition is the files its manifest lists, in the order of their paths from the
+   set's root, compared by Unicode code point, each checked and decoded as a file input
+   is. A file inspect reports `not_interpreted`, such as a cover image or a format
+   CopyOfA does not decode, is excluded from the edition and listed with its outcome
+   and reason. A file that is `failed` or `not_inspected`, such as an audio file
+   modified since import, stays a track of the edition. An edition whose set's
+   Integrity Baseline is unusable, or whose Acquisition Record cannot be used, has no
+   track, and the Report says why.
+2. **Nothing measured.** When a track of either edition is not `interpreted`, or an
+   edition has no track, nothing is measured: the Report has no `measurements`, gives
+   the reason, and compare exits 1.
+3. **Common rate.** The common rate is the lowest sample rate of all tracks of both
+   editions, read before any track is decoded: 44,100 Hz for an acquired set, and the
+   rate in its header for a file. A track at a higher rate is resampled to it, as a
+   track input is, as soon as it is decoded; its samples at its own rate are not kept.
+4. **Sequences.** Each edition's tracks, mixed down, are joined in order without gap,
+   and portions are located on the two sequences as on two tracks, with the same
+   method and parameters. No search is skipped for equal Audio Digests.
+5. **Segments.** Each portion is split at every track boundary of either edition that
+   falls inside it. Each segment is measured as a portion of two tracks is: the
+   correlation, the gain and the residual on the downmix, and for each channel when its
+   two tracks have the same channel count, with the residual of each one-second window.
+   The residual after the per-block gains stays per portion.
+6. **Correspondences, unmatched audio and coverage.** The primary segments pair each
+   track of A with the tracks of B that hold its audio, and give how much of each
+   track the pair shares. The ranges of each track that no primary portion covers are
+   unmatched, with whether each is digitally silent and otherwise its level. Each
+   edition's coverage is how much of its sequence primary portions cover. Primary
+   portions can overlap where audio repeats, so every count of matched audio counts a
+   frame once.
+
+Where the speeds of two editions differ, even by a few parts per million, as between
+different masters, portions are short and coverage stays partial. Tracks that match do
+not establish that the editions are equivalent. The Report's `limitations` state both.
+
+**Known limit.** Time grows with the product of the editions' lengths, and memory with
+their sum. In ADR 0009's spike, the search over two CDs of about 65 min took about 2.5
+minutes at a peak of 4.9 GB to 5.3 GB, and 5.6 GB for a CD against a 96 kHz download,
+before the per-channel measurements. Editions much longer than a CD, such as a box set
+imported as one set, may exhaust memory.
+
 ## Fields
 
 | Field | Content |
 | --- | --- |
 | `report_kind` | Always `copyofa.comparison`. |
 | `format_version` | The version of this format, `6`. A later change to the fields increments it. |
-| `scope` | What the Report compares: always `tracks`, two tracks. |
+| `scope` | What the Report compares: `tracks`, two tracks, or `editions`, two editions (see [Edition comparisons](#edition-comparisons)). The fields below are those of `tracks`. |
 | `copyofa_version` | The version of CopyOfA that ran the comparison. |
 | `compared_at` | The comparison time in UTC, such as `2026-10-25T18:30:00Z`. |
 | `omitted` | The JSON Pointers of the values the Report leaves out, each of `/inputs/a/evidence_set` and `/inputs/b/evidence_set` at most once; `[]` when it leaves out nothing. See [Leaving out Evidence Set locations](#leaving-out-evidence-set-locations). |
 | `inputs` | `a` and `b`: each input, described below. |
 | `method` | How the tracks were decoded, resampled and searched for portions, described below. |
 | `measurements` | The measurements, described below; absent when either input is not `interpreted`. |
+| `absent` | Only in a comparison of editions: `measurements`, the reason they are absent; present exactly when they are. |
 | `limitations` | Sentences stating what the whole Report does not establish or did not examine. |
 
 ### Inputs
@@ -348,6 +412,77 @@ A value that the audio leaves undefined is absent, never NaN or infinity:
 | `gain_db` | Track B is zero over the portion, or the gain is exactly zero. |
 | `residual_db`, `residual_windows` | The audio is identical, or the gain is undefined. |
 | `residual_db` of the portion or of a window | Track A is zero over it, or *a* − *g*·*b* is exactly zero over it. |
+
+### Edition comparisons
+
+A Report of `scope` `editions` has the fields above, with these differences.
+
+Each of `inputs.a` and `inputs.b` is an edition, and holds:
+
+- `evidence_set` and `integrity_baseline`, as an input of two tracks does.
+- `tracks`: one entry per track of the edition, in order, each with its `position`,
+  from 1, and the fields of an input of two tracks other than `evidence_set` and
+  `integrity_baseline`: those of a track input, `track` and the disc image's `path`
+  among them, for an acquired set, and those of a file input for an imported set. A
+  track's `outcome` is `interpreted`, `failed` or `not_inspected`.
+- `excluded`: the files of an imported set left out of its edition, in order, each
+  with `path`, `outcome`, always `not_interpreted`, and `reason`; `[]` for an acquired
+  set.
+- `reason`: present only when the edition has no track because its set's Integrity
+  Baseline is unusable, `the Integrity Baseline is unusable`, or its Acquisition
+  Record cannot be used, with the reason inspect gives `disc`.
+
+`method.common_sample_rate` is the lowest sample rate of all tracks of both editions,
+and absent when nothing is measured.
+
+When nothing is measured, the Report has no `measurements`, and its `absent` holds
+`measurements`, the reason: for an edition with no track, `edition A has no track`,
+followed by `:` and the edition's `reason` when it has one; for an edition with tracks
+that are not interpreted, `the track at position 2 of edition B is not interpreted` or
+`the tracks at positions 2 and 5 of edition B are not interpreted`. When both editions
+give a reason, the two are joined by `; `.
+
+Otherwise `measurements` measures edition B against edition A, with frames counted at
+`common_sample_rate`:
+
+| Field | Content |
+| --- | --- |
+| `sequences` | `a` and `b`: each track of the edition, in order, with its `position`, its `start_frame` in the edition's sequence, and its length in `frames`. |
+| `portions` | The portions found on the two sequences, each described below; `[]` when there is none. Primary portions come first, then alternates, each in order of A. |
+| `correspondences` | Each pair of a track of A and a track of B that primary segments join, described below, in order of A's position, then of B's. |
+| `unmatched` | `a` and `b`: the ranges of the edition's tracks that no primary portion covers, in order, each with its track's `position` and the fields of an unmatched range of two tracks, its `start_frame` counted from the start of its track. |
+| `coverage` | `a` and `b`: `matched_frames`, the frames of the edition's sequence that primary portions cover, each counted once, and `frames`, the frames of its sequence. |
+| `absent` | `portions`, the reason `portions` is empty; present exactly when it is. The reasons are those of two tracks, naming an edition instead: `edition A has no frames`, `edition A is shorter than one window of 5 s`, `the downmix of edition A is zero throughout`, the same for B, or `no portion was found`. |
+
+Each entry of `portions` holds `rank`, `a`, `b`, `offset`, `block_gain_residual_db`
+and `absent` as a portion of two tracks does, its ranges being in the two sequences,
+and instead of `downmix` and `channels`:
+
+- `segments`: the portion split at every track boundary of either edition inside it,
+  in order, each with:
+  - `a` and `b`: the segment's track in each edition, by its `position`, and the
+    segment's range in that track, as its `start_frame` from the track's start and its
+    length in `frames`, the same for both;
+  - `downmix` and `channels`: the values of a portion of two tracks, measured over the
+    segment; `channels` is present only when the two tracks have the same channel
+    count;
+  - `absent`: `channels`, why it is absent, when it is.
+
+The reasons of a segment's absent values name the segment where those of a portion of
+two tracks name the portion, such as `track A is constant over the segment`.
+
+Each entry of `correspondences` holds:
+
+- `a` and `b`: the track's `position`, `matched_frames`, the frames of it that the
+  pair's primary segments cover, each counted once, and `fraction`, those frames over
+  the track's frames.
+- `identical_audio`: `true` when both tracks have an Audio Digest and the digests are
+  equal; absent otherwise.
+
+`limitations` holds the sentences of a comparison of two tracks, then three more: that
+each edition is compared as its tracks joined in order without gap, that where the
+speeds of two editions differ portions are short and coverage stays partial, and that
+tracks that match do not establish that the editions are equivalent.
 
 ## Leaving out Evidence Set locations
 
@@ -741,7 +876,9 @@ scope `tracks` with version 5's layout, plus its scope. It also refuses a valid
 comparison Report of any other format version, such as one a later CopyOfA printed,
 rather than show it with a layout that could leave fields out: it prints nothing on
 stdout and one line on stderr naming the file, its format version and the versions
-view supports, and exits 1.
+view supports, and exits 1. It refuses a version 6 Report of scope `editions` the same
+way, as it has no layout for that scope: the line names the file and its scope, and
+says view supports comparisons of tracks only.
 
 The page shows every field of the Report with its value as the Report records it, and
 adds only labels and units, for each track a duration computed from its frames and
@@ -790,9 +927,9 @@ override, or a lone surrogate for a path byte that is not valid UTF-8, appears a
 escape, such as `\udc80`; spaces such as U+00A0 appear as they are.
 
 View exits 0 when it printed the page, and 1 when the file cannot be read or the
-Report is invalid, unsupported, not a comparison Report, or of a format version view
-does not render, with the reason on stderr and nothing on stdout. It exits 2 for
-invalid arguments and 130 when canceled with Ctrl-C. It also exits 1, with
+Report is invalid, unsupported, not a comparison Report, or of a format version or a
+scope view does not render, with the reason on stderr and nothing on stdout. It exits
+2 for invalid arguments and 130 when canceled with Ctrl-C. It also exits 1, with
 `copyofa: stdout closed` on stderr, when stdout is closed before or while it prints the
 page. It has no `--json` option and writes no file.
 
@@ -800,11 +937,13 @@ page. It has no `--json` option and writes no file.
 
 `copyofa compare` exits 0 when both inputs are `interpreted` and were compared, whether
 or not it found a portion, even when a value is absent. It exits 1 when either input is
-`not_inspected`, `failed` or
-`not_interpreted`, and still prints its result or Report, without measurements. It
-exits 2, printing nothing on stdout, when a file is not under the `data/` directory
-of an Evidence Set, an input given with `--track-a` or `--track-b` is not an Evidence
-Set, or the arguments are invalid, such as a track number that is not a whole number
+`not_inspected`, `failed` or `not_interpreted`, and still prints its result or Report,
+without measurements. For two editions, it exits 0 when they were measured, and 1 when
+nothing was measured: a track of either edition is not `interpreted`, or an edition
+has no track. It exits 2, printing nothing on stdout, when a file is not under the
+`data/` directory of an Evidence Set, an input given with `--track-a` or `--track-b` is
+not an Evidence Set, a set root is given without its option and the other input is not
+one, or the arguments are invalid, such as a track number that is not a whole number
 from 1, and 130 when canceled with Ctrl-C. It also exits 1, with
 `copyofa: stdout closed` on stderr, when stdout is closed before or while it prints its
 result or Report. mpg123 may write notes about damaged MP3 frames to stderr.
