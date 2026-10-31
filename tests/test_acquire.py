@@ -791,6 +791,61 @@ def test_acquire_cuts_given_audio_into_tracks_at_their_boundaries(
             assert track["audio_digest"] == digest_of(audio[start:end])
 
 
+def test_acquire_keeps_the_errors_of_a_disc_of_given_audio(
+    run: Run, redumper: StandIn, tmp_path: Path
+) -> None:
+    audio = random.Random(11).randbytes(6 * 588 * 4)
+    (redumper.directory / "audio.raw").write_bytes(audio)
+    redumper.configure(
+        audio="audio.raw",
+        tracks=[{"frames": 2 * 588}, {"frames": 4 * 588}],
+        errors={"2": [[100, 37, 0], [300, 20, 1]]},
+    )
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination)
+
+    assert outcome.code == 1
+    assert "the disc was read with errors" in outcome.err
+    record = record_of(destination)
+    assert [track["error_ranges"] for track in record["tracks"]] == [
+        [],
+        [
+            {"offset_frames": 100, "frame_count": 37, "state": "not_read"},
+            {"offset_frames": 300, "frame_count": 20, "state": "c2_error"},
+        ],
+    ]
+    # The image holds zeros where the drive read nothing, and the given audio
+    # elsewhere, the frames read with C2 errors included.
+    expected = bytearray(audio[2 * 588 * 4 :])
+    expected[100 * 4 : 137 * 4] = bytes(37 * 4)
+    track = record["tracks"][1]
+    first = track["first_frame"] * 4
+    image = decode(destination, "data/disc.scram.flac")
+    assert image[first : first + track["frame_count"] * 4] == bytes(expected)
+    assert track["audio_digest"] == digest_of(bytes(expected))
+
+
+def test_acquire_fails_when_the_given_audio_does_not_hold_the_tracks(
+    run: Run, redumper: StandIn, tmp_path: Path
+) -> None:
+    (redumper.directory / "audio.raw").write_bytes(bytes(3 * 588 * 4))
+    redumper.configure(
+        audio="audio.raw", tracks=[{"frames": 2 * 588}, {"frames": 2 * 588}]
+    )
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert (
+        "copyofa: Failed: redumper exited with status 1. Its last message: error: "
+        "the tracks hold 2352 frames, 9408 bytes, but audio.raw holds 7056 bytes"
+    ) in outcome.err
+    assert left_behind(destination) == []
+
+
 @pytest.mark.parametrize(
     ("charset", "expected"),
     [(0x80, {"title": "日本のミュージック"}), (0x81, {})],
