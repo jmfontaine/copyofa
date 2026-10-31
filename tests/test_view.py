@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from conftest import (
+    DAMAGED_ERRORS,
     RATE,
     closed_stdout,
     run_without_stdout,
@@ -146,11 +147,12 @@ VERSION_5_CASES = sorted(
 VERSION_6_CASES = ["damaged_tracks", "files"]
 """Version 6 Reports that the tests have compare print, as version 5's cases of the
 same names."""
-EDITION_CASES = ["measured", "not measured"]
+EDITION_CASES = ["measured", "not measured", "damaged"]
 """Version 6 Reports of scope editions that the tests have compare print: `measured`
 (an acquired set against an imported set of its two tracks' audio as 48 kHz files,
 beside a cover image), `not measured` (an imported set against one holding only a
-cover image, so no track)."""
+cover image, so no track), `damaged` (a set acquired with error ranges against
+itself, its tracks too short for any portion)."""
 
 
 @pytest.fixture
@@ -248,12 +250,14 @@ def editions(
         if name == "measured":
             a = acquire(make_acquired_set, redumper, [P, Q])
             b = make_set(write_files)
+        elif name == "damaged":
+            a = b = make_acquired_set(code=1, errors=DAMAGED_ERRORS)
         else:
             assert name == "not measured"
             a = make_set(write_files)
             b = make_set(cover_only)
         outcome = run("compare", a, b, "--json")
-        assert outcome.code == (0 if name == "measured" else 1), outcome.err
+        assert outcome.code == (1 if name == "not measured" else 0), outcome.err
         path = tmp_path / f"editions-{name.replace(' ', '_')}.json"
         path.write_text(outcome.out, encoding="utf-8")
         report = json.loads(outcome.out)
@@ -894,6 +898,53 @@ def test_view_says_why_the_editions_were_not_measured(
         "1 file, listed below",
         "1 file, listed below",
     ]
+
+
+def test_view_shows_the_error_ranges_of_a_track_of_an_edition(
+    run: Run, editions: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = editions("damaged")
+
+    page = view(run, path)
+
+    for name in "ab":
+        for track in report["inputs"][name]["tracks"]:
+            heading = f"Track of edition {name.upper()} at position {track['position']}"
+            ranges = track["track"]["error_ranges"]
+            assert ranges
+            noun = "range" if len(ranges) == 1 else "ranges"
+            assert page.row(heading, "Error ranges of the track") == [
+                f"{len(ranges)} {noun}, listed below"
+            ]
+            assert page.tables[f"{heading}: error ranges"][1:] == [
+                [
+                    number(extent["offset_frames"]),
+                    number(extent["frame_count"]),
+                    extent["state"],
+                ]
+                for extent in ranges
+            ]
+
+
+def test_view_says_why_editions_have_no_portion(
+    run: Run, editions: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = editions("damaged")
+    measurements = report["measurements"]
+    assert measurements["portions"] == []
+    assert measurements["correspondences"] == []
+
+    page = view(run, path)
+
+    assert page.row("Overview", "Portions") == [
+        f"absent: {measurements['absent']['portions']}"
+    ]
+    assert "No correspondence." in page.nodes
+    assert "Portions" not in page.tables
+    assert not any(heading.startswith("Portion ") for heading in page.tables)
+    assert page.row(
+        "Coverage", "Frames found in the other edition, each counted once"
+    ) == ["0", "0"]
 
 
 def test_view_shows_an_unmatched_range_of_a_track_the_sequence_does_not_hold(
