@@ -29,7 +29,7 @@ sets of *The Downward Spiral* CD and a 24-bit, 96 kHz download of its 2017 editi
 - **A 15-track edition, with a bonus track inserted as track 10:** two primary
   portions, before and after the bonus track, at offsets 294.3 s apart, the bonus
   track lasting 294.8 s. The first 19 s of *A Warm Place* matched nowhere in the other
-  edition; compare on that pair of tracks alone found the same.
+  edition; compare on that pair of tracks alone found the same boundary.
 - **The same disc read twice, once with C2 errors left:** one portion over the whole
   disc, at a residual of −96.6 dB.
 - **The 2017 download, whose audio differs from the CD's:** 133 primary portions
