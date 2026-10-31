@@ -241,21 +241,17 @@ the collector already owns.
 
 ### Now
 
-- **[v0.8.0](https://github.com/jmfontaine/copyofa/milestone/8): Acquire Damaged
-  Discs** — Acquire Audio and Record Its Origins; Preserve Evidence Throughout Its
-  Lifetime. S1 for a disc that keeps errors after acquire re-reads it: the disc is
-  kept as the drive read it, and the record, inspect, compare and export say which
-  frames of each track were not read successfully. Specified in
-  [brief 0006](briefs/0006-acquire-damaged-discs.md), with the reading decided in
-  [ADR 0008](decisions/0008-keep-discs-with-read-errors-as-read.md).
+- **[v0.9.0](https://github.com/jmfontaine/copyofa/milestone/9): Compare Editions** —
+  Compare and Discover Relationships; Share and Evaluate Findings. S4: compare takes
+  two Evidence Sets as editions, locates portions across their joined tracks, and
+  reports per track which audio of one edition the other holds, where their
+  boundaries differ and what only one holds. Specified in
+  [brief 0007](briefs/0007-compare-editions.md), with the method decided in
+  [ADR 0009](decisions/0009-compare-editions-as-sequences-of-their-tracks.md).
 
 ### Next
 
-- **Compare Editions** — Compare and Discover Relationships; Share and Evaluate
-  Findings. S4, built on track comparison and the portions it locates since v0.6.0:
-  the tracks of two editions can differ in length and content, as those of a CD and a
-  download of *Add Violence* do, and a spike located each CD track in the whole
-  download.
+None planned; the v0.9.0 release review chooses it from Later.
 
 ### Later
 
@@ -269,6 +265,11 @@ the collector already owns.
   export, delivered for acquired CDs in v0.5.0, for imported files too.
 - **Find Related Audio Among Selected Material** — Compare and Discover Relationships.
   S7.
+- **Compare Masters That Differ in Speed** — Compare and Discover Relationships. S3
+  and S4 for audio whose speed differs by a few parts per million: ADR 0006's portions
+  hold one offset, so such audio gives many short portions. In ADR 0009's spike, five
+  tracks of the 2017 download of *The Downward Spiral* drift against its CD and match
+  it only in short portions.
 - **Repair Limited Archive Damage Using Optional Recovery Information** — Preserve
   Evidence Throughout Its Lifetime. S6.
 
