@@ -4,7 +4,9 @@ import hashlib
 import json
 import lzma
 import os
+import random
 import re
+from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -761,6 +763,32 @@ def test_acquire_reads_ten_tracks_a_silent_first_track_and_lead_track_files(
     stored = {entry["original_name"] for entry in record["stored_files"]}
     assert "disc_09.cue" in stored
     assert not any(name.endswith(".bin") for name in stored)
+
+
+def test_acquire_cuts_given_audio_into_tracks_at_their_boundaries(
+    run: Run, redumper: StandIn, tmp_path: Path
+) -> None:
+    # One disc's audio, split two ways: tracks at sectors 0, 4 and 9, then at
+    # sectors 0, 2, 7 and 10.
+    audio = random.Random(7).randbytes(12 * 588 * 4)
+    (redumper.directory / "audio.raw").write_bytes(audio)
+    for name, starts in (("Three", [0, 4, 9]), ("Four", [0, 2, 7, 10])):
+        bounds = [588 * 4 * sector for sector in [*starts, 12]]
+        redumper.configure(
+            audio="audio.raw",
+            tracks=[{"frames": (end - start) // 4} for start, end in pairwise(bounds)],
+        )
+        destination = tmp_path / name
+
+        outcome = run("acquire", "--to", destination)
+
+        assert outcome.code == 0, outcome.err
+        record = record_of(destination)
+        image = decode(destination, "data/disc.scram.flac")
+        for track, (start, end) in zip(record["tracks"], pairwise(bounds), strict=True):
+            first = track["first_frame"] * 4
+            assert image[first : first + track["frame_count"] * 4] == audio[start:end]
+            assert track["audio_digest"] == digest_of(audio[start:end])
 
 
 @pytest.mark.parametrize(

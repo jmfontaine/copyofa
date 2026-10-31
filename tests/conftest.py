@@ -245,8 +245,11 @@ DISC: dict[str, Any] = {
     # zeros), corrected (the errors a refine stage corrected, as media_errors gives
     # them), lead_track_files (write the lead-in and lead-out as tracks 0 and A),
     # cd_text_languages (language codes after the first, each with a further cue
-    # sheet), cd_text_charset (the CD-Text character code) and hang. A track may
-    # also be silent.
+    # sheet), cd_text_charset (the CD-Text character code), hang, and audio (the
+    # name of a file beside the configuration holding the disc's audio as raw 16-bit
+    # little-endian stereo frames, which the tracks cut in order: their frames must
+    # sum to its frames, else `redumper disc` fails). A track may also be silent, and
+    # leading_zero_frames and silent apply only to audio derived from its number.
 }
 
 _CD_TEXT_CODECS = {0x00: "latin-1", 0x01: "ascii", 0x80: "cp932"}
@@ -270,18 +273,48 @@ class SyntheticDisc:
     track_files: list[str]
 
 
+class GivenAudioError(ValueError):
+    """A configuration's audio does not hold the frames of its tracks."""
+
+
+def _given_audio(config: dict[str, Any]) -> bytes | None:
+    """Return the disc's audio the configuration gives, or None to derive it."""
+    if "audio" not in config:
+        return None
+    path = Path(os.environ["REDUMPER_STAND_IN"]).parent / config["audio"]
+    audio = path.read_bytes()
+    frames = sum(track["frames"] for track in config["tracks"])
+    if len(audio) != frames * 4:
+        message = (
+            f"the tracks hold {frames} frames, {frames * 4} bytes, "
+            f"but {config['audio']} holds {len(audio)} bytes"
+        )
+        raise GivenAudioError(message)
+    return audio
+
+
 def synthetic_disc(config: dict[str, Any]) -> SyntheticDisc:
-    """Build the image, state and tracks of a disc configuration, reproducibly."""
+    """Build the image, state and tracks of a disc configuration, reproducibly.
+
+    Each track's audio is cut from the configuration's audio when it gives one,
+    else derived from the track's number.
+    """
     tracks = []
     errors = config.get("errors", {})
+    given = _given_audio(config)
+    start = 0
     for number, track in enumerate(config["tracks"], start=1):
-        zeros = (
-            track["frames"]
-            if track.get("silent")
-            else track.get("leading_zero_frames", 0)
-        )
-        noise = random.Random(number).randbytes((track["frames"] - zeros) * 4)
-        data = bytearray(bytes(zeros * 4) + noise)
+        if given is None:
+            zeros = (
+                track["frames"]
+                if track.get("silent")
+                else track.get("leading_zero_frames", 0)
+            )
+            noise = random.Random(number).randbytes((track["frames"] - zeros) * 4)
+            data = bytearray(bytes(zeros * 4) + noise)
+        else:
+            data = bytearray(given[start * 4 : (start + track["frames"]) * 4])
+            start += track["frames"]
         # A sector the drive never read is never written to the image: zeros.
         for first, count, value in errors.get(str(number), []):
             if value == 0:
@@ -522,7 +555,11 @@ def stand_in_redumper(arguments: list[str]) -> int:
         return 0
     if arguments[:1] != ["disc"]:
         return 2
-    disc = synthetic_disc(config)
+    try:
+        disc = synthetic_disc(config)
+    except GivenAudioError as error:
+        print(f"error: {error}")
+        return 1
     log = _log(config, disc, arguments)
     if config.get("hang"):
         (config_path.parent / "pid").write_text(str(os.getpid()))
