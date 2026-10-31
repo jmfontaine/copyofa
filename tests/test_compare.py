@@ -427,7 +427,8 @@ def test_compare_report_content(run: Run, make_set: MakeSet) -> None:
         "Inspected data/Album/b.flac: interpreted",
     ]
     assert report["report_kind"] == "copyofa.comparison"
-    assert report["format_version"] == 5
+    assert report["format_version"] == 6
+    assert report["scope"] == "tracks"
     assert report["omitted"] == []
     assert report["copyofa_version"] == copyofa.__version__
     compared_at = datetime.strptime(
@@ -482,7 +483,7 @@ def test_compare_omit_locations_leaves_out_where_each_set_is(
     outcome, report = compare(run, a / "a.flac", b / "b.flac", "--omit-locations")
 
     assert outcome.code == 0, outcome.err
-    assert report["format_version"] == 5
+    assert report["format_version"] == 6
     assert report["omitted"] == ["/inputs/a/evidence_set", "/inputs/b/evidence_set"]
     for name in "ab":
         entry = report["inputs"][name]
@@ -679,7 +680,7 @@ def test_compare_measures_a_track_of_an_acquired_set(
     )
 
     assert outcome.code == 0, outcome.err
-    assert report["format_version"] == 5
+    assert report["format_version"] == 6
     record = json.loads((acquired_set / "copyofa/acquisition-record.json").read_bytes())
     recorded = record["tracks"][1]
     a = report["inputs"]["a"]
@@ -732,7 +733,7 @@ def test_compare_records_the_error_ranges_of_each_track(
     )
 
     assert outcome.code == unaffected.code == 0, outcome.err
-    assert report["format_version"] == 5
+    assert report["format_version"] == 6
     record = json.loads((damaged_set / "copyofa/acquisition-record.json").read_bytes())
     assert report["inputs"]["a"]["track"]["error_ranges"] == [
         {"offset_frames": 100, "frame_count": 37, "state": "not_read"},
@@ -757,7 +758,7 @@ def test_compare_records_no_error_ranges_from_a_version_1_record(
     )
 
     assert outcome.code == 0, outcome.err
-    assert report["format_version"] == 5
+    assert report["format_version"] == 6
     for name in "ab":
         assert report["inputs"][name]["outcome"] == "interpreted"
         assert "error_ranges" not in report["inputs"][name]["track"]

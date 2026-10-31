@@ -42,16 +42,20 @@ class _Layout:
     """Whether the page shows the error ranges of each track input."""
 
 
-_LAYOUTS = {
-    1: _Layout(_Measurements.ALIGNMENT, error_ranges=False),
-    2: _Layout(_Measurements.ALIGNMENT, error_ranges=False),
-    3: _Layout(_Measurements.ALIGNMENT, error_ranges=False),
-    4: _Layout(_Measurements.PORTIONS, error_ranges=False),
-    5: _Layout(_Measurements.PORTIONS, error_ranges=True),
+_LAYOUTS: dict[tuple[int, str | None], _Layout] = {
+    (1, None): _Layout(_Measurements.ALIGNMENT, error_ranges=False),
+    (2, None): _Layout(_Measurements.ALIGNMENT, error_ranges=False),
+    (3, None): _Layout(_Measurements.ALIGNMENT, error_ranges=False),
+    (4, None): _Layout(_Measurements.PORTIONS, error_ranges=False),
+    (5, None): _Layout(_Measurements.PORTIONS, error_ranges=True),
+    (6, comparator.TRACKS): _Layout(_Measurements.PORTIONS, error_ranges=True),
 }
-"""The layout of each comparison Report format version this module renders."""
+"""The layout of each comparison Report format version this module renders and, from
+version 6, of each scope of that version: a version before 6 has no scope, None."""
 
-SUPPORTED_FORMAT_VERSIONS = frozenset(_LAYOUTS)
+SUPPORTED_FORMAT_VERSIONS: frozenset[int] = frozenset(
+    version for version, _ in _LAYOUTS
+)
 """The comparison Report format versions this module renders, each with its layout."""
 
 _ABSENT = "absent"
@@ -81,12 +85,16 @@ def render(report: dict[str, Any], sha256: str) -> str:
     the Report is escaped, and a character that is not printable, such as a lone
     surrogate (a path byte that is not valid UTF-8), is shown as its escape, such as
     `\\udc80`, so the page is valid UTF-8 and inert. Raises ValueError for a format
-    version not in SUPPORTED_FORMAT_VERSIONS.
+    version not in SUPPORTED_FORMAT_VERSIONS, or a scope it has no layout for.
     """
     version = report["format_version"]
-    if version not in SUPPORTED_FORMAT_VERSIONS:
-        raise ValueError(f"cannot render comparison Report format version {version}")
-    layout = _LAYOUTS[version]
+    scope = report.get("scope")
+    layout = _LAYOUTS.get((version, scope))
+    if layout is None:
+        raise ValueError(
+            f"cannot render comparison Report format version {version}"
+            + ("" if scope is None else f" of scope {scope}")
+        )
     inputs = report["inputs"]
     title = (
         f"Comparison of {comparator.input_name(inputs['a'])} and "
@@ -131,23 +139,20 @@ def render(report: dict[str, Any], sha256: str) -> str:
 
 
 def _report_section(report: dict[str, Any], sha256: str) -> list[str]:
-    return [
-        "<h2>Report</h2>",
-        _table(
-            None,
-            [
-                ("SHA-256 of the Report file", f"<code>{_text(sha256)}</code>"),
-                ("Report kind", _show(report, "report_kind")),
-                ("Format version", _show(report, "format_version")),
-                (
-                    "CopyOfA version that ran the comparison",
-                    _show(report, "copyofa_version"),
-                ),
-                ("Compared at (UTC)", _show(report, "compared_at")),
-                ("Left out of the Report (JSON Pointers)", _list(report, "omitted")),
-            ],
-        ),
+    rows = [
+        ("SHA-256 of the Report file", f"<code>{_text(sha256)}</code>"),
+        ("Report kind", _show(report, "report_kind")),
+        ("Format version", _show(report, "format_version")),
     ]
+    # From format version 6, which states what the Report compares.
+    if "scope" in report:
+        rows.append(("Scope", _show(report, "scope")))
+    rows += [
+        ("CopyOfA version that ran the comparison", _show(report, "copyofa_version")),
+        ("Compared at (UTC)", _show(report, "compared_at")),
+        ("Left out of the Report (JSON Pointers)", _list(report, "omitted")),
+    ]
+    return ["<h2>Report</h2>", _table(None, rows)]
 
 
 def _inputs_section(inputs: dict[str, Any], *, error_ranges: bool) -> list[str]:

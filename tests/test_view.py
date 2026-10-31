@@ -133,10 +133,18 @@ CASES = sorted(path.stem for path in (REPORTS / "comparison-3").glob("*.json"))
 VERSION_4_CASES = sorted(
     path.stem for path in (REPORTS / "comparison-4").glob("*.json")
 )
-VERSION_5_CASES = ["damaged_tracks", "files"]
-"""Version 5 Reports that the tests have compare print: `damaged_tracks` (tracks 1
-and 2 of an acquired set, each with error ranges) and `files` (two identical FLAC
-files, so no input is a track)."""
+# Version 5 comparison Reports that compare 0.9.0.dev0 printed, kept as they were so
+# the page keeps rendering version 5: `damaged_tracks` (tracks 1 and 2 of an acquired
+# set, each with error ranges), `files` (two identical FLAC files, so no input is a
+# track), `portions` (B is A's first 5 s, 2 s later, in 24-bit WAV), `too_short`
+# (tracks shorter than a window) and `acquired_track` (A is track 1 of an acquired
+# set, B its image).
+VERSION_5_CASES = sorted(
+    path.stem for path in (REPORTS / "comparison-5").glob("*.json")
+)
+VERSION_6_CASES = ["damaged_tracks", "files"]
+"""Version 6 Reports that the tests have compare print, as version 5's cases of the
+same names."""
 
 
 @pytest.fixture
@@ -174,15 +182,22 @@ def test_every_case_is_stored() -> None:
         "portions",
         "too_short",
     ]
+    assert VERSION_5_CASES == [
+        "acquired_track",
+        "damaged_tracks",
+        "files",
+        "portions",
+        "too_short",
+    ]
 
 
 @pytest.fixture
-def version_5(
+def version_6(
     run: Run, make_set: MakeSet, damaged_set: Path, tmp_path: Path
 ) -> Callable[[str], tuple[Path, dict[str, Any]]]:
-    """Have compare print a version 5 Report of a case; return it."""
+    """Have compare print a version 6 Report of a case; return it."""
 
-    def _version_5(name: str) -> tuple[Path, dict[str, Any]]:
+    def _version_6(name: str) -> tuple[Path, dict[str, Any]]:
         if name == "damaged_tracks":
             arguments: tuple[str | Path, ...] = (
                 damaged_set,
@@ -204,13 +219,13 @@ def version_5(
             arguments = tuple(path / "data/Album/a.flac" for path in sets)
         outcome = run("compare", *arguments, "--json")
         assert outcome.code == 0, outcome.err
-        path = tmp_path / f"{name}-5.json"
+        path = tmp_path / f"{name}-6.json"
         path.write_text(outcome.out, encoding="utf-8")
         report = json.loads(outcome.out)
-        assert report["format_version"] == 5
+        assert (report["format_version"], report["scope"]) == (6, "tracks")
         return path, report
 
-    return _version_5
+    return _version_6
 
 
 @pytest.fixture(
@@ -218,18 +233,20 @@ def version_5(
         *CASES,
         *(f"version 4: {name}" for name in VERSION_4_CASES),
         *(f"version 5: {name}" for name in VERSION_5_CASES),
+        *(f"version 6: {name}" for name in VERSION_6_CASES),
     ]
 )
 def case(
     request: pytest.FixtureRequest,
     report_of: Callable[..., tuple[Path, dict[str, Any]]],
-    version_5: Callable[[str], tuple[Path, dict[str, Any]]],
+    version_6: Callable[[str], tuple[Path, dict[str, Any]]],
 ) -> tuple[Path, dict[str, Any]]:
     name = request.param
-    if name.startswith("version 4: "):
-        return report_of(name.removeprefix("version 4: "), 4)
-    if name.startswith("version 5: "):
-        return version_5(name.removeprefix("version 5: "))
+    for version in (4, 5):
+        if name.startswith(f"version {version}: "):
+            return report_of(name.removeprefix(f"version {version}: "), version)
+    if name.startswith("version 6: "):
+        return version_6(name.removeprefix("version 6: "))
     return report_of(name)
 
 
@@ -708,6 +725,31 @@ def test_render_refuses_a_format_version_it_has_no_layout_for(
         viewer.render(report, "0" * 64)
 
 
+def test_render_refuses_a_scope_it_has_no_layout_for(
+    version_6: Callable[[str], tuple[Path, dict[str, Any]]],
+) -> None:
+    _, report = version_6("files")
+    report["scope"] = "albums"
+
+    with pytest.raises(ValueError, match="format version 6 of scope albums"):
+        viewer.render(report, "0" * 64)
+
+
+def test_view_shows_the_scope_of_a_report_of_format_version_6(
+    run: Run,
+    report_of: Callable[..., tuple[Path, dict[str, Any]]],
+    version_6: Callable[[str], tuple[Path, dict[str, Any]]],
+) -> None:
+    path, _ = version_6("files")
+    stored, _ = report_of("files", 5)
+
+    page = view(run, path)
+    earlier = view(run, stored)
+
+    assert page.row("Report", "Scope") == ["tracks"]
+    assert "Scope" not in [row[0] for row in earlier.tables["Report"]]
+
+
 def test_view_writes_utf8_whatever_the_locale(
     report_of: Callable[[str], tuple[Path, dict[str, Any]]],
 ) -> None:
@@ -1132,10 +1174,17 @@ def test_view_shows_portions_of_a_report_without_a_common_sample_rate(
     assert page.tables["Unmatched audio: track B"][1][2] == unavailable
 
 
+@pytest.mark.parametrize("version", [5, 6])
 def test_view_shows_the_error_ranges_of_each_track_input(
-    run: Run, version_5: Callable[[str], tuple[Path, dict[str, Any]]]
+    run: Run,
+    report_of: Callable[..., tuple[Path, dict[str, Any]]],
+    version_6: Callable[[str], tuple[Path, dict[str, Any]]],
+    version: int,
 ) -> None:
-    path, report = version_5("damaged_tracks")
+    if version == 5:
+        path, report = report_of("damaged_tracks", 5)
+    else:
+        path, report = version_6("damaged_tracks")
     ranges = {name: report["inputs"][name]["track"]["error_ranges"] for name in "ab"}
     assert [len(ranges["a"]), len(ranges["b"])] == [12, 4]
 
@@ -1158,14 +1207,16 @@ def test_view_shows_the_error_ranges_of_each_track_input(
         ]
 
 
+@pytest.mark.parametrize("version", [5, 6])
 def test_view_shows_why_an_input_has_no_error_ranges(
     run: Run,
-    make_set: MakeSet,
     acquired_set: Path,
-    version_5: Callable[[str], tuple[Path, dict[str, Any]]],
+    report_of: Callable[..., tuple[Path, dict[str, Any]]],
+    version_6: Callable[[str], tuple[Path, dict[str, Any]]],
     tmp_path: Path,
+    version: int,
 ) -> None:
-    path, _ = version_5("files")
+    path, _ = report_of("files", 5) if version == 5 else version_6("files")
     image = acquired_set / "data/disc.scram.flac"
     outcome = run("compare", acquired_set, image, "--track-a", "1", "--json")
     assert outcome.code == 0, outcome.err
