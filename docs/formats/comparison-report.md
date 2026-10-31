@@ -67,10 +67,12 @@ copyofa compare <input-a> <input-b> --json --omit-locations > htf.json
    root is input A, and likewise `--track-b` for input B. The root must be an Evidence
    Set, else compare exits 2. Two set roots given without either option are two
    editions, compared as [Comparing editions](#comparing-editions) describes. A set
-   root given without its option beside any other input, such as a file or a set root
-   given with its option, exits 2 with the message
-   `compare takes two tracks or two editions: <root> is the root of an Evidence Set,
-   given without a track number, and the other input is not.`
+   root given without its option beside any other input, such as a file, a plain
+   directory or a set root given with its option, exits 2 with the message
+   `compare takes two tracks or two editions: <root> is the root of an Evidence Set
+   given without a track number, but the other input is not a set root given without
+   one. Give two set roots without track numbers to compare editions, or a track
+   number with each set root to compare tracks.`
 2. **Integrity first.** Each input is checked as `inspect` checks a file (see
    [Inspection Report format](inspection-report.md#how-inspect-works)): the Integrity
    Baseline must be usable, `manifest-sha256.txt` must list the file, and the file must
@@ -979,7 +981,8 @@ nothing was measured: a track of either edition is not `interpreted`, or an edit
 has no track. It exits 2, printing nothing on stdout, when a file is not under the
 `data/` directory of an Evidence Set, an input given with `--track-a` or `--track-b` is
 not an Evidence Set, a set root is given without its option and the other input is not
-one, or the arguments are invalid, such as a track number that is not a whole number
+a set root given without its option, or the arguments are invalid, such as a track
+number that is not a whole number
 from 1, and 130 when canceled with Ctrl-C. It also exits 1, with
 `copyofa: stdout closed` on stderr, when stdout is closed before or while it prints its
 result or Report. mpg123 may write notes about damaged MP3 frames to stderr.

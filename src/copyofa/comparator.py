@@ -145,8 +145,10 @@ def compare(
         if root is not None:
             raise InputsError(
                 f"compare takes two tracks or two editions: {given} is the root of "
-                "an Evidence Set, given without a track number, and the other input "
-                "is not."
+                "an Evidence Set given without a track number, but the other input "
+                "is not a set root given without one. Give two set roots without "
+                "track numbers to compare editions, or a track number with each set "
+                "root to compare tracks."
             )
     locations = [
         (verifier.locate(given), track) if track is not None else _locate(given)

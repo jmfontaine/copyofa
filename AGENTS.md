@@ -157,7 +157,7 @@ holds no script, no link and no external resource, a Content Security Policy for
 both, and every text of the Report is escaped, a lone surrogate as `\udcXX`. Each
 Report kind and format version `view` supports needs its own rendering:
 `copyofa.viewer` maps each comparison format version it renders and, from version 6,
-each scope (`scope`, which a Report states from version 6) to its layout, derives
+each scope (the Report's `scope` field) to its layout, derives
 `SUPPORTED_FORMAT_VERSIONS` and `SUPPORTED_SCOPES` from that mapping, so a version or
 a scope cannot be supported without a layout, and `view` refuses a valid comparison
 Report of any other version or scope: it renders scope `tracks` with version 5's
