@@ -872,18 +872,20 @@ View first validates the file as [`copyofa validate`](validation-result.md) does
 refuses a Report that is invalid, unsupported, or of another kind. It supports
 comparison Reports only, of format version 1, 2, 3, 4, 5 or 6, and renders each
 version, and from version 6 each scope, with its own layout: a version 6 Report of
-scope `tracks` with version 5's layout, plus its scope. It also refuses a valid
-comparison Report of any other format version, such as one a later CopyOfA printed,
-rather than show it with a layout that could leave fields out: it prints nothing on
-stdout and one line on stderr naming the file, its format version and the versions
-view supports, and exits 1. It refuses a version 6 Report of scope `editions` the same
-way, as it has no layout for that scope: the line names the file and its scope, and
-says view supports comparisons of tracks only.
+scope `tracks` with version 5's layout, plus its scope, and one of scope `editions`
+with the edition layout below. It also refuses a valid comparison Report of any other
+format version, such as one a later CopyOfA printed, rather than show it with a layout
+that could leave fields out: it prints nothing on stdout and one line on stderr naming
+the file, its format version and the versions view supports, and exits 1. It refuses
+a Report of a scope it has no layout for the same way: the line names the file and
+its scope, and the scopes view supports.
 
 The page shows every field of the Report with its value as the Report records it, and
 adds only labels and units, for each track a duration computed from its frames and
-sample rate, and for versions 4 to 6 each range also in seconds, computed from its
-frames and the common sample rate. It gives:
+sample rate, for versions 4 to 6 each range also in seconds, computed from its frames
+and the common sample rate, and for an edition comparison each edition's coverage also
+as durations, computed the same way, and each track's name, as the inputs give it,
+beside its position. For a comparison of tracks, it gives:
 
 - the SHA-256 of the exact bytes of the file it was generated from, the Report's kind
   and format version, for version 6 its scope, and the CopyOfA version that generated
@@ -914,6 +916,40 @@ frames and the common sample rate. It gives:
     range, which has none; or that the track has no unmatched range;
 - each absent value, marked absent with its reason; when the Report holds no
   measurements, the page says that the tracks were not measured;
+- the Report's limitations, word for word.
+
+For a comparison of editions, a version 6 Report of scope `editions`, the page gives
+the same Report details and what it leaves out, the method with its parameters, then:
+
+- for each edition, its Evidence Set location, or that it is left out, Integrity
+  Baseline, how many tracks and excluded files it holds, and the reason it has no
+  track, when the Report gives one;
+- for each track of each edition, in the Report's order, its position and every field
+  a track input of a comparison of tracks shows, error ranges included;
+- for each edition, its excluded files, one row each: path, outcome and reason; or
+  that it has none;
+- when the Report holds no measurements, that the editions were not measured, and the
+  reason the Report gives;
+- otherwise, the measurements:
+  - how many portions the Report holds, or why it holds none;
+  - the coverage of each edition: the frames found in the other edition, each counted
+    once, and the frames of the edition;
+  - a table of the correspondences, one row each: each track's position and name, its
+    frames found in the other edition and their fraction, and whether the audio is
+    identical;
+  - each edition's sequence, one row per track: position, name, start frame in the
+    sequence, frames, and range in seconds;
+  - a table of the portions, one row each: rank, start frame and frames in A and in
+    B, offset in frames and seconds, residual after the per-block gains, and how many
+    segments it holds;
+  - for each portion, a table of its segments, one row each: in A and in B the
+    track's position and name, the start frame and frames in the track, and its range
+    in seconds, then the correlation, gain and residual of the downmix; and for each
+    segment, the values of the downmix, and of each channel when the Report gives
+    them, with one table of residual windows for each of them;
+  - for each track of each edition, its unmatched ranges, as for a comparison of
+    tracks, or that it has none;
+- each absent value, marked absent with its reason;
 - the Report's limitations, word for word.
 
 The page draws no conclusion from the measurements: it has no verdict and no

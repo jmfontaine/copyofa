@@ -160,8 +160,8 @@ Report kind and format version `view` supports needs its own rendering:
 each scope (`scope`, which a Report states from version 6) to its layout, derives
 `SUPPORTED_FORMAT_VERSIONS` and `SUPPORTED_SCOPES` from that mapping, so a version or
 a scope cannot be supported without a layout, and `view` refuses a valid comparison
-Report of any other version or scope: it renders scope `tracks` only, and refuses
-`editions`.
+Report of any other version or scope: it renders scope `tracks` with version 5's
+layout and scope `editions` with a layout of its own.
 
 ### Audio decoding
 

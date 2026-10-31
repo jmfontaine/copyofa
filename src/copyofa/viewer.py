@@ -31,6 +31,10 @@ class _Measurements(enum.Enum):
     """The method; one alignment, its overlap, and the values measured over it."""
     PORTIONS = enum.auto()
     """The method and its parameters; the portions and the unmatched audio."""
+    EDITIONS = enum.auto()
+    """The editions and their tracks; the method and its parameters; the coverage,
+    the correspondences, the portions with their segments, and the unmatched audio of
+    each track."""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -49,6 +53,7 @@ _LAYOUTS: dict[tuple[int, str | None], _Layout] = {
     (4, None): _Layout(_Measurements.PORTIONS, error_ranges=False),
     (5, None): _Layout(_Measurements.PORTIONS, error_ranges=True),
     (6, comparator.TRACKS): _Layout(_Measurements.PORTIONS, error_ranges=True),
+    (6, comparator.EDITIONS): _Layout(_Measurements.EDITIONS, error_ranges=True),
 }
 """The layout of each comparison Report format version this module renders and, from
 version 6, of each scope of that version: a version before 6 has no scope, None."""
@@ -101,10 +106,28 @@ def render(report: dict[str, Any], sha256: str) -> str:
             + ("" if scope is None else f" of scope {scope}")
         )
     inputs = report["inputs"]
-    title = (
-        f"Comparison of {comparator.input_name(inputs['a'])} and "
-        f"{comparator.input_name(inputs['b'])}"
-    )
+    if layout.measurements is _Measurements.EDITIONS:
+        title = (
+            f"Comparison of {_edition_name(inputs, 'a')} and "
+            f"{_edition_name(inputs, 'b')}"
+        )
+        sections = [
+            *_editions_section(inputs),
+            *_method_section(report["method"], layout.measurements),
+            *_edition_measurements_section(report),
+        ]
+    else:
+        title = (
+            f"Comparison of {comparator.input_name(inputs['a'])} and "
+            f"{comparator.input_name(inputs['b'])}"
+        )
+        sections = [
+            *_inputs_section(inputs, error_ranges=layout.error_ranges),
+            *_method_section(report["method"], layout.measurements),
+            *_measurements_section(
+                report.get("measurements"), report["method"], layout.measurements
+            ),
+        ]
     body = [
         "<h1>Comparison Report</h1>",
         *_report_section(report, sha256),
@@ -115,11 +138,7 @@ def render(report: dict[str, Any], sha256: str) -> str:
             "labels and units added and no conclusion drawn. Absent means that the "
             "Report holds no value there.</p>"
         ),
-        *_inputs_section(inputs, error_ranges=layout.error_ranges),
-        *_method_section(report["method"], layout.measurements),
-        *_measurements_section(
-            report.get("measurements"), report["method"], layout.measurements
-        ),
+        *sections,
         "<h2>Limitations</h2>",
         _items(report["limitations"]),
     ]
@@ -163,18 +182,48 @@ def _report_section(report: dict[str, Any], sha256: str) -> list[str]:
 def _inputs_section(inputs: dict[str, Any], *, error_ranges: bool) -> list[str]:
     fields: list[tuple[str, Callable[[dict[str, Any]], str]]] = [
         ("Evidence Set location", lambda e: _show(e, "evidence_set", _LEFT_OUT)),
-        (
-            "Integrity Baseline manifest SHA-256",
-            lambda e: _show(e["integrity_baseline"], "manifest_sha256", code=True),
+        *_BASELINE_FIELDS,
+        *_checked_fields(error_ranges=error_ranges),
+    ]
+    parts = [
+        "<h2>Inputs</h2>",
+        _table(
+            ["", "Track A", "Track B"],
+            [(label, show(inputs["a"]), show(inputs["b"])) for label, show in fields],
         ),
-        (
-            "Integrity Baseline usable",
-            lambda e: _show(e["integrity_baseline"], "usable"),
-        ),
-        (
-            "Integrity Baseline problems",
-            lambda e: _list(e["integrity_baseline"], "problems"),
-        ),
+    ]
+    if error_ranges:
+        for name in ("a", "b"):
+            ranges = inputs[name].get("track", {}).get("error_ranges")
+            if ranges:
+                parts += [
+                    f"<h3>Error ranges: track {name.upper()}</h3>",
+                    _error_ranges_table(ranges),
+                ]
+    return parts
+
+
+_BASELINE_FIELDS: list[tuple[str, Callable[[dict[str, Any]], str]]] = [
+    (
+        "Integrity Baseline manifest SHA-256",
+        lambda e: _show(e["integrity_baseline"], "manifest_sha256", code=True),
+    ),
+    (
+        "Integrity Baseline usable",
+        lambda e: _show(e["integrity_baseline"], "usable"),
+    ),
+    (
+        "Integrity Baseline problems",
+        lambda e: _list(e["integrity_baseline"], "problems"),
+    ),
+]
+
+
+def _checked_fields(
+    *, error_ranges: bool
+) -> list[tuple[str, Callable[[dict[str, Any]], str]]]:
+    """Return the rows of a checked file or track: its path, track and findings."""
+    fields: list[tuple[str, Callable[[dict[str, Any]], str]]] = [
         ("Path in the Evidence Set", lambda e: _show(e, "path")),
         ("Track of the acquired disc", lambda e: _show(e.get("track", {}), "number")),
         (
@@ -207,22 +256,75 @@ def _inputs_section(inputs: dict[str, Any], *, error_ranges: bool) -> list[str]:
         ("FLAC MD5 signature", lambda e: _show(e, "flac_md5_signature")),
         ("Limitations", lambda e: _list(e, "limitations")),
     ]
+    return fields
+
+
+def _edition_name(inputs: dict[str, Any], name: str) -> str:
+    """Name an edition by its Evidence Set location, or by its letter when the Report
+    leaves the location out."""
+    return inputs[name].get("evidence_set", f"edition {name.upper()}")
+
+
+def _editions_section(inputs: dict[str, Any]) -> list[str]:
+    """Return the editions of a Report of scope `editions`, then each one's tracks
+    and excluded files."""
+    fields: list[tuple[str, Callable[[dict[str, Any]], str]]] = [
+        ("Evidence Set location", lambda e: _show(e, "evidence_set", _LEFT_OUT)),
+        *_BASELINE_FIELDS,
+        ("Tracks", lambda e: _counted(e["tracks"], "track")),
+        ("Excluded files", lambda e: _counted(e["excluded"], "file")),
+        ("Reason the edition has no track", lambda e: _show(e, "reason")),
+    ]
     parts = [
-        "<h2>Inputs</h2>",
+        "<h2>Editions</h2>",
         _table(
-            ["", "Track A", "Track B"],
+            ["", "Edition A", "Edition B"],
             [(label, show(inputs["a"]), show(inputs["b"])) for label, show in fields],
         ),
     ]
-    if error_ranges:
-        for name in ("a", "b"):
-            ranges = inputs[name].get("track", {}).get("error_ranges")
+    rows: list[tuple[str, Callable[[dict[str, Any]], str]]] = [
+        ("Position", lambda e: _show(e, "position")),
+        *_checked_fields(error_ranges=True),
+    ]
+    for name in ("a", "b"):
+        edition = f"edition {name.upper()}"
+        for track in inputs[name]["tracks"]:
+            heading = f"Track of {edition} at position {_scalar(track['position'])}"
+            parts += [
+                f"<h3>{heading}</h3>",
+                _table(None, [(label, show(track)) for label, show in rows]),
+            ]
+            ranges = track.get("track", {}).get("error_ranges")
             if ranges:
                 parts += [
-                    f"<h3>Error ranges: track {name.upper()}</h3>",
+                    f"<h4>{heading}: error ranges</h4>",
                     _error_ranges_table(ranges),
                 ]
+        excluded = inputs[name]["excluded"]
+        parts.append(f"<h3>Excluded files: {edition}</h3>")
+        if excluded:
+            parts.append(
+                _table(
+                    ["Path in the Evidence Set", "Outcome", "Reason"],
+                    [
+                        (
+                            _show(file, "path"),
+                            _show(file, "outcome"),
+                            _show(file, "reason"),
+                        )
+                        for file in excluded
+                    ],
+                )
+            )
+        else:
+            parts.append("<p>No excluded file.</p>")
     return parts
+
+
+def _counted(items: Sequence[Any], noun: str) -> str:
+    if not items:
+        return "none"
+    return f"{len(items)} {noun if len(items) == 1 else noun + 's'}, listed below"
 
 
 def _error_ranges_count(entry: dict[str, Any]) -> str:
@@ -263,7 +365,7 @@ def _method_section(method: dict[str, Any], layout: _Measurements) -> list[str]:
         "<h2>Method</h2>",
         _table(None, [(label, _show(method, key)) for label, key in fields]),
     ]
-    if layout is _Measurements.PORTIONS:
+    if layout is not _Measurements.ALIGNMENT:
         parts += [
             "<h3>Parameters</h3>",
             _table(
@@ -418,23 +520,279 @@ def _portions_table(portions: Sequence[dict[str, Any]], rate: int | None) -> str
 def _portion_section(number: int, portion: dict[str, Any]) -> list[str]:
     """Return the values of a portion, for the downmix and each channel, with their
     residual windows."""
-    series = [("Downmix", portion["downmix"])]
+    rank = _text(portion["rank"])
+    return _series_section(f"Portion {number} ({rank})", portion, "portion", "h3")
+
+
+def _series_section(
+    heading: str, measured: dict[str, Any], origin: str, level: str
+) -> list[str]:
+    """Return the values measured over a portion or a segment, for the downmix and
+    each channel, with their residual windows."""
+    series = [("Downmix", measured["downmix"])]
     series += [
         (f"Channel {channel}", values)
-        for channel, values in enumerate(portion.get("channels", []), 1)
+        for channel, values in enumerate(measured.get("channels", []), 1)
     ]
-    rank = _text(portion["rank"])
-    parts = [f"<h3>Portion {number} ({rank}): values</h3>", _values_table(series)]
-    if "channels" not in portion:
-        reason = portion.get("absent", {}).get("channels")
+    parts = [f"<{level}>{heading}: values</{level}>", _values_table(series)]
+    if "channels" not in measured:
+        reason = measured.get("absent", {}).get("channels")
         parts.append(f"<p>Channels: {_absent(reason)}</p>")
     for name, values in series:
         if "residual_windows" in values:
             parts += [
-                f"<h3>Portion {number} ({rank}): residual windows, {_text(name)}</h3>",
-                _windows(values, "portion"),
+                f"<{level}>{heading}: residual windows, {_text(name)}</{level}>",
+                _windows(values, origin),
             ]
     return parts
+
+
+def _edition_measurements_section(report: dict[str, Any]) -> list[str]:
+    """Return the measurements of a Report of scope `editions`."""
+    measurements = report.get("measurements")
+    if measurements is None:
+        return [
+            "<h2>Measurements</h2>",
+            "<p>The editions were not measured: the Report holds no measurements.</p>",
+            _table(None, [("Measurements", _show(report, "measurements"))]),
+        ]
+    rate = report["method"].get("common_sample_rate")
+    names = {
+        name: {
+            track.get("position"): comparator.input_name(track)
+            for track in report["inputs"][name]["tracks"]
+        }
+        for name in ("a", "b")
+    }
+
+    def track(name: str, position: Any) -> str:
+        """Name the track of an edition at a position, as its input gives it."""
+        if position not in names[name]:
+            return _absent("the Report lists no track at this position")
+        return _text(names[name][position])
+
+    portions = measurements["portions"]
+    if portions:
+        count = len(portions)
+        listed = f"{count} {'portion' if count == 1 else 'portions'}, listed below"
+    else:
+        listed = _absent(measurements.get("absent", {}).get("portions"))
+    coverage = measurements["coverage"]
+    parts = [
+        "<h2>Measurements</h2>",
+        "<h3>Overview</h3>",
+        _table(None, [("Portions", listed)]),
+        "<h3>Coverage</h3>",
+        _table(
+            ["", "Edition A", "Edition B"],
+            [
+                (label, show(coverage["a"]), show(coverage["b"]))
+                for label, show in (
+                    (
+                        "Frames found in the other edition, each counted once",
+                        lambda c: _show(c, "matched_frames"),
+                    ),
+                    (
+                        "Duration found in the other edition (computed)",
+                        lambda c: _frames_duration(c, "matched_frames", rate),
+                    ),
+                    ("Frames of the edition", lambda c: _show(c, "frames")),
+                    (
+                        "Duration of the edition (computed)",
+                        lambda c: _frames_duration(c, "frames", rate),
+                    ),
+                )
+            ],
+        ),
+        "<h3>Correspondences</h3>",
+    ]
+    correspondences = measurements["correspondences"]
+    if correspondences:
+        table = _table(
+            [
+                "Track of A (position)",
+                "Track of A",
+                "Frames of A found in B",
+                "Fraction of A found in B",
+                "Track of B (position)",
+                "Track of B",
+                "Frames of B found in A",
+                "Fraction of B found in A",
+                "Identical audio",
+            ],
+            [
+                (
+                    _show(pair["a"], "position"),
+                    track("a", pair["a"].get("position")),
+                    _show(pair["a"], "matched_frames"),
+                    _show(pair["a"], "fraction"),
+                    _show(pair["b"], "position"),
+                    track("b", pair["b"].get("position")),
+                    _show(pair["b"], "matched_frames"),
+                    _show(pair["b"], "fraction"),
+                    _show(pair, "identical_audio"),
+                )
+                for pair in correspondences
+            ],
+        )
+        parts.append(f'<div class="wide">\n{table}\n</div>')
+    else:
+        parts.append("<p>No correspondence.</p>")
+    for name in ("a", "b"):
+        parts += [
+            f"<h3>Sequence: edition {name.upper()}</h3>",
+            _table(
+                [
+                    "Position",
+                    "Track",
+                    "Start frame in the sequence",
+                    "Frames",
+                    "Range (s, computed)",
+                ],
+                [
+                    (
+                        _show(entry, "position"),
+                        track(name, entry.get("position")),
+                        _show(entry, "start_frame"),
+                        _show(entry, "frames"),
+                        _seconds(entry, rate),
+                    )
+                    for entry in measurements["sequences"][name]
+                ],
+            ),
+        ]
+    if portions:
+        table = _edition_portions_table(portions, rate)
+        parts += ["<h3>Portions</h3>", f'<div class="wide">\n{table}\n</div>']
+    for number, portion in enumerate(portions, 1):
+        rank = _text(portion["rank"])
+        heading = f"Portion {number} ({rank})"
+        table = _segments_table(portion["segments"], rate, track)
+        parts += [
+            f"<h3>{heading}: segments</h3>",
+            f'<div class="wide">\n{table}\n</div>',
+        ]
+        for segment_number, segment in enumerate(portion["segments"], 1):
+            parts += _series_section(
+                f"{heading}, segment {segment_number}", segment, "segment", "h4"
+            )
+    for name in ("a", "b"):
+        parts.append(f"<h3>Unmatched audio: edition {name.upper()}</h3>")
+        unmatched = measurements["unmatched"][name]
+        # Each track of the sequence in order, then any other position an unmatched
+        # range gives, so the page shows every range the Report holds.
+        positions = [entry.get("position") for entry in measurements["sequences"][name]]
+        positions += [
+            position
+            for position in dict.fromkeys(part.get("position") for part in unmatched)
+            if position not in positions
+        ]
+        for position in positions:
+            heading = (
+                f"Edition {name.upper()}, position {_scalar(position)}: "
+                f"{track(name, position)}"
+            )
+            parts += [
+                f"<h4>{heading}</h4>",
+                _unmatched_table(
+                    [part for part in unmatched if part.get("position") == position],
+                    rate,
+                ),
+            ]
+    return parts
+
+
+def _edition_portions_table(
+    portions: Sequence[dict[str, Any]], rate: int | None
+) -> str:
+    return _table(
+        [
+            "Portion",
+            "Rank",
+            "Edition A start frame",
+            "Edition A frames",
+            "Edition A range (s, computed)",
+            "Edition B start frame",
+            "Edition B frames",
+            "Edition B range (s, computed)",
+            "Offset (frames)",
+            "Offset (seconds)",
+            "Residual after the per-block gains (dB)",
+            "Segments",
+        ],
+        [
+            (
+                str(number),
+                _show(portion, "rank"),
+                _show(portion["a"], "start_frame"),
+                _show(portion["a"], "frames"),
+                _seconds(portion["a"], rate),
+                _show(portion["b"], "start_frame"),
+                _show(portion["b"], "frames"),
+                _seconds(portion["b"], rate),
+                _show(portion["offset"], "frames"),
+                _show(portion["offset"], "seconds"),
+                _show(portion, "block_gain_residual_db"),
+                str(len(portion["segments"])),
+            )
+            for number, portion in enumerate(portions, 1)
+        ],
+    )
+
+
+def _segments_table(
+    segments: Sequence[dict[str, Any]],
+    rate: int | None,
+    track: Callable[[str, Any], str],
+) -> str:
+    rows = []
+    for number, segment in enumerate(segments, 1):
+        cells = [str(number)]
+        for name in ("a", "b"):
+            extent = segment[name]
+            cells += [
+                _show(extent, "position"),
+                track(name, extent.get("position")),
+                _show(extent, "start_frame"),
+                _show(extent, "frames"),
+                _seconds(extent, rate),
+            ]
+        downmix = segment["downmix"]
+        cells += [
+            _show(downmix, "correlation"),
+            _show(downmix, "gain_db"),
+            _show(downmix, "residual_db"),
+        ]
+        rows.append(tuple(cells))
+    return _table(
+        [
+            "Segment",
+            *(
+                header
+                for name in ("A", "B")
+                for header in (
+                    f"Track of {name} (position)",
+                    f"Track of {name}",
+                    f"Start frame in the track of {name}",
+                    "Frames",
+                    f"Range in the track of {name} (s, computed)",
+                )
+            ),
+            "Downmix correlation",
+            "Downmix gain (dB)",
+            "Downmix residual (dB)",
+        ],
+        rows,
+    )
+
+
+def _frames_duration(values: dict[str, Any], key: str, rate: int | None) -> str:
+    """Format a count of frames at the common sample rate as a duration."""
+    if key not in values:
+        return _absent(None)
+    if rate is None:
+        return _absent("the Report holds no common sample rate")
+    return format_duration(int(values[key]), int(rate))
 
 
 def _unmatched_table(ranges: Sequence[dict[str, Any]], rate: int | None) -> str:
