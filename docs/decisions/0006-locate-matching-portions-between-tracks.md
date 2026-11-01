@@ -1,7 +1,9 @@
 # Locate matching portions between tracks
 
 - **Date:** 2026-10-25
-- **Status:** Accepted
+- **Status:** Accepted; the single offset of a portion in decisions 1, 2, 4, 5 and 8,
+  and decision 7's parameters, superseded in part by
+  [ADR 0010](0010-locate-portions-across-speed-differences.md)
 - **Supersedes:** decisions 2 (Alignment) and 3 (Overlap) of
   [ADR 0003](0003-measure-track-comparisons-on-aligned-decoded-audio.md); its other
   decisions stand
