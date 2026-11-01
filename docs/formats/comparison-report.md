@@ -211,8 +211,11 @@ not establish that the editions are equivalent. The Report's `limitations` state
 **Known limit.** Time grows with the product of the editions' lengths, and memory with
 their sum. In ADR 0009's spike, the search over two CDs of about 65 min took about 2.5
 minutes at a peak of 4.9 GB to 5.3 GB, and 5.6 GB for a CD against a 96 kHz download,
-before the per-channel measurements. Editions much longer than a CD, such as a box set
-imported as one set, may exhaust memory.
+before the per-channel measurements. A whole comparison, measurements included, needs
+more memory: of the same sets, two CD pressings took 146 s at a peak of 8.4 GB, a CD
+against the 15-track edition 162 s at 9.0 GB, and a CD against the 96 kHz download,
+imported, 168 s at 8.5 GB (macOS peak memory footprint). Editions much longer than a
+CD, such as a box set imported as one set, may exhaust memory.
 
 ## Fields
 
