@@ -241,17 +241,18 @@ the collector already owns.
 
 ### Now
 
-- **[v0.9.0](https://github.com/jmfontaine/copyofa/milestone/9): Compare Editions** —
-  Compare and Discover Relationships; Share and Evaluate Findings. S4: compare takes
-  two Evidence Sets as editions, locates portions across their joined tracks, and
-  reports per track which audio of one edition the other holds, where their
-  boundaries differ and what only one holds. Specified in
-  [brief 0007](briefs/0007-compare-editions.md), with the method decided in
-  [ADR 0009](decisions/0009-compare-editions-as-sequences-of-their-tracks.md).
+- **[v0.10.0](https://github.com/jmfontaine/copyofa/milestone/10): Compare Masters
+  That Differ in Speed** — Compare and Discover Relationships; Share and Evaluate
+  Findings. S3 and S4 for audio whose speed differs, by parts per million between two
+  clocks or by up to 4.5 %: compare fits a speed ratio to each portion, and the Report
+  and its view give it. Specified in
+  [brief 0008](briefs/0008-compare-masters-that-differ-in-speed.md), with the method
+  decided in
+  [ADR 0010](decisions/0010-locate-portions-across-speed-differences.md).
 
 ### Next
 
-None planned; the v0.9.0 release review chooses it from Later.
+None planned; the v0.10.0 release review chooses it from Later.
 
 ### Later
 
@@ -265,11 +266,6 @@ None planned; the v0.9.0 release review chooses it from Later.
   export, delivered for acquired CDs in v0.5.0, for imported files too.
 - **Find Related Audio Among Selected Material** — Compare and Discover Relationships.
   S7.
-- **Compare Masters That Differ in Speed** — Compare and Discover Relationships. S3
-  and S4 for audio whose speed differs by a few parts per million: ADR 0006's portions
-  hold one offset, so such audio gives many short portions. In ADR 0009's spike, five
-  tracks of the 2017 download of *The Downward Spiral* drift against its CD and match
-  it only in short portions.
 - **Repair Limited Archive Damage Using Optional Recovery Information** — Preserve
   Evidence Throughout Its Lifetime. S6.
 
