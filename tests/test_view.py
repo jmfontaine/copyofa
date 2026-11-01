@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from conftest import (
+    DAMAGED_ERRORS,
     RATE,
     closed_stdout,
     run_without_stdout,
@@ -19,6 +20,7 @@ from conftest import (
     snapshot,
     write_audio,
 )
+from test_compare_editions import P, Q, acquire, cover_only, write_files
 
 import copyofa
 from copyofa import validator, viewer
@@ -26,7 +28,7 @@ from copyofa import validator, viewer
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
-    from conftest import Run
+    from conftest import Run, StandIn
 
     MakeSet = Callable[[Callable[[Path], None]], Path]
 
@@ -59,7 +61,7 @@ class Page(HTMLParser):
         self.tags.append((tag, dict(attrs)))
         if tag == "title":
             self._in_title = True
-        elif tag in ("h1", "h2", "h3"):
+        elif tag in ("h1", "h2", "h3", "h4"):
             self._heading = []
         elif tag == "table":
             self._rows = []
@@ -71,7 +73,7 @@ class Page(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag == "title":
             self._in_title = False
-        elif tag in ("h1", "h2", "h3"):
+        elif tag in ("h1", "h2", "h3", "h4"):
             assert self._heading is not None
             self._last_heading = "".join(self._heading)
             self._heading = None
@@ -145,6 +147,12 @@ VERSION_5_CASES = sorted(
 VERSION_6_CASES = ["damaged_tracks", "files"]
 """Version 6 Reports that the tests have compare print, as version 5's cases of the
 same names."""
+EDITION_CASES = ["measured", "not measured", "damaged"]
+"""Version 6 Reports of scope editions that the tests have compare print: `measured`
+(an acquired set against an imported set of its two tracks' audio as 48 kHz files,
+beside a cover image), `not measured` (an imported set against one holding only a
+cover image, so no track), `damaged` (a set acquired with error ranges against
+itself, its tracks too short for any portion)."""
 
 
 @pytest.fixture
@@ -228,18 +236,51 @@ def version_6(
     return _version_6
 
 
+@pytest.fixture
+def editions(
+    run: Run,
+    make_set: MakeSet,
+    make_acquired_set: Callable[..., Path],
+    redumper: StandIn,
+    tmp_path: Path,
+) -> Callable[[str], tuple[Path, dict[str, Any]]]:
+    """Have compare print a version 6 Report of scope editions of a case."""
+
+    def _editions(name: str) -> tuple[Path, dict[str, Any]]:
+        if name == "measured":
+            a = acquire(make_acquired_set, redumper, [P, Q])
+            b = make_set(write_files)
+        elif name == "damaged":
+            a = b = make_acquired_set(code=1, errors=DAMAGED_ERRORS)
+        else:
+            assert name == "not measured"
+            a = make_set(write_files)
+            b = make_set(cover_only)
+        outcome = run("compare", a, b, "--json")
+        assert outcome.code == (1 if name == "not measured" else 0), outcome.err
+        path = tmp_path / f"editions-{name.replace(' ', '_')}.json"
+        path.write_text(outcome.out, encoding="utf-8")
+        report = json.loads(outcome.out)
+        assert (report["format_version"], report["scope"]) == (6, "editions")
+        return path, report
+
+    return _editions
+
+
 @pytest.fixture(
     params=[
         *CASES,
         *(f"version 4: {name}" for name in VERSION_4_CASES),
         *(f"version 5: {name}" for name in VERSION_5_CASES),
         *(f"version 6: {name}" for name in VERSION_6_CASES),
+        *(f"editions: {name}" for name in EDITION_CASES),
     ]
 )
 def case(
     request: pytest.FixtureRequest,
     report_of: Callable[..., tuple[Path, dict[str, Any]]],
     version_6: Callable[[str], tuple[Path, dict[str, Any]]],
+    editions: Callable[[str], tuple[Path, dict[str, Any]]],
 ) -> tuple[Path, dict[str, Any]]:
     name = request.param
     for version in (4, 5):
@@ -247,6 +288,8 @@ def case(
             return report_of(name.removeprefix(f"version {version}: "), version)
     if name.startswith("version 6: "):
         return version_6(name.removeprefix("version 6: "))
+    if name.startswith("editions: "):
+        return editions(name.removeprefix("editions: "))
     return report_of(name)
 
 
@@ -378,7 +421,7 @@ def test_view_is_self_contained_and_inert(
     assert page.title
 
 
-def test_view_names_both_tracks_in_the_title(
+def test_view_names_both_inputs_in_the_title(
     run: Run, case: tuple[Path, dict[str, Any]]
 ) -> None:
     path, report = case
@@ -386,7 +429,10 @@ def test_view_names_both_tracks_in_the_title(
     page = view(run, path)
 
     for entry in report["inputs"].values():
-        assert entry["path"] in page.title
+        if report.get("scope") == "editions":
+            assert entry["evidence_set"] in page.title
+        else:
+            assert entry["path"] in page.title
         if "track" in entry:
             assert f"track {entry['track']['number']} of {entry['path']}" in page.title
 
@@ -750,6 +796,207 @@ def test_view_shows_the_scope_of_a_report_of_format_version_6(
     assert "Scope" not in [row[0] for row in earlier.tables["Report"]]
 
 
+def test_view_shows_an_edition_comparison(
+    run: Run, editions: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = editions("measured")
+    measurements = report["measurements"]
+    inputs = report["inputs"]
+
+    page = view(run, path)
+
+    assert page.row("Report", "Scope") == ["editions"]
+    assert page.row("Editions", "Tracks") == [
+        f"{len(inputs[name]['tracks'])} tracks, listed below" for name in "ab"
+    ]
+    for name in "ab":
+        for track in inputs[name]["tracks"]:
+            heading = f"Track of edition {name.upper()} at position {track['position']}"
+            assert page.row(heading, "Path in the Evidence Set") == [track["path"]]
+            assert page.row(heading, "Peak of each channel") == [
+                ", ".join(number(value) for value in track["peak"])
+            ]
+    assert page.row("Editions", "Excluded files") == ["none", "1 file, listed below"]
+    assert page.tables["Excluded files: edition B"][1] == [
+        "data/Album/cover.jpg",
+        "not_interpreted",
+        "no supported audio format was recognized",
+    ]
+    rate = report["method"]["common_sample_rate"]
+    assert page.row("Method", "Common sample rate (Hz)") == [number(rate)]
+    assert page.row(
+        "Coverage", "Frames found in the other edition, each counted once"
+    ) == [number(measurements["coverage"][name]["matched_frames"]) for name in "ab"]
+    assert page.row("Coverage", "Frames of the edition") == [
+        number(measurements["coverage"][name]["frames"]) for name in "ab"
+    ]
+    correspondences = page.tables["Correspondences"][1:]
+    assert [(row[0], row[1], row[4], row[5]) for row in correspondences] == [
+        (
+            number(pair["a"]["position"]),
+            f"track {pair['a']['position']} of data/disc.scram.flac",
+            number(pair["b"]["position"]),
+            inputs["b"]["tracks"][pair["b"]["position"] - 1]["path"],
+        )
+        for pair in measurements["correspondences"]
+    ]
+    assert measurements["portions"]
+    for number_, portion in enumerate(measurements["portions"], 1):
+        heading = f"Portion {number_} ({portion['rank']})"
+        rows = page.tables[f"{heading}: segments"][1:]
+        assert [(row[1], row[3], row[4], row[6], row[8], row[9]) for row in rows] == [
+            (
+                number(segment["a"]["position"]),
+                number(segment["a"]["start_frame"]),
+                number(segment["a"]["frames"]),
+                number(segment["b"]["position"]),
+                number(segment["b"]["start_frame"]),
+                number(segment["b"]["frames"]),
+            )
+            for segment in portion["segments"]
+        ]
+        for index, segment in enumerate(portion["segments"], 1):
+            values = f"{heading}, segment {index}: values"
+            assert page.row(values, "Correlation")[0] == cell(
+                segment["downmix"], "correlation"
+            )
+    for name in "ab":
+        for entry in measurements["sequences"][name]:
+            position = entry["position"]
+            track = (
+                f"track {position} of data/disc.scram.flac"
+                if name == "a"
+                else inputs["b"]["tracks"][position - 1]["path"]
+            )
+            heading = f"Edition {name.upper()}, position {position}: {track}"
+            ranges = [
+                extent
+                for extent in measurements["unmatched"][name]
+                if extent["position"] == position
+            ]
+            if ranges:
+                assert [row[0] for row in page.tables[heading][1:]] == [
+                    number(extent["start_frame"]) for extent in ranges
+                ]
+            else:
+                assert heading in page.nodes
+
+
+def test_view_says_why_the_editions_were_not_measured(
+    run: Run, editions: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = editions("not measured")
+
+    page = view(run, path)
+
+    assert report["absent"]["measurements"] == "edition B has no track"
+    assert page.row("Measurements", "Measurements") == [
+        "absent: edition B has no track"
+    ]
+    assert page.row("Editions", "Tracks") == ["2 tracks, listed below", "none"]
+    assert page.row("Editions", "Excluded files") == [
+        "1 file, listed below",
+        "1 file, listed below",
+    ]
+
+
+def test_view_shows_the_error_ranges_of_a_track_of_an_edition(
+    run: Run, editions: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = editions("damaged")
+
+    page = view(run, path)
+
+    for name in "ab":
+        for track in report["inputs"][name]["tracks"]:
+            heading = f"Track of edition {name.upper()} at position {track['position']}"
+            ranges = track["track"]["error_ranges"]
+            assert ranges
+            noun = "range" if len(ranges) == 1 else "ranges"
+            assert page.row(heading, "Error ranges of the track") == [
+                f"{len(ranges)} {noun}, listed below"
+            ]
+            assert page.tables[f"{heading}: error ranges"][1:] == [
+                [
+                    number(extent["offset_frames"]),
+                    number(extent["frame_count"]),
+                    extent["state"],
+                ]
+                for extent in ranges
+            ]
+
+
+def test_view_says_why_editions_have_no_portion(
+    run: Run, editions: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = editions("damaged")
+    measurements = report["measurements"]
+    assert measurements["portions"] == []
+    assert measurements["correspondences"] == []
+
+    page = view(run, path)
+
+    assert page.row("Overview", "Portions") == [
+        f"absent: {measurements['absent']['portions']}"
+    ]
+    assert "No correspondence." in page.nodes
+    assert "Portions" not in page.tables
+    assert not any(heading.startswith("Portion ") for heading in page.tables)
+    assert page.row(
+        "Coverage", "Frames found in the other edition, each counted once"
+    ) == ["0", "0"]
+
+
+def test_view_shows_an_unmatched_range_of_a_track_the_sequence_does_not_hold(
+    run: Run, editions: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, _ = editions("measured")
+    extent = {
+        "position": 999,
+        "start_frame": 5,
+        "frames": 7,
+        "digitally_silent": False,
+        "level_dbfs": -12.5,
+    }
+    edited = edit(
+        path, lambda report: report["measurements"]["unmatched"]["a"].append(extent)
+    )
+    assert validator.validate(str(edited)).result["outcome"] == validator.VALID
+
+    page = view(run, edited)
+
+    [heading] = [h for h in page.tables if h.startswith("Edition A, position 999:")]
+    assert "the Report lists no track at this position" in heading
+    assert page.tables[heading][1] == ["5", "7", "0.000-0.000", "false", "-12.5"]
+
+
+def test_view_shows_text_of_an_edition_comparison_as_text(
+    run: Run, editions: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, _ = editions("measured")
+    name = '<script>alert("1")&amp;\'.flac'
+    surrogate = "data/Album/caf\udc80.flac"
+
+    def change(report: dict[str, Any]) -> None:
+        report["inputs"]["a"]["evidence_set"] = "/Sets/\udc81"
+        report["inputs"]["b"]["tracks"][0]["path"] = f"data/Album/{name}"
+        report["inputs"]["b"]["excluded"][0]["path"] = surrogate
+
+    edited = edit(path, change)
+    assert validator.validate(str(edited)).result["outcome"] == validator.VALID
+
+    page = view(run, edited)
+
+    text = "".join(page.nodes)
+    assert "\udc80" not in text
+    assert "\udc81" not in text
+    assert "data/Album/caf\\udc80.flac" in page.nodes
+    assert f"data/Album/{name}" in page.nodes
+    assert "<script" not in page.text.lower()
+    assert {tag for tag, _ in page.tags} & ACTIVE_TAGS == set()
+    assert "/Sets/\\udc81" in page.title
+
+
 def test_view_writes_utf8_whatever_the_locale(
     report_of: Callable[[str], tuple[Path, dict[str, Any]]],
 ) -> None:
@@ -894,6 +1141,24 @@ def test_view_refuses_a_comparison_report_of_a_version_it_does_not_render(
     assert outcome.err == (
         f"copyofa: {path} is a comparison Report of format version 4; view supports "
         "format versions 1, 2 and 3\n"
+    )
+
+
+def test_view_refuses_a_comparison_report_of_a_scope_it_does_not_render(
+    run: Run,
+    editions: Callable[[str], tuple[Path, dict[str, Any]]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path, _ = editions("not measured")
+    monkeypatch.setattr(viewer, "SUPPORTED_SCOPES", frozenset({"tracks"}))
+
+    outcome = run("view", path)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert outcome.err == (
+        f"copyofa: {path} is a comparison Report of scope editions; view supports "
+        "comparisons of tracks only\n"
     )
 
 

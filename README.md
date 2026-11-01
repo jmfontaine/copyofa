@@ -290,8 +290,9 @@ recipient can check the page against the Report. The page runs no script and loa
 nothing, so it opens in any browser, offline. It draws no conclusion from the
 measurements. For a Report of the current format, it shows the method's parameters,
 a table of the portions with each one's residual windows, the unmatched audio of each
-track, and the error ranges of each track of an acquired set. It does not render a
-comparison of two editions yet, and refuses one, saying why.
+track, and the error ranges of each track of an acquired set. For a comparison of two
+editions, it also shows each edition's tracks and excluded files, the coverage, the
+correspondences between tracks, and each portion's segments with their measurements.
 [Comparison Report format][comparison-report] describes it.
 
 View exits 0 when it printed the page, 1 when the Report is invalid, unsupported, not a

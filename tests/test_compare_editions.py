@@ -215,23 +215,6 @@ def test_compare_prints_an_edition_comparison(
     ]
 
 
-def test_compare_refuses_to_view_an_edition_comparison_it_validates(
-    run: Run, inserted: tuple[Path, Path], tmp_path: Path
-) -> None:
-    report = tmp_path / "report.json"
-    report.write_text(run("compare", *inserted, "--json").out)
-
-    assert run("validate", report).code == 0
-    outcome = run("view", report)
-
-    assert outcome.code == 1
-    assert outcome.out == ""
-    assert outcome.err == (
-        f"copyofa: {report} is a comparison Report of scope editions; view supports "
-        "comparisons of tracks only\n"
-    )
-
-
 def write_files(source: Path) -> None:
     """Q, then P, as 48 kHz files whose paths sort P first, beside a cover."""
     for name, audio in (("B.flac", P), ("a.flac", Q)):
