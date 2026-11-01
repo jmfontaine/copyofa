@@ -45,6 +45,7 @@ _SCHEMAS = {
     ("copyofa.comparison", 3): "comparison-report-3.schema.json",
     ("copyofa.comparison", 4): "comparison-report-4.schema.json",
     ("copyofa.comparison", 5): "comparison-report-5.schema.json",
+    ("copyofa.comparison", 6): "comparison-report-6.schema.json",
 }
 
 # The longest a message of a problem gets: a message can quote a value of the document.

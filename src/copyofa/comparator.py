@@ -21,7 +21,10 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
 REPORT_KIND = "copyofa.comparison"
-REPORT_FORMAT_VERSION = 5
+REPORT_FORMAT_VERSION = 6
+
+TRACKS = "tracks"
+"""The `scope` of a comparison of two tracks."""
 
 RESAMPLER_QUALITY = "VHQ"
 """The soxr quality preset: libsoxr's very high quality."""
@@ -131,6 +134,7 @@ def compare(
     report: dict[str, Any] = {
         "report_kind": REPORT_KIND,
         "format_version": REPORT_FORMAT_VERSION,
+        "scope": TRACKS,
         "copyofa_version": copyofa.__version__,
         "compared_at": compared_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "omitted": omitted,

@@ -25,9 +25,11 @@ records how the tracks are decoded and measured, and
 [ADR 0006](../decisions/0006-locate-matching-portions-between-tracks.md) how portions
 are located and why that method was chosen.
 
-It has five format versions, each with its JSON Schema:
+It has six format versions, each with its JSON Schema:
+[comparison-report-6.schema.json](../../src/copyofa/schemas/comparison-report-6.schema.json)
+for version 6, which this document describes and `compare` prints,
 [comparison-report-5.schema.json](../../src/copyofa/schemas/comparison-report-5.schema.json)
-for version 5, which this document describes and `compare` prints,
+for [version 5](#format-version-5),
 [comparison-report-4.schema.json](../../src/copyofa/schemas/comparison-report-4.schema.json)
 for [version 4](#format-version-4),
 [comparison-report-3.schema.json](../../src/copyofa/schemas/comparison-report-3.schema.json)
@@ -152,7 +154,8 @@ Compare writes nothing into either set.
 | Field | Content |
 | --- | --- |
 | `report_kind` | Always `copyofa.comparison`. |
-| `format_version` | The version of this format, `5`. A later change to the fields increments it. |
+| `format_version` | The version of this format, `6`. A later change to the fields increments it. |
+| `scope` | What the Report compares: always `tracks`, two tracks. |
 | `copyofa_version` | The version of CopyOfA that ran the comparison. |
 | `compared_at` | The comparison time in UTC, such as `2026-10-25T18:30:00Z`. |
 | `omitted` | The JSON Pointers of the values the Report leaves out, each of `/inputs/a/evidence_set` and `/inputs/b/evidence_set` at most once; `[]` when it leaves out nothing. See [Leaving out Evidence Set locations](#leaving-out-evidence-set-locations). |
@@ -374,6 +377,13 @@ Compare may still name a path given on the command line on stderr, such as in an
 The schema requires an input's `evidence_set` exactly when `omitted` does not list it.
 Without the option, compare prints `"omitted": []`.
 
+## Format version 5
+
+Compare printed format version 5 in CopyOfA 0.8. It is version 6 without `scope`:
+`format_version` is `5`, and the Report has no `scope`. `copyofa validate` and
+`copyofa view` still accept it, and the version 5 schema is unchanged. A Report with
+`scope` is not valid at version 5.
+
 ## Format version 4
 
 Compare printed format version 4 in CopyOfA 0.6 and 0.7. It is version 5 without error
@@ -383,9 +393,10 @@ unchanged. A Report with `error_ranges` is not valid at version 4.
 
 ## Format version 3
 
-Compare printed format version 3 in CopyOfA 0.5. It differs from versions 4 and 5 in
-`method` and `measurements`, and from version 5 also in its inputs, whose `track`
-never holds `error_ranges`; `omitted` and the other fields are the same.
+Compare printed format version 3 in CopyOfA 0.5. It differs from versions 4 to 6 in
+`method` and `measurements`, from versions 5 and 6 also in its inputs, whose `track`
+never holds `error_ranges`, and from version 6 in having no `scope`; `omitted` and
+the other fields are the same.
 `copyofa validate` and `copyofa view` still accept it, and the version 3 schema is
 unchanged. A Report with `portions` is not valid at version 3. In version 3:
 
@@ -404,7 +415,7 @@ unchanged. A Report with `portions` is not valid at version 3. In version 3:
 - `absent` holds a reason for each of `offset`, `overlap` and `channels` that is
   absent: `offset`, `overlap` and every value of `downmix` and `channels` are absent
   when a track has no frames or, for audio that is not identical, a downmix is zero
-  throughout. The reasons for the other values say "overlap" where versions 4 and 5
+  throughout. The reasons for the other values say "overlap" where versions 4 to 6
   say "portion".
 - `limitations` state that one global offset aligns the tracks, and not the limits of
   the search for portions.
@@ -432,8 +443,9 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
 ```json
 {
   "report_kind": "copyofa.comparison",
-  "format_version": 5,
-  "copyofa_version": "0.8.0",
+  "format_version": 6,
+  "scope": "tracks",
+  "copyofa_version": "0.9.0",
   "compared_at": "2026-10-26T03:15:12Z",
   "omitted": [],
   "inputs": {
@@ -723,35 +735,37 @@ copyofa view htf.json > htf.html
 
 View first validates the file as [`copyofa validate`](validation-result.md) does, and
 refuses a Report that is invalid, unsupported, or of another kind. It supports
-comparison Reports only, of format version 1, 2, 3, 4 or 5, and renders each version
-with its own layout. It also refuses a valid comparison Report of any other format
-version, such as one a later CopyOfA printed, rather than show it with a layout that
-could leave fields out: it prints nothing on stdout and one line on stderr naming the
-file, its format version and the versions view supports, and exits 1.
+comparison Reports only, of format version 1, 2, 3, 4, 5 or 6, and renders each
+version, and from version 6 each scope, with its own layout: a version 6 Report of
+scope `tracks` with version 5's layout, plus its scope. It also refuses a valid
+comparison Report of any other format version, such as one a later CopyOfA printed,
+rather than show it with a layout that could leave fields out: it prints nothing on
+stdout and one line on stderr naming the file, its format version and the versions
+view supports, and exits 1.
 
 The page shows every field of the Report with its value as the Report records it, and
 adds only labels and units, for each track a duration computed from its frames and
-sample rate, and for versions 4 and 5 each range also in seconds, computed from its
+sample rate, and for versions 4 to 6 each range also in seconds, computed from its
 frames and the common sample rate. It gives:
 
 - the SHA-256 of the exact bytes of the file it was generated from, the Report's kind
-  and format version, and the CopyOfA version that generated the page, which is not
-  the Report's own `copyofa_version`, also shown;
+  and format version, for version 6 its scope, and the CopyOfA version that generated
+  the page, which is not the Report's own `copyofa_version`, also shown;
 - what the Report leaves out: its `omitted` list, or that it holds none, and for
   version 1 that the Report has no such field;
 - for each input, its Evidence Set location, or that it is left out, Integrity
   Baseline, path, track number, first frame and frame count, outcome and reason,
   properties, File Digests, Audio Digest, peak, silence, FLAC MD5 signature and
   limitations;
-- for version 5, for each track input, how many error ranges its `track` holds, or
-  that it holds none, and a table of them, one row each in the Report's order: offset
-  from the track's first frame, frames, and state;
-- the method, and for versions 4 and 5 a table of its parameters, each by its name in
+- for versions 5 and 6, for each track input, how many error ranges its `track`
+  holds, or that it holds none, and a table of them, one row each in the Report's
+  order: offset from the track's first frame, frames, and state;
+- the method, and for versions 4 to 6 a table of its parameters, each by its name in
   the Report;
 - for versions 1 to 3, the measurements: identical audio, offset, overlap, and for the
   downmix and each channel the correlation, gain and residual, with one table of
   residual windows for each of them;
-- for versions 4 and 5, the measurements:
+- for versions 4 to 6, the measurements:
   - identical audio, and how many portions the Report holds, or why it holds none;
   - a table of the portions, in the Report's order, one row each: rank, start frame
     and frames in A and in B, offset in frames and seconds, residual after the

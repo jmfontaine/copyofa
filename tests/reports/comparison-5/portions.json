@@ -1,0 +1,245 @@
+{
+  "report_kind": "copyofa.comparison",
+  "format_version": 5,
+  "copyofa_version": "0.9.0.dev0",
+  "compared_at": "2026-10-31T21:44:14Z",
+  "omitted": [],
+  "inputs": {
+    "a": {
+      "evidence_set": "/Volumes/Archive/set-3",
+      "integrity_baseline": {
+        "manifest_sha256": "f365fc0797664e84573860f9bebbc97aca0ae312c656bed4b73eedd0057c0161",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/a.flac",
+      "outcome": "interpreted",
+      "expected_digest": "409749c28ab9c7fa41f4da4e07faf96b78984ec8cc3ebe1aef6c5c43cff39451",
+      "observed_digest": "409749c28ab9c7fa41f4da4e07faf96b78984ec8cc3ebe1aef6c5c43cff39451",
+      "format": "flac",
+      "encoding": "pcm_16",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "frames": 264600,
+      "audio_digest": "pcm1:44100:2:16:a110f8aebc5473c2ab75257fa47cd68a844e747a314d30b68ffdb8886f4ed5d0",
+      "peak": [
+        32768,
+        32768
+      ],
+      "leading_silence_frames": 0,
+      "trailing_silence_frames": 0,
+      "flac_md5_signature": "matching"
+    },
+    "b": {
+      "evidence_set": "/Volumes/Archive/set-4",
+      "integrity_baseline": {
+        "manifest_sha256": "1ac4595552c2970caa606770b842c5da8c75398a5f77da212ad65e5acb625ae6",
+        "usable": true,
+        "problems": []
+      },
+      "path": "data/Album/b.wav",
+      "outcome": "interpreted",
+      "expected_digest": "812c6ab52ce377b892a2b4002fc3e01f6d10ff8ea376254caef2554772a2098b",
+      "observed_digest": "812c6ab52ce377b892a2b4002fc3e01f6d10ff8ea376254caef2554772a2098b",
+      "format": "wav",
+      "encoding": "pcm_24",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 24,
+      "frames": 308700,
+      "audio_digest": "pcm1:44100:2:24:1e010e6ed2a8068088d57932e8f1a943b832ac0e878bec268f7140a37d4a603d",
+      "peak": [
+        8388592,
+        8388601
+      ],
+      "leading_silence_frames": 88200,
+      "trailing_silence_frames": 0
+    }
+  },
+  "method": {
+    "decoder": "libsndfile",
+    "decoder_version": "1.2.2",
+    "resampler": "libsoxr",
+    "resampler_version": "0.1.3-14-ga66f3ee",
+    "resampler_quality": "VHQ",
+    "common_sample_rate": 44100,
+    "alignment": "windowed_portions",
+    "parameters": {
+      "decimation_factor": 16,
+      "decimation_quality": "HQ",
+      "first_difference_coefficient": 0.5,
+      "window_seconds": 5,
+      "hop_seconds": 5,
+      "silent_window_energy_ratio": 0.0001,
+      "b_position_energy_floor": 1e-10,
+      "candidate_threshold": 0.4,
+      "candidates_per_window": 3,
+      "candidate_separation_seconds": 0.5,
+      "skipped_windows": 1,
+      "chaining_tolerance_frames": 32,
+      "core_ratio": 0.85,
+      "core_seconds": 20,
+      "refinement_radius_frames": 32,
+      "block_frames": 2048,
+      "matched_block_residual_ratio": 0.2,
+      "core_confirming_ratio": 0.5,
+      "evidence_floor_dbfs": -80,
+      "silence_against_signal_dbfs": -60,
+      "end_range_inside_blocks": 8,
+      "end_range_outside_blocks": 1,
+      "acceptance_residual_db": -10,
+      "minimum_portion_seconds": 1,
+      "merge_tolerance_frames": 2,
+      "alternate_margin_db": 3,
+      "alternate_coverage_ratio": 0.9,
+      "equal_residual_floor_db": -60
+    }
+  },
+  "measurements": {
+    "portions": [
+      {
+        "rank": "primary",
+        "a": {
+          "start_frame": 0,
+          "frames": 220500
+        },
+        "b": {
+          "start_frame": 88200,
+          "frames": 220500
+        },
+        "offset": {
+          "frames": 88200,
+          "seconds": 2.0
+        },
+        "block_gain_residual_db": -31.86781501110176,
+        "downmix": {
+          "correlation": 0.9996743499144166,
+          "gain_db": -0.0030942802265397622,
+          "residual_db": -31.862899292388896,
+          "residual_windows": [
+            {
+              "start_frame": 0,
+              "frames": 44100,
+              "residual_db": -30.234592063084875
+            },
+            {
+              "start_frame": 44100,
+              "frames": 44100,
+              "residual_db": -35.663501634220644
+            },
+            {
+              "start_frame": 88200,
+              "frames": 44100,
+              "residual_db": -30.17528027837257
+            },
+            {
+              "start_frame": 132300,
+              "frames": 44100,
+              "residual_db": -30.91869465153262
+            },
+            {
+              "start_frame": 176400,
+              "frames": 44100,
+              "residual_db": -35.677470523513236
+            }
+          ]
+        },
+        "channels": [
+          {
+            "correlation": 0.9996732556879994,
+            "gain_db": -0.0028398696395466557,
+            "residual_db": -31.848303188192737,
+            "residual_windows": [
+              {
+                "start_frame": 0,
+                "frames": 44100,
+                "residual_db": -30.895600652318475
+              },
+              {
+                "start_frame": 44100,
+                "frames": 44100,
+                "residual_db": -35.64149554449296
+              },
+              {
+                "start_frame": 88200,
+                "frames": 44100,
+                "residual_db": -30.864782759562694
+              },
+              {
+                "start_frame": 132300,
+                "frames": 44100,
+                "residual_db": -30.873761974346237
+              },
+              {
+                "start_frame": 176400,
+                "frames": 44100,
+                "residual_db": -32.651535594982874
+              }
+            ]
+          },
+          {
+            "correlation": 0.9996732062800291,
+            "gain_db": -0.0028446088917374857,
+            "residual_db": -31.847625461447837,
+            "residual_windows": [
+              {
+                "start_frame": 0,
+                "frames": 44100,
+                "residual_db": -29.622889327599587
+              },
+              {
+                "start_frame": 44100,
+                "frames": 44100,
+                "residual_db": -35.68200906671839
+              },
+              {
+                "start_frame": 88200,
+                "frames": 44100,
+                "residual_db": -29.597134275345578
+              },
+              {
+                "start_frame": 132300,
+                "frames": 44100,
+                "residual_db": -30.87043740923637
+              },
+              {
+                "start_frame": 176400,
+                "frames": 44100,
+                "residual_db": -67.77225098271794
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "unmatched": {
+      "a": [
+        {
+          "start_frame": 220500,
+          "frames": 44100,
+          "digitally_silent": false,
+          "level_dbfs": -4.75249532311735
+        }
+      ],
+      "b": [
+        {
+          "start_frame": 0,
+          "frames": 88200,
+          "digitally_silent": true
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "No measurement says whether the tracks share a master, a mix or a source; the Report draws no such conclusion.",
+    "MP3 is lossy: the measurements of an MP3 depend on its decoder.",
+    "Tracks at different sample rates are compared at the lower rate, after resampling, so differences above that rate's band are not measured.",
+    "Portions shorter than about 2.5 s may be missed, and the search finds no portion in a track shorter than 5 s; identical audio still gets its portion.",
+    "Speed, pitch and drift differences give no portion.",
+    "A boundary inside audio below -80 dBFS is placed at the nearest frame with evidence, and the rest is reported as unmatched.",
+    "A boundary at a fade falls about three blocks of 2048 frames inside it, where the gain fitted over the eight blocks inside the edge stops fitting the faded audio, not where the fade gets quiet; a boundary at a crossfade falls where the other audio refutes the match.",
+    "In music that repeats a section, one range of a track can match several places in the other; each is reported as a portion.",
+    "Channels are paired in the order each file stores them."
+  ]
+}
