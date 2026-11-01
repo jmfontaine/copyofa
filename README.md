@@ -229,10 +229,10 @@ track of A naming the tracks of B that hold its audio and how much, and the audi
 one edition holds, per track. The Report splits each portion into segments at the
 track boundaries of both editions and measures each. Matching tracks do not make the
 editions equivalent, and editions whose speeds differ slightly, such as two masters,
-match in short portions only. Two CDs take a few minutes and several GB of memory;
-much longer editions may not fit in memory. Compare exits 1 when a track of either
-edition could not be inspected or decoded, or an edition has no track, and 2 when only
-one input is the root of a set given without its track option.
+match in short portions only. Two CDs take about three minutes and up to about 9 GB
+of memory; much longer editions may not fit in memory. Compare exits 1 when a track
+of either edition could not be inspected or decoded, or an edition has no track, and
+2 when only one input is the root of a set given without its track option.
 
 Play a disc you acquired, or tag its tracks with other tools, from FLAC files that
 export writes:
