@@ -4,7 +4,9 @@ import hashlib
 import json
 import lzma
 import os
+import random
 import re
+from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -761,6 +763,87 @@ def test_acquire_reads_ten_tracks_a_silent_first_track_and_lead_track_files(
     stored = {entry["original_name"] for entry in record["stored_files"]}
     assert "disc_09.cue" in stored
     assert not any(name.endswith(".bin") for name in stored)
+
+
+def test_acquire_cuts_given_audio_into_tracks_at_their_boundaries(
+    run: Run, redumper: StandIn, tmp_path: Path
+) -> None:
+    # One disc's audio, split two ways: tracks at sectors 0, 4 and 9, then at
+    # sectors 0, 2, 7 and 10.
+    audio = random.Random(7).randbytes(12 * 588 * 4)
+    (redumper.directory / "audio.raw").write_bytes(audio)
+    for name, starts in (("Three", [0, 4, 9]), ("Four", [0, 2, 7, 10])):
+        bounds = [588 * 4 * sector for sector in [*starts, 12]]
+        redumper.configure(
+            audio="audio.raw",
+            tracks=[{"frames": (end - start) // 4} for start, end in pairwise(bounds)],
+        )
+        destination = tmp_path / name
+
+        outcome = run("acquire", "--to", destination)
+
+        assert outcome.code == 0, outcome.err
+        record = record_of(destination)
+        image = decode(destination, "data/disc.scram.flac")
+        for track, (start, end) in zip(record["tracks"], pairwise(bounds), strict=True):
+            first = track["first_frame"] * 4
+            assert image[first : first + track["frame_count"] * 4] == audio[start:end]
+            assert track["audio_digest"] == digest_of(audio[start:end])
+
+
+def test_acquire_keeps_the_errors_of_a_disc_of_given_audio(
+    run: Run, redumper: StandIn, tmp_path: Path
+) -> None:
+    audio = random.Random(11).randbytes(6 * 588 * 4)
+    (redumper.directory / "audio.raw").write_bytes(audio)
+    redumper.configure(
+        audio="audio.raw",
+        tracks=[{"frames": 2 * 588}, {"frames": 4 * 588}],
+        errors={"2": [[100, 37, 0], [300, 20, 1]]},
+    )
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination)
+
+    assert outcome.code == 1
+    assert "the disc was read with errors" in outcome.err
+    record = record_of(destination)
+    assert [track["error_ranges"] for track in record["tracks"]] == [
+        [],
+        [
+            {"offset_frames": 100, "frame_count": 37, "state": "not_read"},
+            {"offset_frames": 300, "frame_count": 20, "state": "c2_error"},
+        ],
+    ]
+    # The image holds zeros where the drive read nothing, and the given audio
+    # elsewhere, the frames read with C2 errors included.
+    expected = bytearray(audio[2 * 588 * 4 :])
+    expected[100 * 4 : 137 * 4] = bytes(37 * 4)
+    track = record["tracks"][1]
+    first = track["first_frame"] * 4
+    image = decode(destination, "data/disc.scram.flac")
+    assert image[first : first + track["frame_count"] * 4] == bytes(expected)
+    assert track["audio_digest"] == digest_of(bytes(expected))
+
+
+def test_acquire_fails_when_the_given_audio_does_not_hold_the_tracks(
+    run: Run, redumper: StandIn, tmp_path: Path
+) -> None:
+    (redumper.directory / "audio.raw").write_bytes(bytes(3 * 588 * 4))
+    redumper.configure(
+        audio="audio.raw", tracks=[{"frames": 2 * 588}, {"frames": 2 * 588}]
+    )
+    destination = tmp_path / "Album"
+
+    outcome = run("acquire", "--to", destination)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert (
+        "copyofa: Failed: redumper exited with status 1. Its last message: error: "
+        "the tracks hold 2352 frames, 9408 bytes, but audio.raw holds 7056 bytes"
+    ) in outcome.err
+    assert left_behind(destination) == []
 
 
 @pytest.mark.parametrize(
