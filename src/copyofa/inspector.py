@@ -714,8 +714,22 @@ def _decode_range(
         }
 
 
-def _interpret(file: BinaryIO, suffix: str, sink: Sink | None) -> dict[str, Any]:
-    """Decode a file; return its outcome, with a reason or its findings."""
+@dataclass(frozen=True)
+class _Decodable:
+    """An open file whose headers say inspect decodes it, and how."""
+
+    sound: soundfile.SoundFile
+    kind: str
+    bits: int | None
+    """The bits per sample of PCM; None for MP3."""
+    streaminfo: _StreamInfo | None
+
+
+def _recognize(file: BinaryIO, suffix: str) -> _Decodable | dict[str, Any]:
+    """Read a file's headers: how inspect decodes it, or why it does not.
+
+    Returns the open sound, which the caller closes, or the outcome with its reason.
+    """
     try:
         streaminfo = _read_streaminfo(file)
     except _UnreadableError:
@@ -742,22 +756,52 @@ def _interpret(file: BinaryIO, suffix: str, sink: Sink | None) -> dict[str, Any]
         if streaminfo is not None or suffix in _EXPECTED_SUFFIXES:
             return _failed(f"libsndfile cannot open it: {error.error_string}")
         return _not_interpreted("no supported audio format was recognized")
-    with sound:
-        kind = _FORMATS.get(sound.format)
-        if kind is None:
-            return _not_interpreted(f"{sound.format} audio is not supported")
-        if kind == "mp3":
-            if sound.subtype != _MP3_SUBTYPE:
-                return _not_interpreted(
-                    f"MP3 audio with {sound.subtype} encoding is not supported"
-                )
+    kind = _FORMATS.get(sound.format)
+    bits = None if kind == "mp3" else _PCM_BITS.get(sound.subtype)
+    if kind is None:
+        reason = f"{sound.format} audio is not supported"
+    elif kind == "mp3" and sound.subtype != _MP3_SUBTYPE:
+        reason = f"MP3 audio with {sound.subtype} encoding is not supported"
+    elif kind != "mp3" and (
+        bits is None or (kind == "flac" and bits not in _FLAC_BITS)
+    ):
+        reason = f"{sound.format} audio with {sound.subtype} encoding is not supported"
+    else:
+        return _Decodable(sound, kind, bits, streaminfo)
+    sound.close()
+    return _not_interpreted(reason)
+
+
+def _interpret(file: BinaryIO, suffix: str, sink: Sink | None) -> dict[str, Any]:
+    """Decode a file; return its outcome, with a reason or its findings."""
+    recognized = _recognize(file, suffix)
+    if isinstance(recognized, dict):
+        return recognized
+    with recognized.sound as sound:
+        if recognized.bits is None:
             return _decode_mp3(sound, sink)
-        bits = _PCM_BITS.get(sound.subtype)
-        if bits is None or (kind == "flac" and bits not in _FLAC_BITS):
-            return _not_interpreted(
-                f"{sound.format} audio with {sound.subtype} encoding is not supported"
-            )
-        return _decode_pcm(sound, kind, bits, streaminfo, sink)
+        return _decode_pcm(
+            sound, recognized.kind, recognized.bits, recognized.streaminfo, sink
+        )
+
+
+def sample_rate_of(root: Path, path: str) -> int | None:
+    """Return the sample rate at which inspect would decode a listed file.
+
+    Reads the file's headers only, neither hashing nor decoding it. Returns None when
+    the file cannot be read or inspect would not interpret it.
+    """
+    with open_accepted(root, path, None) as accepted:
+        if accepted.file is None:
+            return None
+        try:
+            recognized = _recognize(accepted.file, PurePosixPath(path).suffix.lower())
+        except OSError:
+            return None
+        if isinstance(recognized, dict):
+            return None
+        with recognized.sound as sound:
+            return sound.samplerate
 
 
 def _decode_pcm(

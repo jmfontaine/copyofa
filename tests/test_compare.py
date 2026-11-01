@@ -830,12 +830,11 @@ def test_compare_does_not_inspect_a_track_of_an_unusable_record_or_image(
 @pytest.mark.parametrize(
     "arguments",
     [
-        ("{set}", "{set}"),
         ("{set}", "{set}", "--track-a", "0"),
         ("{set}", "{set}", "--track-a", "one"),
         ("{set}/data/disc.scram.flac", "{set}", "--track-a", "1", "--track-b", "1"),
     ],
-    ids=["set root without option", "track 0", "not a number", "file as a set"],
+    ids=["track 0", "not a number", "file as a set"],
 )
 def test_compare_exits_2_for_a_track_input_it_cannot_take(
     run: Run, acquired_set: Path, arguments: tuple[str, ...]

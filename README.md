@@ -211,6 +211,29 @@ when a track could not be inspected or decoded or is not a supported format, or 
 stdout is closed, 2 when an input is not inside an Evidence Set or the arguments are
 invalid, and 130 when canceled. It writes nothing into either set.
 
+Compare two editions of a release, track by track, by giving the roots of their
+Evidence Sets without `--track-a` or `--track-b`:
+
+```bash
+copyofa compare "/Volumes/Archive/TDS CD" "/Volumes/Archive/TDS 2017"
+copyofa compare "/Volumes/Archive/TDS CD" "/Volumes/Archive/TDS 2017" --json > tds.json
+```
+
+Each edition is the tracks of its set joined in order: an acquired set's in the order
+of its Acquisition Record, an imported set's audio files in the order of their paths,
+leaving out the files that are not audio, such as a cover image, which it lists.
+Compare searches the two editions for matching portions as it searches two tracks, so
+it finds audio whose track boundaries moved, a track only one edition holds, or a
+changed intro. It prints how much of each edition it found in the other, a line per
+track of A naming the tracks of B that hold its audio and how much, and the audio only
+one edition holds, per track. The Report splits each portion into segments at the
+track boundaries of both editions and measures each. Matching tracks do not make the
+editions equivalent, and editions whose speeds differ slightly, such as two masters,
+match in short portions only. Two CDs take about three minutes and up to about 9 GB
+of memory; much longer editions may not fit in memory. Compare exits 1 when a track
+of either edition could not be inspected or decoded, or an edition has no track, and
+2 when only one input is the root of a set given without its track option.
+
 Play a disc you acquired, or tag its tracks with other tools, from FLAC files that
 export writes:
 
@@ -267,13 +290,14 @@ recipient can check the page against the Report. The page runs no script and loa
 nothing, so it opens in any browser, offline. It draws no conclusion from the
 measurements. For a Report of the current format, it shows the method's parameters,
 a table of the portions with each one's residual windows, the unmatched audio of each
-track, and the error ranges of each track of an acquired set.
+track, and the error ranges of each track of an acquired set. It does not render a
+comparison of two editions yet, and refuses one, saying why.
 [Comparison Report format][comparison-report] describes it.
 
 View exits 0 when it printed the page, 1 when the Report is invalid, unsupported, not a
-comparison Report, of a format version view does not render, or cannot be read, or
-when stdout is closed, 2 when the arguments are invalid, and 130 when canceled. It
-prints nothing on stdout otherwise, and writes no file.
+comparison Report, of a format version or a scope view does not render, or cannot be
+read, or when stdout is closed, 2 when the arguments are invalid, and 130 when
+canceled. It prints nothing on stdout otherwise, and writes no file.
 
 ## Documents
 
