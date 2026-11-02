@@ -1,0 +1,643 @@
+{
+  "report_kind": "copyofa.comparison",
+  "format_version": 6,
+  "scope": "editions",
+  "copyofa_version": "0.10.0.dev0",
+  "compared_at": "2026-11-01T21:47:38Z",
+  "omitted": [],
+  "inputs": {
+    "a": {
+      "evidence_set": "/Volumes/Archive/acquired-1",
+      "integrity_baseline": {
+        "manifest_sha256": "74ac58305074e2872707b15dc8a6d65a444016a71853a9ab5386fcf46901c055",
+        "usable": true,
+        "problems": []
+      },
+      "tracks": [
+        {
+          "position": 1,
+          "path": "data/disc.scram.flac",
+          "track": {
+            "number": 1,
+            "first_frame": 2952,
+            "frame_count": 441000,
+            "error_ranges": []
+          },
+          "outcome": "interpreted",
+          "expected_digest": "face092a7985661ac4f1d74d5481d382419cc40fa85463208caf78046b72cd23",
+          "observed_digest": "face092a7985661ac4f1d74d5481d382419cc40fa85463208caf78046b72cd23",
+          "format": "flac",
+          "encoding": "pcm_16",
+          "sample_rate": 44100,
+          "channels": 2,
+          "bits_per_sample": 16,
+          "frames": 441000,
+          "audio_digest": "pcm1:44100:2:16:de9589e0b21236305ce0752ee920b52a7ae7f5a1ddd37b85f453dbb70e93330f",
+          "peak": [
+            15528,
+            16662
+          ],
+          "leading_silence_frames": 0,
+          "trailing_silence_frames": 0
+        },
+        {
+          "position": 2,
+          "path": "data/disc.scram.flac",
+          "track": {
+            "number": 2,
+            "first_frame": 443952,
+            "frame_count": 441000,
+            "error_ranges": []
+          },
+          "outcome": "interpreted",
+          "expected_digest": "face092a7985661ac4f1d74d5481d382419cc40fa85463208caf78046b72cd23",
+          "observed_digest": "face092a7985661ac4f1d74d5481d382419cc40fa85463208caf78046b72cd23",
+          "format": "flac",
+          "encoding": "pcm_16",
+          "sample_rate": 44100,
+          "channels": 2,
+          "bits_per_sample": 16,
+          "frames": 441000,
+          "audio_digest": "pcm1:44100:2:16:117062a5ff1cca07a34f015c8ce5541d8e8371b310f0460e339d3c4e91c6372f",
+          "peak": [
+            16258,
+            14971
+          ],
+          "leading_silence_frames": 0,
+          "trailing_silence_frames": 0
+        }
+      ],
+      "excluded": []
+    },
+    "b": {
+      "evidence_set": "/Volumes/Archive/set-1",
+      "integrity_baseline": {
+        "manifest_sha256": "9f8b1819c754180bea51fbd95fb97795b453956598878ec9d9b664141851374b",
+        "usable": true,
+        "problems": []
+      },
+      "tracks": [
+        {
+          "position": 1,
+          "path": "data/Album/B.flac",
+          "outcome": "interpreted",
+          "expected_digest": "3706ea420cda6714cef52caf1c5c8e09be489628575483692da2401ab0daa343",
+          "observed_digest": "3706ea420cda6714cef52caf1c5c8e09be489628575483692da2401ab0daa343",
+          "format": "flac",
+          "encoding": "pcm_24",
+          "sample_rate": 48000,
+          "channels": 2,
+          "bits_per_sample": 24,
+          "frames": 480000,
+          "audio_digest": "pcm1:48000:2:24:6eb6aabfcb546abde7bc48d546201420787b3c0da93ce7ac409b2faf7f10568f",
+          "peak": [
+            4110428,
+            4098394
+          ],
+          "leading_silence_frames": 0,
+          "trailing_silence_frames": 0,
+          "flac_md5_signature": "matching"
+        },
+        {
+          "position": 2,
+          "path": "data/Album/a.flac",
+          "outcome": "interpreted",
+          "expected_digest": "52e73da97b9855a4273013493c6e8a8ad83e631a863f893f5c54ce821266222f",
+          "observed_digest": "52e73da97b9855a4273013493c6e8a8ad83e631a863f893f5c54ce821266222f",
+          "format": "flac",
+          "encoding": "pcm_24",
+          "sample_rate": 48000,
+          "channels": 2,
+          "bits_per_sample": 24,
+          "frames": 480000,
+          "audio_digest": "pcm1:48000:2:24:09d942807d14b1767e31a5e42f42812d674829dcbe8e29ddacb92b10b5c1e2b8",
+          "peak": [
+            4607104,
+            3832578
+          ],
+          "leading_silence_frames": 0,
+          "trailing_silence_frames": 0,
+          "flac_md5_signature": "matching"
+        }
+      ],
+      "excluded": [
+        {
+          "path": "data/Album/cover.jpg",
+          "outcome": "not_interpreted",
+          "reason": "no supported audio format was recognized"
+        }
+      ]
+    }
+  },
+  "method": {
+    "decoder": "libsndfile",
+    "decoder_version": "1.2.2",
+    "resampler": "libsoxr",
+    "resampler_version": "0.1.3-14-ga66f3ee",
+    "resampler_quality": "VHQ",
+    "common_sample_rate": 44100,
+    "alignment": "windowed_portions",
+    "parameters": {
+      "decimation_factor": 16,
+      "decimation_quality": "HQ",
+      "first_difference_coefficient": 0.5,
+      "window_seconds": 5,
+      "hop_seconds": 5,
+      "silent_window_energy_ratio": 0.0001,
+      "b_position_energy_floor": 1e-10,
+      "candidate_threshold": 0.4,
+      "candidates_per_window": 3,
+      "candidate_separation_seconds": 0.5,
+      "skipped_windows": 1,
+      "chaining_tolerance_frames": 32,
+      "core_ratio": 0.85,
+      "core_seconds": 20,
+      "refinement_radius_frames": 32,
+      "block_frames": 2048,
+      "matched_block_residual_ratio": 0.2,
+      "core_confirming_ratio": 0.5,
+      "evidence_floor_dbfs": -80,
+      "silence_against_signal_dbfs": -60,
+      "end_range_inside_blocks": 8,
+      "end_range_outside_blocks": 1,
+      "acceptance_residual_db": -10,
+      "minimum_portion_seconds": 1,
+      "merge_tolerance_frames": 2,
+      "alternate_margin_db": 3,
+      "alternate_coverage_ratio": 0.9,
+      "equal_residual_floor_db": -60
+    }
+  },
+  "measurements": {
+    "sequences": {
+      "a": [
+        {
+          "position": 1,
+          "start_frame": 0,
+          "frames": 441000
+        },
+        {
+          "position": 2,
+          "start_frame": 441000,
+          "frames": 441000
+        }
+      ],
+      "b": [
+        {
+          "position": 1,
+          "start_frame": 0,
+          "frames": 441000
+        },
+        {
+          "position": 2,
+          "start_frame": 441000,
+          "frames": 441000
+        }
+      ]
+    },
+    "portions": [
+      {
+        "rank": "primary",
+        "a": {
+          "start_frame": 0,
+          "frames": 882000
+        },
+        "b": {
+          "start_frame": 0,
+          "frames": 882000
+        },
+        "offset": {
+          "frames": 0,
+          "seconds": 0.0
+        },
+        "block_gain_residual_db": -71.27661991501523,
+        "segments": [
+          {
+            "a": {
+              "position": 1,
+              "start_frame": 0,
+              "frames": 441000
+            },
+            "b": {
+              "position": 1,
+              "start_frame": 0,
+              "frames": 441000
+            },
+            "downmix": {
+              "correlation": 0.9999999480594554,
+              "gain_db": 1.6696039504448755e-05,
+              "residual_db": -69.83462671653838,
+              "residual_windows": [
+                {
+                  "start_frame": 0,
+                  "frames": 44100,
+                  "residual_db": -60.7360980399793
+                },
+                {
+                  "start_frame": 44100,
+                  "frames": 44100,
+                  "residual_db": -94.06676088470505
+                },
+                {
+                  "start_frame": 88200,
+                  "frames": 44100,
+                  "residual_db": -94.31858823205324
+                },
+                {
+                  "start_frame": 132300,
+                  "frames": 44100,
+                  "residual_db": -94.07363139281338
+                },
+                {
+                  "start_frame": 176400,
+                  "frames": 44100,
+                  "residual_db": -94.21750836610072
+                },
+                {
+                  "start_frame": 220500,
+                  "frames": 44100,
+                  "residual_db": -94.15574039618042
+                },
+                {
+                  "start_frame": 264600,
+                  "frames": 44100,
+                  "residual_db": -94.28665640510636
+                },
+                {
+                  "start_frame": 308700,
+                  "frames": 44100,
+                  "residual_db": -94.25256297696875
+                },
+                {
+                  "start_frame": 352800,
+                  "frames": 44100,
+                  "residual_db": -94.23765815982367
+                },
+                {
+                  "start_frame": 396900,
+                  "frames": 44100,
+                  "residual_db": -67.37731186870342
+                }
+              ]
+            },
+            "channels": [
+              {
+                "correlation": 0.9999999155326066,
+                "gain_db": 1.4803834404165998e-05,
+                "residual_db": -67.72280817912478,
+                "residual_windows": [
+                  {
+                    "start_frame": 0,
+                    "frames": 44100,
+                    "residual_db": -60.4497340186225
+                  },
+                  {
+                    "start_frame": 44100,
+                    "frames": 44100,
+                    "residual_db": -94.33145087692026
+                  },
+                  {
+                    "start_frame": 88200,
+                    "frames": 44100,
+                    "residual_db": -94.29778346335935
+                  },
+                  {
+                    "start_frame": 132300,
+                    "frames": 44100,
+                    "residual_db": -94.03888874994453
+                  },
+                  {
+                    "start_frame": 176400,
+                    "frames": 44100,
+                    "residual_db": -94.10107346541737
+                  },
+                  {
+                    "start_frame": 220500,
+                    "frames": 44100,
+                    "residual_db": -94.4964566632622
+                  },
+                  {
+                    "start_frame": 264600,
+                    "frames": 44100,
+                    "residual_db": -94.36791472330984
+                  },
+                  {
+                    "start_frame": 308700,
+                    "frames": 44100,
+                    "residual_db": -94.41685299832143
+                  },
+                  {
+                    "start_frame": 352800,
+                    "frames": 44100,
+                    "residual_db": -94.37385667877793
+                  },
+                  {
+                    "start_frame": 396900,
+                    "frames": 44100,
+                    "residual_db": -61.11812736004325
+                  }
+                ]
+              },
+              {
+                "correlation": 0.9999996582538402,
+                "gain_db": 2.0870992741219398e-05,
+                "residual_db": -61.65266215608905,
+                "residual_windows": [
+                  {
+                    "start_frame": 0,
+                    "frames": 44100,
+                    "residual_db": -53.35637712301306
+                  },
+                  {
+                    "start_frame": 44100,
+                    "frames": 44100,
+                    "residual_db": -94.10879900859146
+                  },
+                  {
+                    "start_frame": 88200,
+                    "frames": 44100,
+                    "residual_db": -94.13485870583698
+                  },
+                  {
+                    "start_frame": 132300,
+                    "frames": 44100,
+                    "residual_db": -94.2081188458419
+                  },
+                  {
+                    "start_frame": 176400,
+                    "frames": 44100,
+                    "residual_db": -94.34026898678484
+                  },
+                  {
+                    "start_frame": 220500,
+                    "frames": 44100,
+                    "residual_db": -94.26432129251097
+                  },
+                  {
+                    "start_frame": 264600,
+                    "frames": 44100,
+                    "residual_db": -94.25676293061953
+                  },
+                  {
+                    "start_frame": 308700,
+                    "frames": 44100,
+                    "residual_db": -94.30722365108309
+                  },
+                  {
+                    "start_frame": 352800,
+                    "frames": 44100,
+                    "residual_db": -94.26025926025463
+                  },
+                  {
+                    "start_frame": 396900,
+                    "frames": 44100,
+                    "residual_db": -56.58282669737466
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "a": {
+              "position": 2,
+              "start_frame": 0,
+              "frames": 441000
+            },
+            "b": {
+              "position": 2,
+              "start_frame": 0,
+              "frames": 441000
+            },
+            "downmix": {
+              "correlation": 0.9999999773432926,
+              "gain_db": 1.3852609209756584e-05,
+              "residual_db": -73.4377380189732,
+              "residual_windows": [
+                {
+                  "start_frame": 0,
+                  "frames": 44100,
+                  "residual_db": -66.06998881129026
+                },
+                {
+                  "start_frame": 44100,
+                  "frames": 44100,
+                  "residual_db": -94.25913947440435
+                },
+                {
+                  "start_frame": 88200,
+                  "frames": 44100,
+                  "residual_db": -94.1463817917775
+                },
+                {
+                  "start_frame": 132300,
+                  "frames": 44100,
+                  "residual_db": -94.0846120847956
+                },
+                {
+                  "start_frame": 176400,
+                  "frames": 44100,
+                  "residual_db": -94.26008540142823
+                },
+                {
+                  "start_frame": 220500,
+                  "frames": 44100,
+                  "residual_db": -94.5048936286274
+                },
+                {
+                  "start_frame": 264600,
+                  "frames": 44100,
+                  "residual_db": -94.20604578456204
+                },
+                {
+                  "start_frame": 308700,
+                  "frames": 44100,
+                  "residual_db": -94.04964186600388
+                },
+                {
+                  "start_frame": 352800,
+                  "frames": 44100,
+                  "residual_db": -94.04597360895785
+                },
+                {
+                  "start_frame": 396900,
+                  "frames": 44100,
+                  "residual_db": -66.97293121152235
+                }
+              ]
+            },
+            "channels": [
+              {
+                "correlation": 0.9999999887171472,
+                "gain_db": 1.3818949463298324e-05,
+                "residual_db": -76.46550309999262,
+                "residual_windows": [
+                  {
+                    "start_frame": 0,
+                    "frames": 44100,
+                    "residual_db": -67.13797441708658
+                  },
+                  {
+                    "start_frame": 44100,
+                    "frames": 44100,
+                    "residual_db": -94.1092645467762
+                  },
+                  {
+                    "start_frame": 88200,
+                    "frames": 44100,
+                    "residual_db": -94.23511731838519
+                  },
+                  {
+                    "start_frame": 132300,
+                    "frames": 44100,
+                    "residual_db": -94.16241485051187
+                  },
+                  {
+                    "start_frame": 176400,
+                    "frames": 44100,
+                    "residual_db": -94.12612334909674
+                  },
+                  {
+                    "start_frame": 220500,
+                    "frames": 44100,
+                    "residual_db": -94.27533572260162
+                  },
+                  {
+                    "start_frame": 264600,
+                    "frames": 44100,
+                    "residual_db": -94.30239228462469
+                  },
+                  {
+                    "start_frame": 308700,
+                    "frames": 44100,
+                    "residual_db": -94.01302578338252
+                  },
+                  {
+                    "start_frame": 352800,
+                    "frames": 44100,
+                    "residual_db": -94.07332564734871
+                  },
+                  {
+                    "start_frame": 396900,
+                    "frames": 44100,
+                    "residual_db": -75.35017767179272
+                  }
+                ]
+              },
+              {
+                "correlation": 0.9999999783105689,
+                "gain_db": 1.5055618983793267e-05,
+                "residual_db": -73.62722392955922,
+                "residual_windows": [
+                  {
+                    "start_frame": 0,
+                    "frames": 44100,
+                    "residual_db": -66.80966855845158
+                  },
+                  {
+                    "start_frame": 44100,
+                    "frames": 44100,
+                    "residual_db": -94.3648481944575
+                  },
+                  {
+                    "start_frame": 88200,
+                    "frames": 44100,
+                    "residual_db": -94.07473245498383
+                  },
+                  {
+                    "start_frame": 132300,
+                    "frames": 44100,
+                    "residual_db": -94.17415970128016
+                  },
+                  {
+                    "start_frame": 176400,
+                    "frames": 44100,
+                    "residual_db": -94.20975222554488
+                  },
+                  {
+                    "start_frame": 220500,
+                    "frames": 44100,
+                    "residual_db": -94.21723193305752
+                  },
+                  {
+                    "start_frame": 264600,
+                    "frames": 44100,
+                    "residual_db": -94.28571246947698
+                  },
+                  {
+                    "start_frame": 308700,
+                    "frames": 44100,
+                    "residual_db": -94.25717275893157
+                  },
+                  {
+                    "start_frame": 352800,
+                    "frames": 44100,
+                    "residual_db": -94.26326349831682
+                  },
+                  {
+                    "start_frame": 396900,
+                    "frames": 44100,
+                    "residual_db": -66.59038808240054
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "correspondences": [
+      {
+        "a": {
+          "position": 1,
+          "matched_frames": 441000,
+          "fraction": 1.0
+        },
+        "b": {
+          "position": 1,
+          "matched_frames": 441000,
+          "fraction": 1.0
+        }
+      },
+      {
+        "a": {
+          "position": 2,
+          "matched_frames": 441000,
+          "fraction": 1.0
+        },
+        "b": {
+          "position": 2,
+          "matched_frames": 441000,
+          "fraction": 1.0
+        }
+      }
+    ],
+    "unmatched": {
+      "a": [],
+      "b": []
+    },
+    "coverage": {
+      "a": {
+        "matched_frames": 882000,
+        "frames": 882000
+      },
+      "b": {
+        "matched_frames": 882000,
+        "frames": 882000
+      }
+    }
+  },
+  "limitations": [
+    "No measurement says whether the tracks share a master, a mix or a source; the Report draws no such conclusion.",
+    "MP3 is lossy: the measurements of an MP3 depend on its decoder.",
+    "Tracks at different sample rates are compared at the lower rate, after resampling, so differences above that rate's band are not measured.",
+    "Portions shorter than about 2.5 s may be missed, and the search finds no portion in a track shorter than 5 s; identical audio still gets its portion.",
+    "Speed, pitch and drift differences give no portion.",
+    "A boundary inside audio below -80 dBFS is placed at the nearest frame with evidence, and the rest is reported as unmatched.",
+    "A boundary at a fade falls about three blocks of 2048 frames inside it, where the gain fitted over the eight blocks inside the edge stops fitting the faded audio, not where the fade gets quiet; a boundary at a crossfade falls where the other audio refutes the match.",
+    "In music that repeats a section, one range of a track can match several places in the other; each is reported as a portion.",
+    "Channels are paired in the order each file stores them.",
+    "Each edition is compared as its tracks joined in order without gap: an acquired set's in the order of its Acquisition Record, an imported set's audio files in the order of their paths.",
+    "Where the speeds of two editions differ, even by a few parts per million, portions are short and the coverage stays partial.",
+    "Tracks that match, even with identical audio, do not establish that the editions are equivalent."
+  ]
+}

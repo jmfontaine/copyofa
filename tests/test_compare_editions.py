@@ -87,6 +87,7 @@ def test_compare_follows_audio_across_moved_track_boundaries(
     [portion] = measurements["portions"]
     assert portion["rank"] == "primary"
     assert portion["offset"]["frames"] == 0
+    assert portion["speed_ratio_ppm"] == 0
     assert near(portion["a"]["start_frame"], 0)
     assert near(portion["a"]["frames"], 24 * SECOND)
     segments = portion["segments"]
@@ -104,6 +105,12 @@ def test_compare_follows_audio_across_moved_track_boundaries(
         "frames": SECOND,
     }
     for segment in segments:
+        # Each segment's own offset, within its two tracks, at a ratio of 0.
+        assert segment["speed_ratio_ppm"] == 0
+        assert segment["offset"]["frames"] == (
+            segment["b"]["start_frame"] - segment["a"]["start_frame"]
+        )
+        assert isinstance(segment["offset"]["frames"], int)
         assert segment["downmix"]["correlation"] == pytest.approx(1)
         assert segment["downmix"]["absent"]["residual_db"] == (
             "A minus B after the gain is zero throughout the segment"

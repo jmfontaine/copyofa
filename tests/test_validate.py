@@ -44,11 +44,12 @@ SCHEMA_FILES = sorted(
 # align at an offset, the same with the locations left out, and one whose input A is
 # a track of an acquired set.
 STORED = Path(__file__).parent / "reports" / "comparison-3"
-# Version 4 and 5 comparison Reports that compare 0.8.0.dev0 and 0.9.0.dev0 printed,
-# kept as they were so validate keeps accepting what those versions printed;
-# tests/test_view.py lists them.
+# Version 4, 5 and 6 comparison Reports that compare 0.8.0.dev0, 0.9.0.dev0 and
+# 0.10.0.dev0 printed, kept as they were so validate keeps accepting what those
+# versions printed; tests/test_view.py lists them.
 STORED_4 = Path(__file__).parent / "reports" / "comparison-4"
 STORED_5 = Path(__file__).parent / "reports" / "comparison-5"
+STORED_6 = Path(__file__).parent / "reports" / "comparison-6"
 STORED_REPORTS = {
     "comparison_v3": "measured",
     "comparison_omitted": "locations_omitted",
@@ -181,7 +182,7 @@ def test_validate_prints_a_short_result(run: Run, reports: dict[str, Path]) -> N
     assert lines[0] == "Result: valid"
     assert f"SHA-256: {hashlib.sha256(path.read_bytes()).hexdigest()}" in lines
     assert "Report kind: copyofa.comparison" in lines
-    assert "Format version: 6" in lines
+    assert "Format version: 7" in lines
     assert "Limitations:" in lines
     assert "Traceback" not in outcome.out + outcome.err
 
@@ -473,7 +474,31 @@ def test_validate_accepts_a_comparison_report_of_format_version_5(
     assert result["problems"] == []
 
 
+@pytest.mark.parametrize("name", sorted(path.stem for path in STORED_6.glob("*.json")))
 def test_validate_accepts_a_comparison_report_of_format_version_6(
+    run: Run, name: str
+) -> None:
+    outcome, result = validate(run, STORED_6 / f"{name}.json")
+
+    assert outcome.code == 0, outcome.err
+    assert result["outcome"] == "valid"
+    assert result["format_version"] == 6
+    assert result["problems"] == []
+
+
+def test_validate_refuses_a_speed_ratio_in_a_comparison_report_of_format_version_6(
+    run: Run, tmp_path: Path
+) -> None:
+    document = json.loads((STORED_6 / "editions_measured.json").read_text())
+    document["measurements"]["portions"][0]["speed_ratio_ppm"] = 0.0
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 1
+    assert result["outcome"] == "invalid"
+
+
+def test_validate_accepts_a_comparison_report_of_format_version_7(
     run: Run, reports: dict[str, Path]
 ) -> None:
     document = json.loads(reports["comparison"].read_text())
@@ -486,11 +511,11 @@ def test_validate_accepts_a_comparison_report_of_format_version_6(
 
     assert outcome.code == 0, outcome.err
     assert result["outcome"] == "valid"
-    assert result["format_version"] == 6
+    assert result["format_version"] == 7
     assert result["problems"] == []
 
 
-def test_validate_accepts_a_comparison_report_of_format_version_6_without_a_portion(
+def test_validate_accepts_a_comparison_report_of_format_version_7_without_a_portion(
     run: Run, make_set: MakeSet, tmp_path: Path
 ) -> None:
     # Tracks shorter than one 5 s window have no portion, and say why.
@@ -517,13 +542,35 @@ def test_validate_accepts_a_comparison_report_of_format_version_6_without_a_port
 
     assert outcome.code == 0, outcome.err
     assert result["outcome"] == "valid"
-    assert result["format_version"] == 6
+    assert result["format_version"] == 7
+
+
+def test_validate_accepts_a_comparison_report_of_format_version_7_of_editions(
+    run: Run, make_set: MakeSet, tmp_path: Path
+) -> None:
+    def fill(source: Path) -> None:
+        for seed in (1, 2):
+            samples = signal(6 * RATE, 2, 16, seed=seed)
+            write_audio(source / f"{seed}.flac", samples, 16, "FLAC")
+
+    comparison = run("compare", make_set(fill), make_set(fill), "--json")
+    assert comparison.code == 0, comparison.err
+    document = json.loads(comparison.out)
+    assert document["scope"] == "editions"
+    assert document["measurements"]["portions"][0]["segments"]
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 0, outcome.err
+    assert result["outcome"] == "valid"
+    assert result["format_version"] == 7
+    assert result["problems"] == []
 
 
 @pytest.mark.parametrize(
     ("scope", "location"), [(None, ""), ("albums", "/scope"), ("Tracks", "/scope")]
 )
-def test_validate_requires_the_scope_of_a_comparison_report_of_format_version_6(
+def test_validate_requires_the_scope_of_a_comparison_report_of_format_version_7(
     run: Run, reports: dict[str, Path], tmp_path: Path, scope: str | None, location: str
 ) -> None:
     document = json.loads(reports["comparison"].read_text())
@@ -536,8 +583,38 @@ def test_validate_requires_the_scope_of_a_comparison_report_of_format_version_6(
 
     assert outcome.code == 1
     assert result["outcome"] == "invalid"
-    assert result["format_version"] == 6
+    assert result["format_version"] == 7
     assert location in {problem["location"] for problem in result["problems"]}
+
+
+def test_validate_requires_the_speed_ratio_of_a_portion_of_format_version_7(
+    run: Run, reports: dict[str, Path], tmp_path: Path
+) -> None:
+    document = json.loads(reports["comparison"].read_text())
+    del document["measurements"]["portions"][0]["speed_ratio_ppm"]
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 1
+    assert result["outcome"] == "invalid"
+    assert "/measurements/portions/0" in {
+        problem["location"] for problem in result["problems"]
+    }
+
+
+@pytest.mark.parametrize(("ratio", "valid"), [(0.0, False), (12.5, True)])
+def test_validate_takes_a_fraction_of_a_frame_only_at_another_speed(
+    run: Run, reports: dict[str, Path], tmp_path: Path, ratio: float, valid: bool
+) -> None:
+    document = json.loads(reports["comparison"].read_text())
+    portion = document["measurements"]["portions"][0]
+    portion["speed_ratio_ppm"] = ratio
+    portion["offset"]["frames"] += 0.25
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert result["outcome"] == ("valid" if valid else "invalid"), result
+    assert outcome.code == (0 if valid else 1)
 
 
 def test_validate_refuses_a_scope_in_a_comparison_report_of_format_version_5(
@@ -1134,7 +1211,7 @@ TRACK_EDITS: dict[str, tuple[Callable[[dict[str, Any]], None], str]] = {
 }
 
 
-@pytest.mark.parametrize("version", [3, 4, 5, 6])
+@pytest.mark.parametrize("version", [3, 4, 5, 6, 7])
 @pytest.mark.parametrize("name", TRACK_EDITS)
 def test_validate_checks_the_track_input_of_a_comparison_report(
     run: Run, acquired_set: Path, tmp_path: Path, name: str, version: int
@@ -1146,6 +1223,8 @@ def test_validate_checks_the_track_input_of_a_comparison_report(
         document = json.loads((STORED_4 / "acquired_track.json").read_text())
     elif version == 5:
         document = json.loads((STORED_5 / "acquired_track.json").read_text())
+    elif version == 6:
+        document = json.loads((STORED_6 / "damaged_tracks.json").read_text())
     else:
         report = run(
             "compare",
@@ -1211,7 +1290,7 @@ def test_validate_checks_the_error_ranges_of_a_track_input(
     )
     assert report.code == 0, report.err
     document = json.loads(report.out)
-    assert document["format_version"] == 6
+    assert document["format_version"] == 7
     assert document["inputs"]["a"]["track"]["error_ranges"]
     change(document)
 

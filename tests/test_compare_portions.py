@@ -207,6 +207,9 @@ def assert_found(report: dict[str, Any], expected: list[Expected]) -> None:
     for portion, wanted in zip(
         found, sorted(expected, key=lambda e: e.start), strict=True
     ):
+        # At the same speed, a portion's ratio is 0 and its offset a whole number.
+        assert portion["speed_ratio_ppm"] == 0
+        assert isinstance(portion["offset"]["frames"], int)
         assert portion["offset"]["frames"] == wanted.offset
         start = portion["a"]["start_frame"]
         end = start + portion["a"]["frames"]

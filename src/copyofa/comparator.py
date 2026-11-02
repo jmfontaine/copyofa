@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
 REPORT_KIND = "copyofa.comparison"
-REPORT_FORMAT_VERSION = 6
+REPORT_FORMAT_VERSION = 7
 
 TRACKS = "tracks"
 """The `scope` of a comparison of two tracks."""
@@ -35,7 +35,7 @@ EDITIONS = "editions"
 
 RESAMPLER_QUALITY = "VHQ"
 """The soxr quality preset: libsoxr's very high quality."""
-ALIGNMENT = "windowed_portions"
+ALIGNMENT = "speed_tolerant_portions"
 PRIMARY = "primary"
 ALTERNATE = "alternate"
 
@@ -54,7 +54,17 @@ LIMITATIONS = (
         "portion in a track shorter than 5 s; identical audio still gets its "
         "portion."
     ),
-    "Speed, pitch and drift differences give no portion.",
+    (
+        "Speed differences up to ±4.5 % are found, each portion at its own constant "
+        "speed ratio; a portion whose ratio lies more than about 145 ppm from the "
+        "comparison's one speed estimate is missed."
+    ),
+    (
+        "Pitch is not corrected: a speed ratio changes speed and pitch together. "
+        "Tempo changes that keep the pitch, and speeds that vary within a portion, "
+        "are not followed."
+    ),
+    "A short excerpt at a different speed may be missed.",
     (
         "A boundary inside audio below -80 dBFS is placed at the nearest frame "
         "with evidence, and the rest is reported as unmatched."
@@ -79,15 +89,15 @@ EDITION_LIMITATIONS = (
         "audio files in the order of their paths."
     ),
     (
-        "Where the speeds of two editions differ, even by a few parts per million, "
-        "portions are short and the coverage stays partial."
+        "The speed estimate is one per comparison, so a track whose speed differs "
+        "from that of most others by more than about 145 ppm may be missed."
     ),
     (
         "Tracks that match, even with identical audio, do not establish that the "
         "editions are equivalent."
     ),
 )
-"""What an edition comparison adds to LIMITATIONS (see ADR 0009)."""
+"""What an edition comparison adds to LIMITATIONS (see ADRs 0009 and 0010)."""
 
 _UNUSABLE = "the Integrity Baseline is unusable"
 _NOT_LISTED = f"{evidence_set.MANIFEST} does not list it"
@@ -431,10 +441,7 @@ def _measure(a: _Audio, b: _Audio, rate: int) -> dict[str, Any]:
         ),
         "b": _unmatched(
             samples_b,
-            [
-                (portion.start_b, portion.start_b + portion.frames)
-                for portion in primaries
-            ],
+            [(portion.start_b, portion.end_b) for portion in primaries],
         ),
     }
     if missing is not None:
@@ -482,13 +489,14 @@ class _Segment:
 
     start: int
     """The segment's first frame in the sequence of edition A."""
-    frames: int
     index_a: int
     index_b: int
-    start_a: int
-    """The segment's first frame in its track of edition A."""
+    span: locator.Portion
+    """The segment as a portion of its track of A in its track of B: its range of A,
+    and its offset and ratio, within the two tracks."""
     start_b: int
     """The segment's first frame in its track of edition B."""
+    frames_b: int
 
 
 def _compare_editions(
@@ -682,9 +690,7 @@ def _measure_editions(a: _Edition, b: _Edition, rate: int) -> dict[str, Any]:
     primaries = [portion for portion in portions if not portion.alternate]
     covered = {
         "a": [(portion.start_a, portion.end_a) for portion in primaries],
-        "b": [
-            (portion.start_b, portion.start_b + portion.frames) for portion in primaries
-        ],
+        "b": [(portion.start_b, portion.end_b) for portion in primaries],
     }
     measurements: dict[str, Any] = {
         "sequences": {
@@ -718,27 +724,43 @@ def _measure_editions(a: _Edition, b: _Edition, rate: int) -> dict[str, Any]:
 
 
 def _split(portion: locator.Portion, a: _Edition, b: _Edition) -> list[_Segment]:
-    """Split a portion at the boundaries of the tracks of both editions."""
+    """Split a portion at the boundaries of the tracks of both editions.
+
+    A track of B starts, along the portion's line, at the first frame of A whose
+    position of B is at or past its first frame.
+    """
     start, end = portion.start_a, portion.end_a
     cuts = {start, end}
     cuts.update(first for first in a.starts if start < first < end)
-    cuts.update(
-        first - portion.offset
-        for first in b.starts
-        if start < first - portion.offset < end
-    )
+    # The first frame of A of each track of B, along the portion's line.
+    b_firsts = [math.ceil(portion.frame_a(first)) for first in b.starts[:-1]]
+    cuts.update(frame for frame in b_firsts if start < frame < end)
     segments = []
     for first, stop in itertools.pairwise(sorted(cuts)):
         index_a = a.track_at(first)
-        index_b = b.track_at(first + portion.offset)
+        # At least the first track, should rounding put the line's start of B a
+        # hair after the portion's first frame.
+        index_b = max(0, bisect.bisect_right(b_firsts, first) - 1)
+        offset = (
+            portion.position_b(first) - b.starts[index_b] - (first - a.starts[index_a])
+        )
+        span = locator.Portion(
+            first - a.starts[index_a],
+            stop - first,
+            int(offset) if portion.ratio_ppm == 0 else round(offset, 2) + 0.0,
+            None,
+            ratio_ppm=portion.ratio_ppm,
+        )
+        frames_b = b.frames(index_b)
+        start_b = min(max(0, span.start_b), frames_b - 1)
         segments.append(
             _Segment(
                 first,
-                stop - first,
                 index_a,
                 index_b,
-                first - a.starts[index_a],
-                first + portion.offset - b.starts[index_b],
+                span,
+                start_b,
+                min(max(span.end_b, start_b + 1), frames_b) - start_b,
             )
         )
     return segments
@@ -746,21 +768,21 @@ def _split(portion: locator.Portion, a: _Edition, b: _Edition) -> list[_Segment]
 
 def _segment(segment: _Segment, a: _Edition, b: _Edition, rate: int) -> dict[str, Any]:
     """Describe and measure one segment, within its two tracks."""
+    span = segment.span
     entry: dict[str, Any] = {
         "a": {
             "position": segment.index_a + 1,
-            "start_frame": segment.start_a,
-            "frames": segment.frames,
+            "start_frame": span.start_a,
+            "frames": span.frames,
         },
         "b": {
             "position": segment.index_b + 1,
             "start_frame": segment.start_b,
-            "frames": segment.frames,
+            "frames": segment.frames_b,
         },
+        "offset": {"frames": span.offset, "seconds": span.offset / rate},
+        "speed_ratio_ppm": span.ratio_ppm,
     }
-    span = locator.Portion(
-        segment.start_a, segment.frames, segment.start_b - segment.start_a, None
-    )
     values, absent = _measure_series(
         (a.tracks[segment.index_a].samples, b.tracks[segment.index_b].samples),
         (a.downmix_of(segment.index_a), b.downmix_of(segment.index_b)),
@@ -786,8 +808,8 @@ def _correspondences(
         ranges_a, ranges_b = pairs.setdefault(
             (segment.index_a, segment.index_b), ([], [])
         )
-        ranges_a.append((segment.start_a, segment.start_a + segment.frames))
-        ranges_b.append((segment.start_b, segment.start_b + segment.frames))
+        ranges_a.append((segment.span.start_a, segment.span.end_a))
+        ranges_b.append((segment.start_b, segment.start_b + segment.frames_b))
     correspondences = []
     for (index_a, index_b), (ranges_a, ranges_b) in sorted(pairs.items()):
         entry: dict[str, Any] = {}
@@ -862,13 +884,14 @@ def _portion(
 def _portion_head(
     portion: locator.Portion, rate: int, identical: bool
 ) -> tuple[dict[str, Any], dict[str, str]]:
-    """Describe a portion: its rank, ranges, offset and block-gain residual; return
-    the entry and the reasons of its absent values."""
+    """Describe a portion: its rank, ranges, offset, speed ratio and block-gain
+    residual; return the entry and the reasons of its absent values."""
     entry: dict[str, Any] = {
         "rank": ALTERNATE if portion.alternate else PRIMARY,
         "a": {"start_frame": portion.start_a, "frames": portion.frames},
-        "b": {"start_frame": portion.start_b, "frames": portion.frames},
+        "b": {"start_frame": portion.start_b, "frames": portion.frames_b},
         "offset": {"frames": portion.offset, "seconds": portion.offset / rate},
+        "speed_ratio_ppm": portion.ratio_ppm,
     }
     absent: dict[str, str] = {}
     if identical:
@@ -990,10 +1013,10 @@ def _measure_pair(
 ) -> dict[str, Any]:
     """Measure B against A over a span, a portion or a segment as extent names it:
     correlation, gain and residual."""
-    end_b = span.start_b + span.frames
-    # Views when the samples are already float64, as a downmix is.
+    # Views when the samples are already float64, as a downmix is, and the ratio is
+    # 0; else B stretched along the span's line.
     x = a[span.start_a : span.end_a].astype(np.float64, copy=False)
-    y = b[span.start_b : end_b].astype(np.float64, copy=False)
+    y = locator.aligned(b, span)
     values: dict[str, Any] = {}
     absent: dict[str, str] = {}
 

@@ -168,8 +168,8 @@ layout and scope `editions` with a layout of its own.
 `inspect`, `compare` and `export` decode audio with soundfile, whose wheels bundle
 libsndfile with FLAC and mpg123, and NumPy; `export` also writes its FLAC files
 through soundfile. `compare` also resamples with soxr (python-soxr, bundling
-libsoxr) to the common sample rate at its `VHQ` quality, and decimates with it for
-its coarse search at its `HQ` quality.
+libsoxr) to the common sample rate at its `VHQ` quality, and decimates and stretches
+with it for its speed estimate and coarse search at its `HQ` quality.
 These three, with jsonschema (see Report schemas), are the only
 runtime dependencies. The Audio Digest is defined on canonical PCM by
 [ADR 0002](docs/decisions/0002-define-audio-digest-from-canonical-pcm.md), so any
@@ -181,11 +181,18 @@ functions rather than soundfile's `read()` (see the `KLUDGE` in
 `src/copyofa/inspector.py`), and compare and export decode through inspect's code. The
 comparison method is decided in
 [ADR 0003](docs/decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md)
-(decoding, resampling, measurements) and
-[ADR 0006](docs/decisions/0006-locate-matching-portions-between-tracks.md): compare
+(decoding, resampling, measurements),
+[ADR 0006](docs/decisions/0006-locate-matching-portions-between-tracks.md) and
+[ADR 0010](docs/decisions/0010-locate-portions-across-speed-differences.md): compare
 locates matching portions with the windowed method of ADR 0006, which supersedes ADR
-0003's single global offset and overlap. `src/copyofa/locator.py` holds the method and
-its fixed parameters, which each comparison Report states. Given the roots of two
+0003's single global offset and overlap, as ADR 0010 amends it: a speed estimate
+before the coarse search, then a constant speed ratio per portion, fitted near its
+chain's strongest window, with refinement and measurements on B stretched along the
+portion's line by the locator's own windowed-sinc interpolator, over the region a
+portion needs, never a whole copy of B. A ratio within 0.05 ppm of 0 is 0, and such a
+portion is ADR 0006's, with an integer offset; the Report's `alignment` is
+`speed_tolerant_portions`. `src/copyofa/locator.py` holds the method and its fixed
+parameters, which each comparison Report states. Given the roots of two
 Evidence Sets without track numbers, compare compares two editions, as
 [ADR 0009](docs/decisions/0009-compare-editions-as-sequences-of-their-tracks.md)
 decides: each edition is its tracks joined in order (an acquired set's in the order of

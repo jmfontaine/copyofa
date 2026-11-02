@@ -22,18 +22,22 @@ copyofa compare "/Volumes/Archive/TDS CD" "/Volumes/Archive/TDS 2017" --json \
 ```
 
 A Report holds measurements: the portions of track A found in track B, each with its
-offset, correlation, gain and residual, and the audio that only one track holds. It
-draws no conclusion from them, such as "same master" or "match".
+offset, speed ratio, correlation, gain and residual, and the audio that only one track
+holds. It draws no conclusion from them, such as "same master" or "match".
 [ADR 0003](../decisions/0003-measure-track-comparisons-on-aligned-decoded-audio.md)
-records how the tracks are decoded and measured, and
+records how the tracks are decoded and measured,
 [ADR 0006](../decisions/0006-locate-matching-portions-between-tracks.md) how portions
-are located and why that method was chosen.
+are located and why that method was chosen, and
+[ADR 0010](../decisions/0010-locate-portions-across-speed-differences.md) how they are
+located where the speed of the two differs.
 [ADR 0009](../decisions/0009-compare-editions-as-sequences-of-their-tracks.md) records
 why two editions are compared as sequences of their tracks.
 
-It has six format versions, each with its JSON Schema:
+It has seven format versions, each with its JSON Schema:
+[comparison-report-7.schema.json](../../src/copyofa/schemas/comparison-report-7.schema.json)
+for version 7, which this document describes and `compare` prints,
 [comparison-report-6.schema.json](../../src/copyofa/schemas/comparison-report-6.schema.json)
-for version 6, which this document describes and `compare` prints,
+for [version 6](#format-version-6),
 [comparison-report-5.schema.json](../../src/copyofa/schemas/comparison-report-5.schema.json)
 for [version 5](#format-version-5),
 [comparison-report-4.schema.json](../../src/copyofa/schemas/comparison-report-4.schema.json)
@@ -87,10 +91,27 @@ copyofa compare <input-a> <input-b> --json --omit-locations > htf.json
    resampled to the lower one with libsoxr at its `VHQ` quality. Measurements cover
    only the band of that common rate.
 4. **Locating portions.** Each track is mixed down to mono, the mean of its channels. A
-   portion is a range of A that appears in B at one offset. When both tracks have an
-   Audio Digest and the digests are equal, there is no search: one primary portion
-   covers both tracks at offset 0. Otherwise compare searches with the fixed
-   [parameters](#parameters) below, in these stages:
+   portion is a range of A that appears in B along one line: frame *n* of A lines up
+   with frame *n* + offset + ratio·(*n* − start) of B, where start is the portion's
+   first frame of A, offset where B is then, and ratio its speed ratio, B's frames per
+   frame of A minus one. At a ratio of 0, B is at the same speed and the offset is a
+   whole number of frames. When both tracks have an Audio Digest and the digests are
+   equal, there is no search: one primary portion covers both tracks at offset 0 and
+   ratio 0. Otherwise compare searches with the fixed [parameters](#parameters) below,
+   in these stages:
+   - **Speed estimate.** The speed of B against A is first estimated in two levels. At
+     each, both downmixes are decimated with libsoxr at its `HQ` quality and filtered
+     as the coarse search below filters them, and A is cut into its windows of 5 s.
+     Windows of A evenly spread among those that give evidence, or all of them when
+     there are fewer, are each stretched by every ratio of the level with libsoxr at
+     its `HQ` quality, cut from an excerpt a quarter of a window longer on each side,
+     and correlated with all of B as the coarse search correlates a window; the ratio
+     with the highest sum of the windows' best scores is kept. The first level
+     decimates by 128, takes 8 windows and the ratios from −45,000 to +45,000 ppm in
+     steps of 1,500 ppm; the second decimates by 16, takes 12 windows and the ratios
+     within 1,000 ppm of the first level's, in steps of 200 ppm. The estimate is the
+     second level's ratio when the mean of its windows' best scores at that ratio is
+     at least 0.25, and 0 otherwise.
    - **Coarse search.** Both downmixes are decimated by 16 with libsoxr at its `HQ`
      quality, then filtered with a first difference of coefficient 0.5:
      *y*[*n*] = *x*[*n*] − 0.5·*x*[*n* − 1]. A is cut into windows of 5 s, without
@@ -104,10 +125,33 @@ copyofa compare <input-a> <input-b> --json --omit-locations > htf.json
      neighboring windows, with at most one window skipped between them, whose offsets
      differ by at most 32 frames form a chain. A track shorter than one window gives
      no candidate, and neither does a track at a sample rate under 2 Hz, where a
-     window holds no frame of the decimated audio.
-   - **Offset.** Chains are refined at the common rate, strongest first. A chain whose
-     windows all lie inside a portion already found at an offset within 32 frames of
-     its strongest window's is not refined again. The core of a chain is its strongest
+     window holds no frame of the decimated audio. When the estimate is not 0, A's
+     decimated downmix is stretched by it, as a whole, with libsoxr at its `HQ`
+     quality before it is cut into windows, and each candidate's window and offset are
+     mapped back to A's frames; chained candidates then still agree within 32 frames
+     of the estimate's line, so a chain holds a ratio within about ±145 ppm of the
+     estimate.
+   - **Ratio.** Chains are refined at the common rate, strongest first. A chain whose
+     windows all lie inside a portion already found whose line passes within 32
+     frames of its strongest window's coarse position in B is not refined again. A
+     line through the chain's candidates, the best of each window, by least squares,
+     leaving out the farthest while it lies more than 32 frames from the line, gives
+     a first ratio; a chain of one window takes the estimate. When the first ratio is
+     20 ppm or more from 0, B is stretched by it, as described under **Stretched
+     refinement** below. Then each window within 12 windows of the strongest one is
+     placed against B, or the stretched B, to a fraction of a frame: the whole frame
+     is that of its best normalized correlation within 40 frames of its coarse
+     position, not at the edge of that search, and the fraction the slope of the
+     phase of the cross-spectrum there, each frequency weighted by its magnitude times
+     its frequency; each offset belongs to its window's middle frame. A line through
+     the offsets of the windows that score at least 0.5 of the best, leaving out the
+     farthest while it lies more than 4 frames or three standard deviations from the
+     line, from at least 4 windows, corrects the first ratio. With fewer windows, the
+     ratio is the first one, or 0 when it is under 20 ppm. A ratio within 0.05 ppm of
+     0 is 0, and the chain is refined at one offset as ADR 0006 refines it, in the
+     stages that follow; any other ratio is refined as **Stretched refinement**
+     describes.
+   - **Offset.** The core of a chain is its strongest
      window and the neighboring windows that score at least 0.85 of it, up to 20 s.
      The offset is the integer within 32 frames of the strongest window's coarse offset
      that maximizes |Σ*ab*| / √Σ*b*² over the core, taken over the frames of the core
@@ -129,22 +173,45 @@ copyofa compare <input-a> <input-b> --json --omit-locations > htf.json
      prefix or suffix of 0.2·*a*[*n*]² − (*a*[*n*] − *g*·*b*[*n* + offset])². That
      range stops where either track does; of equally scoring prefixes or suffixes,
      the shortest is taken.
+   - **Stretched refinement.** A chain at a ratio other than 0 is refined on B
+     stretched along its line by a windowed-sinc interpolator of 32 taps (Kaiser
+     window, β 9, cutoff 0.96 of the Nyquist frequency, 1,024 phases, each scaled to a
+     gain of 1 at 0 Hz; frames outside B count as zero), over the core and 40 s on
+     either side. Offset, blocks, growth and ends run as above against the stretched
+     B, and the line moves by the whole frames the offset finds. When the grown
+     portion ends within two blocks of an edge of the stretched region and B goes on
+     there, the region grows on that side by 40 s or its own width, whichever is more,
+     and the refinement runs again. The line is then fitted again on the 5 s windows of
+     the grown portion: each placed as under **Ratio**, within 12 frames, those
+     scoring at least 0.3, leaving out the farthest while it lies more than 3 frames
+     from the line, from at least 3 windows. When the refitted line lies within 0.3
+     frame of the line refined on at both ends of the portion, the portion keeps the
+     refitted line; otherwise the refinement repeats on it, at most 10 times. The
+     portion's ratio is given to 0.01 ppm and its offset to 0.01 frame; a ratio that
+     rounds to 0 is refined at one offset instead.
    - **Holes.** Windows of the chain left outside the portion are refined again, so a
      portion after a hole is kept.
    - **Acceptance.** A portion is kept when it is at least 1 s long and its residual
      after the per-block gains, 10·log10(Σ*ₖ*Σ(*a* − *gₖ*·*b*)² / Σ*a*²) over its blocks
-     *k*, counted from its start, is at most −10 dB. A portion whose residual is
-     undefined because *a* − *gₖ*·*b* is zero throughout is kept.
-   - **Merging and ranking.** Portions whose offsets differ by at most 2 frames and
-     whose ranges of A overlap or touch are merged; the merged portion takes the offset
-     of the longer one. A portion is an alternate when portions whose residual after
-     the per-block gains is at least 3 dB lower cover 90 % or more of its range of A.
-     For that comparison, residuals below −60 dB and undefined ones count as −60 dB, so
-     exact repeats tie and are all primary. Compare reports every portion, primaries
-     first, then alternates, each in order of A.
-5. **Measurements.** Compare measures each portion over its ranges: the correlation,
-   the gain and the residual on the downmix, and for each channel when both tracks
-   have the same channel count, with the residual of each one-second window.
+     *k*, counted from its start, is at most −10 dB, with *b* B along the portion's
+     line as the Report gives it. A portion whose residual is undefined because *a* −
+     *gₖ*·*b* is zero throughout is kept.
+   - **Merging and ranking.** Portions whose lines lie within 2 frames of each other at
+     both ends of the frames of A they share, and whose ranges of A overlap or touch,
+     are merged; the merged portion takes the line of the longer one, and its residual
+     is taken again over its range. A portion is an alternate when portions whose
+     residual after the per-block gains is at least 3 dB lower cover 90 % or more of
+     its range of A. For that comparison, residuals below −60 dB and undefined ones
+     count as −60 dB, so exact repeats tie and are all primary. Compare reports every
+     portion, primaries first, then alternates, each in order of A.
+5. **Measurements.** A portion's range of B starts at the frame nearest its line at its
+   first frame of A, a half rounding up, and ends likewise; at a ratio other than 0,
+   the two ranges differ in length. Compare measures each portion over its range of
+   A: the correlation, the gain and the residual on the downmix, and for each channel
+   when both tracks have the same channel count, with the residual of each one-second
+   window. At a ratio of 0, B is its range; at any other ratio, B is stretched along
+   the portion's line by the interpolator above, one value per frame of A, the
+   downmix and each channel alike.
 6. **Unmatched audio.** The ranges of A and of B that no primary portion covers are
    reported, each with whether it is digitally silent and, when it is not, its level.
    Alternates do not shrink them. Compare measures both on the samples at the common
@@ -152,12 +219,29 @@ copyofa compare <input-a> <input-b> --json --omit-locations > htf.json
    unmatched range.
 
 The search finds no portion in a track shorter than 5 s, identical audio excepted, and
-may miss a portion shorter than about 2.5 s. A speed, pitch or drift difference gives
-no portion. A boundary at a fade falls about three blocks inside it, where the gain
-fitted over the eight blocks inside the edge stops fitting the faded audio, not where
-the fade gets quiet; a boundary at a crossfade falls where the other audio refutes the
-match. In music that repeats a section, one range of A matches several places in B,
-and each is a portion. The Report's `limitations` state this.
+may miss a portion shorter than about 2.5 s. It finds a speed difference of up to
+±4.5 % when the windows of the estimate match, each portion at its own constant ratio.
+The estimate is one per comparison, so a portion whose ratio lies more than about 145
+ppm from it is missed whatever its length, and a short excerpt at a different speed
+inside unrelated audio may not raise it. A portion shorter than 20 s has fewer than 4
+windows to correct its first ratio: it keeps that ratio, or 0 when it is under 20 ppm,
+so it lasts only as far as its remaining drift passes the block test. Unless the
+stretched refinement refits it, from at least 3 windows, the Report gives that first
+ratio, from the coarse offsets or the estimate, not one refined to a fraction of a
+frame, and the range of ratios the text result prints for a track can include it.
+Pitch is not corrected: a ratio changes speed and pitch together, as a clock or a
+turntable does. A tempo change that keeps the pitch gives no portion, nor does a speed
+that varies within a portion beyond what the block test absorbs; a step in offset,
+such as an edit, is a portion of its own. The interpolator cuts off at 96 % of the
+Nyquist frequency, and a resampler that made B may cut off lower: in a quiet passage
+that holds much of its energy above that, such as the noise-shaped dither between two
+notes, the block test refutes the match, so a track resampled whole can match as
+several portions at one ratio, each ending at such a passage. A boundary at a fade
+falls about three blocks inside it, where the gain fitted over the eight blocks inside
+the edge stops fitting the faded audio, not where the fade gets quiet; a boundary at a
+crossfade falls where the other audio refutes the match. In music that repeats a
+section, one range of A matches several places in B, and each is a portion. The
+Report's `limitations` state this.
 
 Compare writes nothing into either set.
 
@@ -192,10 +276,13 @@ whole. The Report's `scope` is `editions`, and its fields are those
    and portions are located on the two sequences as on two tracks, with the same
    method and parameters. No search is skipped for equal Audio Digests.
 5. **Segments.** Each portion is split at every track boundary of either edition that
-   falls inside it. Each segment is measured as a portion of two tracks is: the
-   correlation, the gain and the residual on the downmix, and for each channel when its
-   two tracks have the same channel count, with the residual of each one-second window.
-   The residual after the per-block gains stays per portion.
+   falls inside it. A boundary of B starts the next segment at the first frame of A at
+   or after the position of that track's first frame on the portion's line. Each
+   segment takes the portion's ratio and its own offset, within its two tracks, at its
+   first frame, and is measured as a portion of two tracks is: the correlation, the
+   gain and the residual on the downmix, and for each channel when its two tracks have
+   the same channel count, with the residual of each one-second window. The residual
+   after the per-block gains stays per portion.
 6. **Correspondences, unmatched audio and coverage.** The primary segments pair each
    track of A with the tracks of B that hold its audio, and give how much of each
    track the pair shares. The ranges of each track that no primary portion covers are
@@ -204,25 +291,41 @@ whole. The Report's `scope` is `editions`, and its fields are those
    portions can overlap where audio repeats, so every count of matched audio counts a
    frame once.
 
-Where the speeds of two editions differ, even by a few parts per million, as between
-different masters, portions are short and coverage stays partial. Tracks that match do
-not establish that the editions are equivalent. The Report's `limitations` state both.
+Each portion takes its own ratio, so tracks whose speeds differ, as between different
+masters, each match at their own ratio and offset. The speed estimate is one per
+comparison, so a track whose speed differs from that of most others by more than about
+145 ppm may be missed. Coverage stays bounded by the audio: different masters still
+leave unmatched audio the block test refutes. Tracks that match do not establish that
+the editions are equivalent. The Report's `limitations` state both.
 
 **Known limit.** Time grows with the product of the editions' lengths, and memory with
 their sum. In ADR 0009's spike, the search over two CDs of about 65 min took about 2.5
 minutes at a peak of 4.9 GB to 5.3 GB, and 5.6 GB for a CD against a 96 kHz download,
 before the per-channel measurements. A whole comparison, measurements included, needs
-more memory: of the same sets, two CD pressings took 146 s at a peak of 8.4 GB, a CD
-against the 15-track edition 162 s at 9.0 GB, and a CD against the 96 kHz download,
-imported, 168 s at 8.5 GB (macOS peak memory footprint). Editions much longer than a
-CD, such as a box set imported as one set, may exhaust memory.
+more memory. Version 7 adds the speed estimate and the stretched refinement of each
+chain at a ratio other than 0, so its cost grows with the audio that drifts. Run back
+to back on one Mac on mains power, version 6 (CopyOfA 0.9.0) and version 7 took, with
+A the 14-track CD pressing of ADR 0009's spike and the peak as macOS's peak memory
+footprint:
+
+| Input B | Version 6 | Version 7 |
+| --- | --- | --- |
+| Another CD pressing | 154 s, 8.45 GB | 205 s, 8.51 GB |
+| The 15-track edition | 186 s, 9.02 GB | 249 s, 8.37 GB |
+| The 96 kHz download, imported | 200 s, 8.46 GB | 387 s, 8.68 GB |
+| An unrelated release | 199 s, 11.31 GB | 227 s, 10.84 GB |
+| Track 13 of A, stretched by +1 %, against that track | 2.0 s, 0.86 GB | 10.5 s, 1.08 GB |
+| Track 13 of A, stretched by +41,667 ppm, against that track | 2.1 s, 0.88 GB | 10.0 s, 1.04 GB |
+
+Editions much longer than a CD, such as a box set imported as one set, may exhaust
+memory.
 
 ## Fields
 
 | Field | Content |
 | --- | --- |
 | `report_kind` | Always `copyofa.comparison`. |
-| `format_version` | The version of this format, `6`. A later change to the fields increments it. |
+| `format_version` | The version of this format, `7`. A later change to the fields increments it. |
 | `scope` | What the Report compares: `tracks`, two tracks, or `editions`, two editions (see [Edition comparisons](#edition-comparisons)). The fields below are those of `tracks`. |
 | `copyofa_version` | The version of CopyOfA that ran the comparison. |
 | `compared_at` | The comparison time in UTC, such as `2026-10-25T18:30:00Z`. |
@@ -288,7 +391,7 @@ with the reason inspect gives `disc` when the record cannot be used.
 | `resampler_version` | Its version, such as `0.1.3-14-ga66f3ee`. |
 | `resampler_quality` | Always `VHQ`, libsoxr's very high quality preset. |
 | `common_sample_rate` | The lower of the two sample rates, at which every measurement is made; absent when nothing is measured. |
-| `alignment` | Always `windowed_portions`: the tracks are aligned by portions, each at its own offset, found with the windows and blocks described above. |
+| `alignment` | Always `speed_tolerant_portions`: the tracks are aligned by portions, each at its own offset and speed ratio, found with the speed estimate, windows, blocks and stretched refinement described above. |
 | `parameters` | The fixed parameters of the search, listed below. Every value is the same in every Report of this version; the Report states them because the result moves with them. |
 
 ### Parameters
@@ -316,6 +419,15 @@ portion, when a track is shorter than `window_seconds` × `common_sample_rate` f
 220,500 at 44.1 kHz, though a window is 220,496. `core_seconds` and
 `minimum_portion_seconds` are compared with frame counts as `core_seconds` ×
 `common_sample_rate` and `minimum_portion_seconds` × `common_sample_rate`.
+
+Each level of the speed estimate cuts its windows the same way at its own decimation
+factor: at 44.1 kHz and a factor of 128, a window holds round(5 × 44100 / 128) = 1,723
+decimated frames. When the estimate is not 0, the windows of A are cut after A's
+decimated downmix is stretched by it, so at the common rate each starts at its start
+in the stretched audio times `decimation_factor`, divided by 1 + the estimate and
+rounded to the nearest frame.
+`stretch_margin_seconds` is counted as `stretch_margin_seconds` ×
+`common_sample_rate` frames.
 
 | Parameter | Value | Unit | Meaning |
 | --- | --- | --- | --- |
@@ -347,6 +459,32 @@ portion, when a track is shorter than `window_seconds` × `common_sample_rate` f
 | `alternate_margin_db` | `3` | dB | Least amount by which another portion's residual must be lower to rank this one as an alternate. |
 | `alternate_coverage_ratio` | `0.9` | ratio | Least fraction of a portion's range of A that better portions cover to make it an alternate. |
 | `equal_residual_floor_db` | `-60` | dB | Residuals below it, and undefined ones, count as this value when ranking. |
+| `estimate_decimation_factors` | `[128, 16]` | factors | Decimation of both downmixes at each level of the speed estimate. |
+| `estimate_windows` | `[8, 12]` | windows | Most windows of A stretched and correlated at each level of the speed estimate. |
+| `estimate_range_ppm` | `45000` | ppm | The first level of the speed estimate tries the ratios from minus to plus this value. |
+| `estimate_steps_ppm` | `[1500, 200]` | ppm | Distance between the ratios tried at each level of the speed estimate. |
+| `estimate_span_ppm` | `1000` | ppm | The second level tries the ratios within this distance of the first level's. |
+| `estimate_adoption_score` | `0.25` | correlation | Least mean of the windows' best scores at the second level's ratio for the estimate to be that ratio instead of 0. |
+| `first_line_outlier_frames` | `32` | frames | A candidate farther than this from a chain's first line is left out of it. |
+| `first_ratio_stretch_ppm` | `20` | ppm | Least distance of a chain's first ratio from 0 for B to be stretched by it before its windows are placed. |
+| `ratio_windows` | `12` | windows | Windows on each side of a chain's strongest one that correct its first ratio. |
+| `ratio_minimum_windows` | `4` | windows | Fewest windows that correct the first ratio. |
+| `ratio_radius_frames` | `40` | frames | Distance from a window's coarse position over which it is placed to correct the first ratio. |
+| `ratio_window_score_ratio` | `0.5` | ratio | Least score, relative to the best, of a window that corrects the first ratio. |
+| `ratio_outlier_frames` | `4` | frames | A window farther than this from the corrected line is left out of it. |
+| `ratio_outlier_deviations` | `3` | deviations | A window farther than this many standard deviations from the corrected line is left out of it. |
+| `ratio_snap_ppm` | `0.05` | ppm | A ratio within this distance of 0 is 0. |
+| `stretch_taps` | `32` | taps | Length of the interpolator that stretches B. |
+| `stretch_kaiser_beta` | `9` | β | Shape of the interpolator's Kaiser window. |
+| `stretch_cutoff_ratio` | `0.96` | ratio | Cutoff of the interpolator, relative to the Nyquist frequency. |
+| `stretch_phases` | `1024` | phases | Fractions of a frame at which the interpolator has its taps. |
+| `stretch_margin_seconds` | `40` | s | Audio stretched on either side of a chain's core, and least growth of the stretched region. |
+| `refit_window_score` | `0.3` | correlation | Least score of a window of a grown portion that fits its line again. |
+| `refit_minimum_windows` | `3` | windows | Fewest windows that fit a grown portion's line again. |
+| `refit_radius_frames` | `12` | frames | Distance over which each window of a grown portion is placed to fit its line again. |
+| `refit_outlier_frames` | `3` | frames | A window farther than this from the refitted line is left out of it. |
+| `convergence_frames` | `0.3` | frames | Most distance between the refitted line and the line refined on, at both ends of the portion, for the refinement to stop. |
+| `maximum_passes` | `10` | passes | Most refinements of a portion along its line. |
 
 ### Measurements
 
@@ -364,10 +502,15 @@ Each entry of `portions` holds:
 - `rank`: `primary`, or `alternate` when better-matching portions cover 90 % or more of
   its range of A, as described above.
 - `a` and `b`: the portion's range in each track, as its `start_frame` and its length
-  in `frames`, the same for both.
-- `offset`: `frames`, an integer, and `seconds`. A positive offset means the range of B
-  starts that many frames later than the range of A: frame *n* of A lines up with frame
-  *n* + `frames` of B.
+  in `frames`; at a ratio other than 0, the two lengths differ.
+- `offset`: `frames` and `seconds`, where B is at the portion's first frame of A. A
+  positive offset means the range of B starts that many frames later than the range
+  of A. `frames` is an integer at a ratio of 0, and otherwise a number to 0.01 frame.
+- `speed_ratio_ppm`: the portion's speed ratio, B's frames per frame of A minus one, in
+  parts per million, to 0.01 ppm; `0` when B is at the same speed. Frame *n* of A
+  lines up with frame *n* + `offset.frames` + `speed_ratio_ppm`·10⁻⁶·(*n* −
+  `a.start_frame`) of B. A positive ratio means B holds more frames for the same
+  audio: it plays slower, and lower, than A at the same rate.
 - `block_gain_residual_db`: the residual after the per-block gains, on the downmix,
   10·log10(Σ*ₖ*Σ(*a* − *gₖ*·*b*)² / Σ*a*²) dB over the blocks *k* of 2048 frames
   counted from the start of the portion. It differs from the residual of `downmix`,
@@ -459,15 +602,19 @@ Otherwise `measurements` measures edition B against edition A, with frames count
 | `coverage` | `a` and `b`: `matched_frames`, the frames of the edition's sequence that primary portions cover, each counted once, and `frames`, the frames of its sequence. |
 | `absent` | `portions`, the reason `portions` is empty; present exactly when it is. The reasons are those of two tracks, naming an edition instead: `edition A has no frames`, `edition A is shorter than one window of 5 s`, `the downmix of edition A is zero throughout`, the same for B, or `no portion was found`. |
 
-Each entry of `portions` holds `rank`, `a`, `b`, `offset`, `block_gain_residual_db`
-and `absent` as a portion of two tracks does, its ranges being in the two sequences,
-and instead of `downmix` and `channels`:
+Each entry of `portions` holds `rank`, `a`, `b`, `offset`, `speed_ratio_ppm`,
+`block_gain_residual_db` and `absent` as a portion of two tracks does, its ranges and
+its offset being in the two sequences, and instead of `downmix` and `channels`:
 
 - `segments`: the portion split at every track boundary of either edition inside it,
   in order, each with:
   - `a` and `b`: the segment's track in each edition, by its `position`, and the
     segment's range in that track, as its `start_frame` from the track's start and its
-    length in `frames`, the same for both;
+    length in `frames`; at a ratio other than 0, the two lengths differ;
+  - `offset`: `frames` and `seconds`, where B is within its track at the segment's
+    first frame of A, from that frame's position in its own track: a whole number of
+    frames at a ratio of 0, and otherwise a number to 0.01 frame;
+  - `speed_ratio_ppm`: the portion's ratio;
   - `downmix` and `channels`: the values of a portion of two tracks, measured over the
     segment; `channels` is present only when the two tracks have the same channel
     count;
@@ -485,9 +632,10 @@ Each entry of `correspondences` holds:
   equal; absent otherwise.
 
 `limitations` holds the sentences of a comparison of two tracks, then three more: that
-each edition is compared as its tracks joined in order without gap, that where the
-speeds of two editions differ portions are short and coverage stays partial, and that
-tracks that match do not establish that the editions are equivalent.
+each edition is compared as its tracks joined in order without gap, that the speed
+estimate is one per comparison, so a track whose speed differs from that of most
+others by more than about 145 ppm may be missed, and that tracks that match do not
+establish that the editions are equivalent.
 
 ## Leaving out Evidence Set locations
 
@@ -516,6 +664,29 @@ Compare may still name a path given on the command line on stderr, such as in an
 
 The schema requires an input's `evidence_set` exactly when `omitted` does not list it.
 Without the option, compare prints `"omitted": []`.
+
+## Format version 6
+
+Compare printed format version 6 in CopyOfA 0.9. It is version 7 located with
+[ADR 0006](../decisions/0006-locate-matching-portions-between-tracks.md)'s method
+alone, each portion at one offset, without
+[ADR 0010](../decisions/0010-locate-portions-across-speed-differences.md)'s speed
+estimate, ratio and stretched refinement. `copyofa validate` and `copyofa view` still
+accept it, and the version 6 schema is unchanged. A Report with `speed_ratio_ppm` is
+not valid at version 6. In version 6:
+
+- `format_version` is `6`.
+- `method.alignment` is always `windowed_portions`, and `method.parameters` holds
+  those up to `equal_residual_floor_db`, without the ones ADR 0010 adds.
+- A portion, of two tracks or of two editions, has no `speed_ratio_ppm`, its
+  `offset.frames` is always an integer, and its ranges of A and of B have the same
+  length. A segment has no `offset` or `speed_ratio_ppm`, and its ranges have the same
+  length.
+- In place of the three sentences about speed, pitch and short excerpts,
+  `limitations` states that speed, pitch and drift differences give no portion. A
+  comparison of editions states, in place of the sentence about the speed estimate,
+  that where the speeds of two editions differ, even by a few parts per million,
+  portions are short and the coverage stays partial.
 
 ## Format version 5
 
@@ -583,9 +754,9 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
 ```json
 {
   "report_kind": "copyofa.comparison",
-  "format_version": 6,
+  "format_version": 7,
   "scope": "tracks",
-  "copyofa_version": "0.9.0",
+  "copyofa_version": "0.10.0",
   "compared_at": "2026-10-26T03:15:12Z",
   "omitted": [],
   "inputs": {
@@ -648,7 +819,7 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
     "resampler_version": "0.1.3-14-ga66f3ee",
     "resampler_quality": "VHQ",
     "common_sample_rate": 44100,
-    "alignment": "windowed_portions",
+    "alignment": "speed_tolerant_portions",
     "parameters": {
       "decimation_factor": 16,
       "decimation_quality": "HQ",
@@ -677,7 +848,33 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
       "merge_tolerance_frames": 2,
       "alternate_margin_db": 3,
       "alternate_coverage_ratio": 0.9,
-      "equal_residual_floor_db": -60
+      "equal_residual_floor_db": -60,
+      "estimate_decimation_factors": [128, 16],
+      "estimate_windows": [8, 12],
+      "estimate_range_ppm": 45000,
+      "estimate_steps_ppm": [1500, 200],
+      "estimate_span_ppm": 1000,
+      "estimate_adoption_score": 0.25,
+      "first_line_outlier_frames": 32,
+      "first_ratio_stretch_ppm": 20,
+      "ratio_windows": 12,
+      "ratio_minimum_windows": 4,
+      "ratio_radius_frames": 40,
+      "ratio_window_score_ratio": 0.5,
+      "ratio_outlier_frames": 4,
+      "ratio_outlier_deviations": 3,
+      "ratio_snap_ppm": 0.05,
+      "stretch_taps": 32,
+      "stretch_kaiser_beta": 9,
+      "stretch_cutoff_ratio": 0.96,
+      "stretch_phases": 1024,
+      "stretch_margin_seconds": 40,
+      "refit_window_score": 0.3,
+      "refit_minimum_windows": 3,
+      "refit_radius_frames": 12,
+      "refit_outlier_frames": 3,
+      "convergence_frames": 0.3,
+      "maximum_passes": 10
     }
   },
   "measurements": {
@@ -696,6 +893,7 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
           "frames": 34946,
           "seconds": 0.7924263038548753
         },
+        "speed_ratio_ppm": 0.0,
         "block_gain_residual_db": -22.031079860026253,
         "downmix": {
           "correlation": 0.996859930941858,
@@ -755,6 +953,7 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
           "frames": 790945,
           "seconds": 17.935260770975056
         },
+        "speed_ratio_ppm": 0.0,
         "block_gain_residual_db": -15.019716761815886,
         "downmix": {
           "correlation": 0.9831640250215374,
@@ -847,7 +1046,9 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
     "MP3 is lossy: the measurements of an MP3 depend on its decoder.",
     "Tracks at different sample rates are compared at the lower rate, after …",
     "Portions shorter than about 2.5 s may be missed, and the search finds no …",
-    "Speed, pitch and drift differences give no portion.",
+    "Speed differences up to ±4.5 % are found, each portion at its own constant …",
+    "Pitch is not corrected: a speed ratio changes speed and pitch together. …",
+    "A short excerpt at a different speed may be missed.",
     "A boundary inside audio below -80 dBFS is placed at the nearest frame …",
     "A boundary at a fade falls about three blocks of 2048 frames inside it, where …",
     "In music that repeats a section, one range of a track can match several …",
@@ -883,7 +1084,8 @@ format version, such as one a later CopyOfA printed, rather than show it with a 
 that could leave fields out: it prints nothing on stdout and one line on stderr naming
 the file, its format version and the versions view supports, and exits 1. It refuses
 a Report of a scope it has no layout for the same way: the line names the file and
-its scope, and the scopes view supports.
+its scope, and the scopes view supports. View does not yet render version 7, which
+compare prints: it refuses a version 7 Report the same way.
 
 The page shows every field of the Report with its value as the Report records it, and
 adds only labels and units, for each track a duration computed from its frames and
