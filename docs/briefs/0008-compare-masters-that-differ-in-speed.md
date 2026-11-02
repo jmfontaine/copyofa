@@ -138,9 +138,12 @@ None.
 
 Stop and report if, in AC10, a pair at the same speed does not give the primary
 portions it gave in v0.9.0, the download covers less than 66 % of the CD, a whole
-comparison takes 6 minutes or more, or memory cannot be held to the bound above
-without changing ADR 0010's method. Six minutes is the spike's added cost over v0.9.0's
-168 s, with about 80 s for the stretched measurements the spike did not build.
+comparison takes 6 minutes or more and over 2.1 times v0.9.0's time for the same pair,
+or memory cannot be held to the bound above without changing ADR 0010's method. Six
+minutes is the spike's added cost over v0.9.0's 168 s, with about 80 s for the
+stretched measurements the spike did not build, and 2.1 times is that bound's ratio to
+168 s: v0.9.0's time for the same pair, measured on the same Mac right before, scales
+it to the speed of the run.
 Stop and report as well if the residuals of −23 to −24 dB the spike left unexplained
 at −1 % and +1,000 ppm come from the method, not the test's resampling.
 
@@ -184,8 +187,8 @@ Boundaries are checked within the suite's existing tolerance of 32 frames.
   longest portion in each of its drifting tracks at 9 to 11.5 ppm; the unrelated
   release gives no portion; and a CD track, exported, stretched with soxr at its `VHQ`
   quality by +1 % and by +41,667 ppm and each imported, gives one portion at its ratio.
-  Each comparison meets the memory bound above and takes under 6 minutes, and each
-  view opens in a browser.
+  Each comparison meets the memory bound above and the time bound of the stop rule,
+  and each view opens in a browser.
 
 ## Manifesto alignment
 
