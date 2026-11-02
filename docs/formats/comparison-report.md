@@ -312,10 +312,11 @@ The text result's line for each track of A gives, for each track of B that holds
 audio, the speed ratio of their primary segments when it is not 0, or the range of
 their ratios when they differ, counting only the segments at the same speed or
 confirmed, as in `at +9.05 ppm`. When it leaves segments out, it says how many and
-how their ratios were set, as in `at +9.05 ppm (2 segments left out: first ratio)`;
-when it counts none, it gives the range of the others and how they were set, as in
-`at +9.08 ppm (first ratio)`. A track of B holding a track of A at the same speed gets
-no ratio.
+how their ratios were set, as in `at +9.05 ppm (2 segments left out: first ratio)`,
+even when the segments it counts are all at the same speed, as in
+`at +0.00 ppm (1 segment left out: first ratio)`; when it counts none, it gives the
+range of the others and how they were set, as in `at +9.08 ppm (first ratio)`.
+Otherwise a track of B holding a track of A at the same speed gets no ratio.
 
 **Known limit.** Time grows with the product of the editions' lengths, and memory with
 their sum. In ADR 0009's spike, the search over two CDs of about 65 min took about 2.5

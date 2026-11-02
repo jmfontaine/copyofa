@@ -19,7 +19,7 @@ from conftest import DAMAGED_ERRORS, RATE, signal, write_audio
 from test_compare_editions import P, Q, acquire, cover_only, near, pairs, write_files
 from test_compare_portions import compare_signals, noise, primaries, quantized, write_b
 
-from copyofa import locator
+from copyofa import cli, locator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -357,6 +357,146 @@ def test_compare_says_how_an_edition_track_s_ratios_were_set_when_none_converged
             assert float(found[1]) == pytest.approx(ppm, abs=0.2)
         else:
             assert " ppm" not in line, line
+
+
+def test_compare_keeps_a_line_not_converged_when_a_later_pass_ends_early(
+    run: Run, make_set: MakeSet, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The first refit moves the line too far to hold; the second finds too few
+    # windows, so the second pass ends before the passes run out.
+    monkeypatch.setattr(locator, "CONVERGENCE_FRAMES", -1)
+    fit = locator._fit
+    refits = 0
+
+    def second_refit_fails(
+        points: list[tuple[float, float]],
+        outlier_frames: float,
+        deviations: float | None,
+        minimum: int,
+    ) -> Any:
+        nonlocal refits
+        if outlier_frames == locator.REFIT_OUTLIER_FRAMES:
+            refits += 1
+            if refits > 1:
+                return None
+        return fit(points, outlier_frames, deviations, minimum)
+
+    monkeypatch.setattr(locator, "_fit", second_refit_fails)
+    track = A[: 40 * SECOND]
+    first = make_set(
+        lambda source: write_audio(source / "a.flac", quantized(track, 16), 16, "FLAC")
+    )
+    second = make_set(lambda source: write_b(source, stretched(track, 100), "24-bit"))
+
+    outcome = run(
+        "compare", first / "data/Album/a.flac", second / "data/Album/b.flac", "--json"
+    )
+
+    assert outcome.code == 0, outcome.err
+    assert refits == 2
+    [portion] = primaries(json.loads(outcome.out))
+    assert portion["speed_ratio_ppm"] == pytest.approx(100, abs=0.2)
+    assert portion["ratio_fit"] == "not_converged"
+
+
+@pytest.mark.parametrize(
+    ("fits", "longer"),
+    [
+        (("first_ratio", "confirmed"), "confirmed"),
+        (("confirmed", "not_converged"), "not_converged"),
+    ],
+)
+def test_a_merged_portion_takes_how_the_longer_one_s_ratio_was_set(
+    fits: tuple[str, str], longer: str
+) -> None:
+    a = np.random.default_rng(31).standard_normal(20 * SECOND) * 0.1
+    pair = locator._Pair(a, stretched(a, 100), RATE)
+    shorter_fit, longer_fit = fits
+    shorter = locator.Portion(
+        0, 5 * SECOND, 0.0, None, ratio_ppm=100.0, ratio_fit=shorter_fit
+    )
+    start = 4 * SECOND
+    other = locator.Portion(
+        start,
+        10 * SECOND,
+        round(100e-6 * start, 2),
+        None,
+        ratio_ppm=100.0,
+        ratio_fit=longer_fit,
+    )
+
+    for one, two in ((shorter, other), (other, shorter)):
+        merged = locator._merged(pair, one, two)
+
+        assert (merged.start_a, merged.end_a) == (0, 14 * SECOND)
+        assert merged.ratio_ppm == 100.0
+        assert merged.ratio_fit == longer
+
+
+def segments_of(*segments: tuple[float, str]) -> list[dict[str, Any]]:
+    """Primary portions of an edition comparison, one per segment, all joining track
+    1 of A to track 2 of B, at the given ratios set the given ways."""
+    return [
+        {
+            "rank": "primary",
+            "segments": [
+                {
+                    "a": {"position": 1},
+                    "b": {"position": 2},
+                    "speed_ratio_ppm": ppm,
+                    "ratio_fit": fit,
+                }
+            ],
+        }
+        for ppm, fit in segments
+    ]
+
+
+@pytest.mark.parametrize(
+    ("segments", "text"),
+    [
+        ([(0, "same_speed")], ""),
+        ([(0, "same_speed"), (9.05, "confirmed")], " at +0.00 ppm to +9.05 ppm"),
+        (
+            [(9.05, "confirmed"), (9.2, "first_ratio")],
+            " at +9.05 ppm (1 segment left out: first ratio)",
+        ),
+        (
+            [
+                (9.05, "confirmed"),
+                (9.9, "confirmed"),
+                (9.2, "first_ratio"),
+                (9.3, "first_ratio"),
+            ],
+            " at +9.05 ppm to +9.90 ppm (2 segments left out: first ratio)",
+        ),
+        (
+            [(9.05, "confirmed"), (9.6, "not_converged"), (9.2, "first_ratio")],
+            " at +9.05 ppm (2 segments left out: first ratio, not converged)",
+        ),
+        (
+            [(0, "same_speed"), (9.2, "first_ratio")],
+            " at +0.00 ppm (1 segment left out: first ratio)",
+        ),
+        (
+            [(9.6, "not_converged"), (9.2, "first_ratio")],
+            " at +9.20 ppm to +9.60 ppm (first ratio, not converged)",
+        ),
+    ],
+    ids=[
+        "same speed",
+        "counted range",
+        "one left out",
+        "range and several left out",
+        "several states left out",
+        "same speed and one left out",
+        "none counted",
+    ],
+)
+def test_an_edition_track_s_ratio_counts_only_same_speed_and_confirmed_segments(
+    segments: list[tuple[float, str]], text: str
+) -> None:
+    assert cli._ratios(segments_of(*segments), 1, 2) == text
 
 
 @pytest.fixture

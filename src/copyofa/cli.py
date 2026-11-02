@@ -784,9 +784,9 @@ def _print_edition_comparison(report: dict[str, Any]) -> None:
 def _ratios(portions: list[dict[str, Any]], position_a: int, position_b: int) -> str:
     """Format the speed ratio of the primary segments joining two tracks, or their
     range when they differ, counting only those at the same speed or confirmed;
-    nothing when it is 0. Say how many segments it leaves out and how their ratios
-    were set; when it counts none, give the range of the others and how they were
-    set."""
+    nothing when it is 0 and none is left out. Say how many segments it leaves out and
+    how their ratios were set; when it counts none, give the range of the others and
+    how they were set."""
     segments = [
         segment
         for portion in portions
@@ -799,7 +799,7 @@ def _ratios(portions: list[dict[str, Any]], position_a: int, position_b: int) ->
     left = [segment for segment in segments if segment["ratio_fit"] in _NOTES]
     ratios = sorted({segment["speed_ratio_ppm"] for segment in counted or left})
     text = ""
-    if ratios and ratios != [0]:
+    if ratios and (ratios != [0] or left):
         text = f" at {_ppm(ratios[0])}"
         if len(ratios) > 1:
             text += f" to {_ppm(ratios[-1])}"
