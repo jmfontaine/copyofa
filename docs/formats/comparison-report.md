@@ -186,9 +186,13 @@ copyofa compare <input-a> <input-b> --json --omit-locations > htf.json
      scoring at least 0.3, leaving out the farthest while it lies more than 3 frames
      from the line, from at least 3 windows. When the refitted line lies within 0.3
      frame of the line refined on at both ends of the portion, the portion keeps the
-     refitted line; otherwise the refinement repeats on it, at most 10 times. The
+     refitted line, and its ratio is confirmed; otherwise the refinement repeats on it,
+     at most 10 times. When no pass holds, the portion keeps the line of the last pass
+     that gave a portion: its ratio is not converged when a refit succeeded, and its
+     first ratio when the portion had too few windows to refit at the first pass. The
      portion's ratio is given to 0.01 ppm and its offset to 0.01 frame; a ratio that
-     rounds to 0 is refined at one offset instead.
+     rounds to 0 is refined at one offset instead, at the same speed. `ratio_fit`
+     records which.
    - **Holes.** Windows of the chain left outside the portion are refined again, so a
      portion after a hole is kept.
    - **Acceptance.** A portion is kept when it is at least 1 s long and its residual
@@ -198,8 +202,9 @@ copyofa compare <input-a> <input-b> --json --omit-locations > htf.json
      *gₖ*·*b* is zero throughout is kept.
    - **Merging and ranking.** Portions whose lines lie within 2 frames of each other at
      both ends of the frames of A they share, and whose ranges of A overlap or touch,
-     are merged; the merged portion takes the line of the longer one, and its residual
-     is taken again over its range. A portion is an alternate when portions whose
+     are merged; the merged portion takes the line of the longer one, and with it how
+     its ratio was set, and its residual is taken again over its range. A portion is
+     an alternate when portions whose
      residual after the per-block gains is at least 3 dB lower cover 90 % or more of
      its range of A. For that comparison, residuals below −60 dB and undefined ones
      count as −60 dB, so exact repeats tie and are all primary. Compare reports every
@@ -228,7 +233,7 @@ windows to correct its first ratio: it keeps that ratio, or 0 when it is under 2
 so it lasts only as far as its remaining drift passes the block test. Unless the
 stretched refinement refits it, from at least 3 windows, the Report gives that first
 ratio, from the coarse offsets or the estimate, not one refined to a fraction of a
-frame, and the range of ratios the text result prints for a track can include it.
+frame, and its `ratio_fit` says so: `first_ratio`.
 Pitch is not corrected: a ratio changes speed and pitch together, as a clock or a
 turntable does. A tempo change that keeps the pitch gives no portion, nor does a speed
 that varies within a portion beyond what the block test absorbs; a step in offset,
@@ -242,6 +247,11 @@ the edge stops fitting the faded audio, not where the fade gets quiet; a boundar
 crossfade falls where the other audio refutes the match. In music that repeats a
 section, one range of A matches several places in B, and each is a portion. The
 Report's `limitations` state this.
+
+The text result gives each portion's speed ratio when it is not 0, followed by a note
+when the ratio is not confirmed: `not converged` or `first ratio`, as in
+`speed ratio -41670.47 ppm (first ratio)`. A confirmed ratio has no note, and a
+comparison at the same speed prints no ratio.
 
 Compare writes nothing into either set.
 
@@ -297,6 +307,15 @@ comparison, so a track whose speed differs from that of most others by more than
 145 ppm may be missed. Coverage stays bounded by the audio: different masters still
 leave unmatched audio the block test refutes. Tracks that match do not establish that
 the editions are equivalent. The Report's `limitations` state both.
+
+The text result's line for each track of A gives, for each track of B that holds its
+audio, the speed ratio of their primary segments when it is not 0, or the range of
+their ratios when they differ, counting only the segments at the same speed or
+confirmed, as in `at +9.05 ppm`. When it leaves segments out, it says how many and
+how their ratios were set, as in `at +9.05 ppm (2 segments left out: first ratio)`;
+when it counts none, it gives the range of the others and how they were set, as in
+`at +9.08 ppm (first ratio)`. A track of B holding a track of A at the same speed gets
+no ratio.
 
 **Known limit.** Time grows with the product of the editions' lengths, and memory with
 their sum. In ADR 0009's spike, the search over two CDs of about 65 min took about 2.5
@@ -511,6 +530,20 @@ Each entry of `portions` holds:
   lines up with frame *n* + `offset.frames` + `speed_ratio_ppm`·10⁻⁶·(*n* −
   `a.start_frame`) of B. A positive ratio means B holds more frames for the same
   audio: it plays slower, and lower, than A at the same rate.
+- `ratio_fit`: how the portion's ratio was set, as **Stretched refinement** above
+  describes:
+  - `same_speed`: the ratio is 0, however it came to be 0, and only then;
+  - `confirmed`: the ratio is not 0, and a refit of its line on B stretched along it
+    held within 0.3 frame;
+  - `not_converged`: the ratio is not 0, and a refit succeeded but none held, because
+    the passes ran out or a later pass ended early; the portion keeps the line of the
+    last pass that gave one;
+  - `first_ratio`: the ratio is not 0, and no refit succeeded, so it is its chain's
+    ratio before stretched refinement, the first ratio, corrected when **Ratio** had
+    4 windows or more to correct it: the portion had too few windows of 5 s scoring at
+    least 0.3 to refit, as a portion shorter than about 15 s does.
+
+  A merged portion takes the value of the portion whose line it takes.
 - `block_gain_residual_db`: the residual after the per-block gains, on the downmix,
   10·log10(Σ*ₖ*Σ(*a* − *gₖ*·*b*)² / Σ*a*²) dB over the blocks *k* of 2048 frames
   counted from the start of the portion. It differs from the residual of `downmix`,
@@ -603,8 +636,9 @@ Otherwise `measurements` measures edition B against edition A, with frames count
 | `absent` | `portions`, the reason `portions` is empty; present exactly when it is. The reasons are those of two tracks, naming an edition instead: `edition A has no frames`, `edition A is shorter than one window of 5 s`, `the downmix of edition A is zero throughout`, the same for B, or `no portion was found`. |
 
 Each entry of `portions` holds `rank`, `a`, `b`, `offset`, `speed_ratio_ppm`,
-`block_gain_residual_db` and `absent` as a portion of two tracks does, its ranges and
-its offset being in the two sequences, and instead of `downmix` and `channels`:
+`ratio_fit`, `block_gain_residual_db` and `absent` as a portion of two tracks does, its
+ranges and its offset being in the two sequences, and instead of `downmix` and
+`channels`:
 
 - `segments`: the portion split at every track boundary of either edition inside it,
   in order, each with:
@@ -615,6 +649,7 @@ its offset being in the two sequences, and instead of `downmix` and `channels`:
     first frame of A, from that frame's position in its own track: a whole number of
     frames at a ratio of 0, and otherwise a number to 0.01 frame;
   - `speed_ratio_ppm`: the portion's ratio;
+  - `ratio_fit`: how the portion's ratio was set;
   - `downmix` and `channels`: the values of a portion of two tracks, measured over the
     segment; `channels` is present only when the two tracks have the same channel
     count;
@@ -672,16 +707,16 @@ Compare printed format version 6 in CopyOfA 0.9. It is version 7 located with
 alone, each portion at one offset, without
 [ADR 0010](../decisions/0010-locate-portions-across-speed-differences.md)'s speed
 estimate, ratio and stretched refinement. `copyofa validate` and `copyofa view` still
-accept it, and the version 6 schema is unchanged. A Report with `speed_ratio_ppm` is
-not valid at version 6. In version 6:
+accept it, and the version 6 schema is unchanged. A Report with `speed_ratio_ppm` or
+`ratio_fit` is not valid at version 6. In version 6:
 
 - `format_version` is `6`.
 - `method.alignment` is always `windowed_portions`, and `method.parameters` holds
   those up to `equal_residual_floor_db`, without the ones ADR 0010 adds.
-- A portion, of two tracks or of two editions, has no `speed_ratio_ppm`, its
-  `offset.frames` is always an integer, and its ranges of A and of B have the same
-  length. A segment has no `offset` or `speed_ratio_ppm`, and its ranges have the same
-  length.
+- A portion, of two tracks or of two editions, has no `speed_ratio_ppm` or
+  `ratio_fit`, its `offset.frames` is always an integer, and its ranges of A and of B
+  have the same length. A segment has no `offset`, `speed_ratio_ppm` or `ratio_fit`,
+  and its ranges have the same length.
 - In place of the three sentences about speed, pitch and short excerpts,
   `limitations` states that speed, pitch and drift differences give no portion. A
   comparison of editions states, in place of the sentence about the speed estimate,
@@ -894,6 +929,7 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
           "seconds": 0.7924263038548753
         },
         "speed_ratio_ppm": 0.0,
+        "ratio_fit": "same_speed",
         "block_gain_residual_db": -22.031079860026253,
         "downmix": {
           "correlation": 0.996859930941858,
@@ -954,6 +990,7 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
           "seconds": 17.935260770975056
         },
         "speed_ratio_ppm": 0.0,
+        "ratio_fit": "same_speed",
         "block_gain_residual_db": -15.019716761815886,
         "downmix": {
           "correlation": 0.9831640250215374,
@@ -1080,12 +1117,12 @@ comparison Reports only, of format version 1, 2, 3, 4, 5, 6 or 7, and renders ea
 version, and from version 6 each scope, with its own layout: a version 6 Report of
 scope `tracks` with version 5's layout, plus its scope, and one of scope `editions`
 with the edition layout below; a version 7 Report with version 6's layout of its
-scope, plus the offset and speed ratio of each portion and segment. It also refuses a
-valid comparison Report of any other format version, such as one a later CopyOfA
-printed, rather than show it with a layout that could leave fields out: it prints
-nothing on stdout and one line on stderr naming the file, its format version and the
-versions view supports, and exits 1. It refuses a Report of a scope it has no layout
-for the same way: the line names the file and its scope, and the scopes view
+scope, plus the offset, speed ratio and how it was set of each portion and segment. It
+also refuses a valid comparison Report of any other format version, such as one a
+later CopyOfA printed, rather than show it with a layout that could leave fields out:
+it prints nothing on stdout and one line on stderr naming the file, its format version
+and the versions view supports, and exits 1. It refuses a Report of a scope it has no
+layout for the same way: the line names the file and its scope, and the scopes view
 supports.
 
 The page shows every field of the Report with its value as the Report records it, and
@@ -1118,8 +1155,9 @@ beside its position. For a comparison of tracks, it gives:
   - identical audio, and how many portions the Report holds, or why it holds none;
   - a table of the portions, in the Report's order, one row each: rank, start frame
     and frames in A and in B, offset in frames and seconds, for version 7 at the
-    portion's first frame and followed by its speed ratio in ppm, residual after the
-    per-block gains, and the correlation, gain and residual of the downmix;
+    portion's first frame and followed by its speed ratio in ppm and how it was set,
+    residual after the per-block gains, and the correlation, gain and residual of the
+    downmix;
   - for each portion, the correlation, gain and residual of the downmix and of each
     channel, with one table of residual windows for each of them;
   - for each track, its unmatched ranges: start frame, frames, whether the range is
@@ -1153,15 +1191,15 @@ the same Report details and what it leaves out, the method with its parameters, 
     sequence, frames, and range in seconds;
   - a table of the portions, one row each: rank, start frame and frames in A and in
     B, offset in frames and seconds, for version 7 at the portion's first frame and
-    followed by its speed ratio in ppm, residual after the per-block gains, and how
-    many segments it holds;
+    followed by its speed ratio in ppm and how it was set, residual after the per-block
+    gains, and how many segments it holds;
   - for each portion, a table of its segments, one row each: in A and in B the
     track's position and name, the start frame and frames in the track, and its range
     in seconds, for version 7 the segment's offset at its first frame, in frames and
-    seconds, and its speed ratio in ppm, then the correlation, gain and residual of
-    the downmix; and for each
-    segment, the values of the downmix, and of each channel when the Report gives
-    them, with one table of residual windows for each of them;
+    seconds, its speed ratio in ppm and how it was set, then the correlation, gain and
+    residual of the downmix; and for each segment, the values of the downmix, and of
+    each channel when the Report gives them, with one table of residual windows for
+    each of them;
   - for each track of each edition, its unmatched ranges, as for a comparison of
     tracks, or that it has none;
 - each absent value, marked absent with its reason;

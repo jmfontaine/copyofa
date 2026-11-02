@@ -19,6 +19,8 @@ from conftest import DAMAGED_ERRORS, RATE, signal, write_audio
 from test_compare_editions import P, Q, acquire, cover_only, near, pairs, write_files
 from test_compare_portions import compare_signals, noise, primaries, quantized, write_b
 
+from copyofa import locator
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -56,6 +58,7 @@ def test_compare_finds_a_track_at_another_speed(
     [portion] = primaries(report)
     assert portion["a"]["frames"] >= 0.99 * len(A)
     assert portion["speed_ratio_ppm"] == pytest.approx(ppm, abs=0.2)
+    assert portion["ratio_fit"] == "confirmed"
     assert portion["block_gain_residual_db"] <= residual_db
     # B's audio starts where A's does, and runs ppm longer.
     start = portion["a"]["start_frame"]
@@ -144,6 +147,7 @@ def test_compare_follows_tracks_of_editions_that_drift(
         portions, SPEEDS, LEADS, sequences["a"], strict=True
     ):
         assert portion["speed_ratio_ppm"] == pytest.approx(ppm, abs=0.2)
+        assert portion["ratio_fit"] == ("confirmed" if ppm else "same_speed")
         assert near(portion["a"]["start_frame"], track["start_frame"])
         assert near(portion["a"]["frames"], 60 * SECOND)
         [segment] = portion["segments"]
@@ -153,6 +157,7 @@ def test_compare_follows_tracks_of_editions_that_drift(
             position,
         )
         assert segment["speed_ratio_ppm"] == portion["speed_ratio_ppm"]
+        assert segment["ratio_fit"] == portion["ratio_fit"]
         # Each segment's own offset, within its two tracks: B's lead.
         start = segment["a"]["start_frame"]
         assert near(start, 0)
@@ -221,6 +226,139 @@ def test_compare_finds_no_portion_between_unrelated_editions(
     assert measurements["correspondences"] == []
 
 
+EXCERPT_PPM = -41_667
+"""The speed ratio of the audio of B in short_excerpt, in ppm."""
+TRACK = Path("data/Album/01.flac")
+"""The one track of each set short_excerpt makes."""
+
+
+def short_excerpt(make_set: MakeSet) -> tuple[Path, Path]:
+    """Two sets of one track each, compared as tracks or as editions.
+
+    A is 80 s. B is A's first 60 s, then 10 s of A from 70 s, each at EXCERPT_PPM and
+    followed by 5 s of other audio. The excerpt holds two windows of A, too few to
+    correct or refit its chain's ratio, so its portion keeps its first ratio; the speed
+    estimate comes from the first 60 s, whose portion is confirmed.
+    """
+    samples = quantized(noise(80, seed=51), 16)
+    a = samples / 32768
+    cut = 70 * SECOND
+    b = np.concatenate(
+        [
+            stretched(a[: 60 * SECOND], EXCERPT_PPM),
+            quantized(noise(5, seed=52), 16) / 32768,
+            stretched(a[cut : cut + 10 * SECOND], EXCERPT_PPM),
+            quantized(noise(5, seed=53), 16) / 32768,
+        ]
+    )
+    return (
+        make_set(lambda source: write_audio(source / TRACK.name, samples, 16, "FLAC")),
+        make_set(
+            lambda source: write_audio(
+                source / TRACK.name, quantized(b, 24), 24, "FLAC"
+            )
+        ),
+    )
+
+
+def never_converge(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make every refit of a line move it too far to hold, in two passes."""
+    monkeypatch.setattr(locator, "CONVERGENCE_FRAMES", -1)
+    monkeypatch.setattr(locator, "MAXIMUM_PASSES", 2)
+
+
+def portion_lines(text: str) -> list[str]:
+    return [line for line in text.splitlines() if line.startswith("Portion")]
+
+
+def test_compare_keeps_the_first_ratio_of_a_portion_too_short_to_refit(
+    run: Run, make_set: MakeSet
+) -> None:
+    a, b = short_excerpt(make_set)
+
+    outcome = run("compare", a / TRACK, b / TRACK, "--json")
+    text = run("compare", a / TRACK, b / TRACK)
+
+    assert outcome.code == 0, outcome.err
+    long, short = primaries(json.loads(outcome.out))
+    assert long["speed_ratio_ppm"] == pytest.approx(EXCERPT_PPM, abs=0.2)
+    assert long["ratio_fit"] == "confirmed"
+    assert abs(short["a"]["start_frame"] - 70 * SECOND) < 5 * SECOND
+    assert short["a"]["frames"] < 3 * locator.WINDOW_SECONDS * SECOND
+    assert short["speed_ratio_ppm"] == pytest.approx(EXCERPT_PPM, abs=50)
+    assert short["ratio_fit"] == "first_ratio"
+    first, second = portion_lines(text.out)
+    assert f"speed ratio {long['speed_ratio_ppm']:+.2f} ppm, correlation" in first
+    assert (
+        f"speed ratio {short['speed_ratio_ppm']:+.2f} ppm (first ratio), correlation"
+        in second
+    )
+
+
+def test_compare_says_when_a_line_does_not_converge(
+    run: Run, make_set: MakeSet, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    never_converge(monkeypatch)
+    track = A[: 40 * SECOND]
+    first = make_set(
+        lambda source: write_audio(source / "a.flac", quantized(track, 16), 16, "FLAC")
+    )
+    second = make_set(lambda source: write_b(source, stretched(track, 100), "24-bit"))
+    inputs = (first / "data/Album/a.flac", second / "data/Album/b.flac")
+
+    outcome = run("compare", *inputs, "--json")
+    text = run("compare", *inputs)
+
+    assert outcome.code == 0, outcome.err
+    [portion] = primaries(json.loads(outcome.out))
+    assert portion["speed_ratio_ppm"] == pytest.approx(100, abs=0.2)
+    assert portion["ratio_fit"] == "not_converged"
+    [line] = portion_lines(text.out)
+    ratio = f"{portion['speed_ratio_ppm']:+.2f}"
+    assert f"speed ratio {ratio} ppm (not converged), correlation" in line
+
+
+def test_compare_leaves_a_first_ratio_out_of_an_edition_track_s_ratio(
+    run: Run, make_set: MakeSet
+) -> None:
+    editions = short_excerpt(make_set)
+
+    outcome = run("compare", *editions, "--json")
+    text = run("compare", *editions)
+
+    assert outcome.code == 0, outcome.err
+    portions = primaries(json.loads(outcome.out))
+    assert [portion["ratio_fit"] for portion in portions] == [
+        "confirmed",
+        "first_ratio",
+    ]
+    for portion in portions:
+        assert [segment["ratio_fit"] for segment in portion["segments"]] == [
+            portion["ratio_fit"]
+        ]
+    [line] = [line for line in text.out.splitlines() if line.startswith("A data")]
+    ratio = f"{portions[0]['speed_ratio_ppm']:+.2f}"
+    assert line.endswith(f" at {ratio} ppm (1 segment left out: first ratio)"), line
+
+
+def test_compare_says_how_an_edition_track_s_ratios_were_set_when_none_converged(
+    run: Run, drifting: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    never_converge(monkeypatch)
+
+    outcome = run("compare", *drifting)
+
+    assert outcome.code == 0, outcome.err
+    lines = [line for line in outcome.out.splitlines() if line.startswith("A data")]
+    for line, ppm in zip(lines, SPEEDS, strict=True):
+        if ppm:
+            found = re.search(r" at ([+-]\d+\.\d\d) ppm \(not converged\)$", line)
+            assert found is not None, line
+            assert float(found[1]) == pytest.approx(ppm, abs=0.2)
+        else:
+            assert " ppm" not in line, line
+
+
 @pytest.fixture
 def compared(
     run: Run,
@@ -274,11 +412,16 @@ def compared(
 
 
 def same_speed(entry: dict[str, Any]) -> dict[str, Any]:
-    """Check that a portion or segment of version 7 is at a ratio of 0 with an
-    integer offset; return it as version 6 gives it."""
+    """Check that a portion or segment of version 7 is at a ratio of 0, set by the same
+    speed, with an integer offset; return it as version 6 gives it."""
     assert entry["speed_ratio_ppm"] == 0
+    assert entry["ratio_fit"] == "same_speed"
     assert isinstance(entry["offset"]["frames"], int)
-    earlier = {key: value for key, value in entry.items() if key != "speed_ratio_ppm"}
+    earlier = {
+        key: value
+        for key, value in entry.items()
+        if key not in {"speed_ratio_ppm", "ratio_fit"}
+    }
     if "segments" in entry:
         earlier["segments"] = [
             {

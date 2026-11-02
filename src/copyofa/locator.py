@@ -166,6 +166,19 @@ _EDGE_FRAMES = 2 * BLOCK_FRAMES
 """A portion refined on stretched B that ends this close to the stretched range,
 where A and B go on, is refined again on a longer range."""
 
+SAME_SPEED = "same_speed"
+"""A portion's ratio is 0, however it came to be 0: snapped to it, or never fitted."""
+CONFIRMED = "confirmed"
+"""A portion's ratio is not 0, and a refit of its line on B stretched along it held
+within CONVERGENCE_FRAMES."""
+NOT_CONVERGED = "not_converged"
+"""A portion's ratio is not 0, and a refit of its line succeeded but none held: the
+passes ran out, or a later pass ended early, and the portion keeps the line of the
+last pass that gave one."""
+FIRST_RATIO = "first_ratio"
+"""A portion's ratio is not 0, and no refit succeeded: the portion on its chain's line
+has too few windows to refit, so it keeps that line."""
+
 
 @dataclass(frozen=True)
 class Portion:
@@ -182,6 +195,9 @@ class Portion:
     ratio_ppm: float = 0.0
     """B's frames per frame of A, minus one, in parts per million, to 0.01; 0 when
     the speeds agree."""
+    ratio_fit: str = SAME_SPEED
+    """How the ratio was set: SAME_SPEED exactly when the ratio is 0, else CONFIRMED,
+    NOT_CONVERGED or FIRST_RATIO."""
 
     @property
     def end_a(self) -> int:
@@ -795,7 +811,12 @@ def _chain_line(pair: _Pair, chain: list[_Candidate], estimate: float) -> _Line 
 
 def _refine_along(pair: _Pair, chain: list[_Candidate], line: _Line) -> Portion | None:
     """Refine a chain into a portion on B stretched along its line, refitting the
-    line until it holds (ADR 0010, decision 4)."""
+    line until it holds (ADR 0010, decision 4).
+
+    The portion's ratio is CONFIRMED when a refit holds, FIRST_RATIO when no refit
+    succeeds, the portion on the chain's line having too few windows, and
+    NOT_CONVERGED when a refit succeeded and none held after it.
+    """
     windows, strongest = _best_windows(chain)
     low, high = _core(pair, windows, strongest)
     core_start = windows[low].start
@@ -805,15 +826,16 @@ def _refine_along(pair: _Pair, chain: list[_Candidate], line: _Line) -> Portion 
     margin = STRETCH_MARGIN_SECONDS * pair.rate
     span = (core_start, core_stop)
     result: tuple[_Line, int, int] | None = None
+    ratio_fit = FIRST_RATIO
     for _ in range(MAXIMUM_PASSES):
         first, last = line.valid(len(pair.a), len(pair.b))
         lo, hi = max(first, span[0] - margin), min(last, span[1] + margin)
         while True:
             if hi - lo < pair.window:
-                return None if result is None else _quantized(pair, *result)
+                return None if result is None else _quantized(pair, *result, ratio_fit)
             along, found = _refined_on(pair, chain, line, lo, hi)
             if found is None:
-                return None if result is None else _quantized(pair, *result)
+                return None if result is None else _quantized(pair, *result, ratio_fit)
             extend = max(margin, hi - lo)
             if found.start_a < _EDGE_FRAMES and lo > first:
                 lo = max(first, lo - extend)
@@ -849,10 +871,14 @@ def _refine_along(pair: _Pair, chain: list[_Candidate], line: _Line) -> Portion 
         ):
             # The portion holds on the refitted line, the closer of the two.
             result = (refitted, start, end)
+            ratio_fit = CONFIRMED
             break
+        # A refit succeeded but did not hold: whichever line the portion keeps, it is
+        # not confirmed.
+        ratio_fit = NOT_CONVERGED
         line = refitted
         span = (min(start, core_start), max(end, core_stop))
-    return None if result is None else _quantized(pair, *result)
+    return None if result is None else _quantized(pair, *result, ratio_fit)
 
 
 def _refined_on(
@@ -909,9 +935,11 @@ def _core_holds(
     return not nodes or _held_core(local, nodes) is not None
 
 
-def _quantized(pair: _Pair, line: _Line, start: int, end: int) -> Portion | None:
+def _quantized(
+    pair: _Pair, line: _Line, start: int, end: int, ratio_fit: str
+) -> Portion | None:
     """Return a portion on a line given to 0.01 frame and 0.01 ppm, its residual
-    taken on that line.
+    taken on that line, its ratio set as ratio_fit says, unless it rounds to 0.
 
     The rounding can move the line by a fraction of a frame, so the range keeps only
     the frames of A that have a frame of B on the line as given; None when less than
@@ -927,7 +955,9 @@ def _quantized(pair: _Pair, line: _Line, start: int, end: int) -> Portion | None
     if end - start < MINIMUM_PORTION_SECONDS * pair.rate:
         return None
     offset = round(line.at(start) - start, 2) + 0.0
-    portion = Portion(start, end - start, offset, None, ratio_ppm=ratio_ppm)
+    portion = Portion(
+        start, end - start, offset, None, ratio_ppm=ratio_ppm, ratio_fit=ratio_fit
+    )
     return replace(portion, residual_db=pair.residual_along(portion))
 
 
@@ -1315,7 +1345,15 @@ def _merged(pair: _Pair, one: Portion, other: Portion) -> Portion:
     start = max(low, min(one.start_a, other.start_a))
     end = min(high, max(one.end_a, other.end_a))
     offset = round(line.at(start) - start, 2) + 0.0
-    portion = Portion(start, end - start, offset, None, ratio_ppm=longer.ratio_ppm)
+    # The merged portion takes the longer one's line, and with it how its ratio was set.
+    portion = Portion(
+        start,
+        end - start,
+        offset,
+        None,
+        ratio_ppm=longer.ratio_ppm,
+        ratio_fit=longer.ratio_fit,
+    )
     return replace(portion, residual_db=pair.residual_along(portion))
 
 

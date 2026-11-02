@@ -45,8 +45,8 @@ class _Layout:
     error_ranges: bool
     """Whether the page shows the error ranges of each track input."""
     speed: bool = False
-    """Whether the page shows each portion's and each segment's speed ratio, and each
-    segment's offset."""
+    """Whether the page shows each portion's and each segment's speed ratio and how it
+    was set, and each segment's offset."""
 
 
 _LAYOUTS: dict[tuple[int, str | None], _Layout] = {
@@ -548,22 +548,23 @@ def _portions_table(
 
 def _offset_headers(*, speed: bool) -> list[str]:
     """Return the headers of a portion's or a segment's offset and, from format
-    version 7, its speed ratio."""
+    version 7, its speed ratio and how it was set."""
     if not speed:
         return ["Offset (frames)", "Offset (seconds)"]
     return [
         "Offset at the first frame (frames)",
         "Offset at the first frame (seconds)",
         "Speed ratio (ppm)",
+        "How the speed ratio was set",
     ]
 
 
 def _offset_cells(entry: dict[str, Any], *, speed: bool) -> list[str]:
     """Return the cells of a portion's or a segment's offset and, from format
-    version 7, its speed ratio."""
+    version 7, its speed ratio and how it was set."""
     cells = [_show(entry["offset"], "frames"), _show(entry["offset"], "seconds")]
     if speed:
-        cells.append(_show(entry, "speed_ratio_ppm"))
+        cells += [_show(entry, "speed_ratio_ppm"), _show(entry, "ratio_fit")]
     return cells
 
 

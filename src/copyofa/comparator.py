@@ -750,6 +750,7 @@ def _split(portion: locator.Portion, a: _Edition, b: _Edition) -> list[_Segment]
             int(offset) if portion.ratio_ppm == 0 else round(offset, 2) + 0.0,
             None,
             ratio_ppm=portion.ratio_ppm,
+            ratio_fit=portion.ratio_fit,
         )
         frames_b = b.frames(index_b)
         start_b = min(max(0, span.start_b), frames_b - 1)
@@ -782,6 +783,7 @@ def _segment(segment: _Segment, a: _Edition, b: _Edition, rate: int) -> dict[str
         },
         "offset": {"frames": span.offset, "seconds": span.offset / rate},
         "speed_ratio_ppm": span.ratio_ppm,
+        "ratio_fit": span.ratio_fit,
     }
     values, absent = _measure_series(
         (a.tracks[segment.index_a].samples, b.tracks[segment.index_b].samples),
@@ -884,14 +886,16 @@ def _portion(
 def _portion_head(
     portion: locator.Portion, rate: int, identical: bool
 ) -> tuple[dict[str, Any], dict[str, str]]:
-    """Describe a portion: its rank, ranges, offset, speed ratio and block-gain
-    residual; return the entry and the reasons of its absent values."""
+    """Describe a portion: its rank, ranges, offset, speed ratio, how that ratio was
+    set, and block-gain residual; return the entry and the reasons of its absent
+    values."""
     entry: dict[str, Any] = {
         "rank": ALTERNATE if portion.alternate else PRIMARY,
         "a": {"start_frame": portion.start_a, "frames": portion.frames},
         "b": {"start_frame": portion.start_b, "frames": portion.frames_b},
         "offset": {"frames": portion.offset, "seconds": portion.offset / rate},
         "speed_ratio_ppm": portion.ratio_ppm,
+        "ratio_fit": portion.ratio_fit,
     }
     absent: dict[str, str] = {}
     if identical:
