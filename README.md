@@ -24,7 +24,10 @@ acquisition fails. The eighth, v0.8.0, keeps a disc that still has errors as the
 drive read it, and inspect, compare and export report which frames were not read
 successfully. The ninth, v0.9.0, compares two editions: given two Evidence Sets,
 `compare` reports, track by track, which audio of one the other holds, where their
-track boundaries differ and what only one holds.
+track boundaries differ and what only one holds. The tenth, v0.10.0, compares masters
+that differ in speed: `compare` fits a speed ratio to each portion it finds, so audio
+whose speed differs by parts per million or by up to 4.5 % matches at its ratio, and
+says how each ratio was set.
 The roadmap in the Product Map lists what comes next.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
