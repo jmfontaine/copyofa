@@ -19,6 +19,9 @@ from conftest import (
     snapshot,
     write_audio,
 )
+from test_compare_portions import A as TRACK
+from test_compare_portions import quantized, write_b
+from test_compare_speed import drifting_editions, stretched
 
 import copyofa
 from copyofa import validator, viewer
@@ -153,6 +156,16 @@ VERSION_5_CASES = sorted(
 # same inputs again.
 VERSION_6_CASES = ["damaged_tracks", "files"]
 EDITION_CASES = ["measured", "not measured", "damaged"]
+# Version 7 comparisons the tests make, each once, at a speed ratio other than 0: of
+# scope tracks, `tracks` (a 40 s track against itself 100 ppm faster); of scope
+# editions, `editions` (the editions of tests/test_compare_speed.py whose second and
+# third tracks drift).
+VERSION_7_CASES = ["tracks", "editions"]
+OFFSET_HEADERS = [
+    "Offset at the first frame (frames)",
+    "Offset at the first frame (seconds)",
+    "Speed ratio (ppm)",
+]
 
 
 @pytest.fixture
@@ -223,6 +236,42 @@ def editions(
     return lambda name: report_of(f"editions_{name.replace(' ', '_')}", 6)
 
 
+@pytest.fixture(scope="module")
+def compared_7() -> dict[str, str]:
+    """The version 7 Report of each case the module's tests compared, as printed."""
+    return {}
+
+
+@pytest.fixture
+def version_7(
+    run: Run, make_set: MakeSet, compared_7: dict[str, str], tmp_path: Path
+) -> Callable[[str], tuple[Path, dict[str, Any]]]:
+    """Save the version 7 Report of a case, comparing its inputs the first time."""
+
+    def _version_7(name: str) -> tuple[Path, dict[str, Any]]:
+        if name not in compared_7:
+            if name == "tracks":
+                first = make_set(
+                    lambda source: write_audio(
+                        source / "a.flac", quantized(TRACK, 16), 16, "FLAC"
+                    )
+                )
+                second = make_set(
+                    lambda source: write_b(source, stretched(TRACK, 100), "24-bit")
+                )
+                inputs = (first / "data/Album/a.flac", second / "data/Album/b.flac")
+            else:
+                inputs = drifting_editions(make_set)
+            outcome = run("compare", *inputs, "--json")
+            assert outcome.code == 0, outcome.err
+            compared_7[name] = outcome.out
+        path = tmp_path / f"{name}-7.json"
+        path.write_text(compared_7[name], encoding="utf-8")
+        return path, json.loads(compared_7[name])
+
+    return _version_7
+
+
 @pytest.fixture(
     params=[
         *CASES,
@@ -230,6 +279,7 @@ def editions(
         *(f"version 5: {name}" for name in VERSION_5_CASES),
         *(f"version 6: {name}" for name in VERSION_6_CASES),
         *(f"editions: {name}" for name in EDITION_CASES),
+        *(f"version 7: {name}" for name in VERSION_7_CASES),
     ]
 )
 def case(
@@ -237,6 +287,7 @@ def case(
     report_of: Callable[..., tuple[Path, dict[str, Any]]],
     version_6: Callable[[str], tuple[Path, dict[str, Any]]],
     editions: Callable[[str], tuple[Path, dict[str, Any]]],
+    version_7: Callable[[str], tuple[Path, dict[str, Any]]],
 ) -> tuple[Path, dict[str, Any]]:
     name = request.param
     for version in (4, 5):
@@ -246,6 +297,8 @@ def case(
         return version_6(name.removeprefix("version 6: "))
     if name.startswith("editions: "):
         return editions(name.removeprefix("editions: "))
+    if name.startswith("version 7: "):
+        return version_7(name.removeprefix("version 7: "))
     return report_of(name)
 
 
@@ -296,9 +349,12 @@ def test_view_holds_every_value_of_the_report(
 
     nodes = set(page.nodes)
     text = "\n".join(page.nodes)
+    parameters = report["method"].get("parameters", {})
     for where, value in leaves(report):
         if "peak" in where:
             continue
+        if where[:2] == ("method", "parameters") and len(where) > 3:
+            continue  # An item of a list parameter, checked below.
         if isinstance(value, str):
             assert value in text, where
         else:
@@ -306,6 +362,9 @@ def test_view_holds_every_value_of_the_report(
     for entry in report["inputs"].values():
         if "peak" in entry:
             assert ", ".join(number(value) for value in entry["peak"]) in nodes
+    for value in parameters.values():
+        if isinstance(value, list):
+            assert ", ".join(number(item) for item in value) in nodes
 
 
 def test_view_holds_the_limitations_word_for_word(
@@ -1100,27 +1159,77 @@ def test_view_refuses_a_comparison_report_of_a_version_it_does_not_render(
     )
 
 
-def test_view_refuses_a_comparison_report_of_format_version_7(
-    run: Run, make_set: MakeSet, tmp_path: Path
+def test_view_shows_the_offset_and_speed_ratio_of_each_portion(
+    run: Run, version_7: Callable[[str], tuple[Path, dict[str, Any]]]
 ) -> None:
-    samples = signal(RATE, 2, 16)
-    sets = [
-        make_set(lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"))
-        for _ in range(2)
+    path, report = version_7("tracks")
+    [portion] = report["measurements"]["portions"]
+    assert portion["speed_ratio_ppm"] == pytest.approx(100, abs=0.2)
+
+    page = view(run, path)
+
+    header, row = page.tables["Portions"]
+    columns = [header.index(label) for label in OFFSET_HEADERS]
+    assert [row[column] for column in columns] == [
+        number(portion["offset"]["frames"]),
+        number(portion["offset"]["seconds"]),
+        number(portion["speed_ratio_ppm"]),
     ]
-    compared = run("compare", *(path / "data/Album/a.flac" for path in sets), "--json")
-    assert json.loads(compared.out)["format_version"] == 7
-    path = tmp_path / "report.json"
-    path.write_text(compared.out, encoding="utf-8")
 
-    outcome = run("view", path)
 
-    assert outcome.code == 1
-    assert outcome.out == ""
-    assert outcome.err == (
-        f"copyofa: {path} is a comparison Report of format version 7; view supports "
-        "format versions 1, 2, 3, 4, 5 and 6\n"
-    )
+def test_view_shows_the_offset_and_speed_ratio_of_each_segment(
+    run: Run, version_7: Callable[[str], tuple[Path, dict[str, Any]]]
+) -> None:
+    path, report = version_7("editions")
+    portions = report["measurements"]["portions"]
+    segments = [segment for portion in portions for segment in portion["segments"]]
+    assert {segment["speed_ratio_ppm"] for segment in segments} > {0}
+
+    page = view(run, path)
+
+    def values(entry: dict[str, Any]) -> list[str]:
+        return [
+            number(entry["offset"]["frames"]),
+            number(entry["offset"]["seconds"]),
+            number(entry["speed_ratio_ppm"]),
+        ]
+
+    header, *rows = page.tables["Portions"]
+    columns = [header.index(label) for label in OFFSET_HEADERS]
+    assert [[row[column] for column in columns] for row in rows] == [
+        values(portion) for portion in portions
+    ]
+    for number_, portion in enumerate(portions, 1):
+        heading = f"Portion {number_} ({portion['rank']}): segments"
+        header, *rows = page.tables[heading]
+        columns = [header.index(label) for label in OFFSET_HEADERS]
+        assert [[row[column] for column in columns] for row in rows] == [
+            values(segment) for segment in portion["segments"]
+        ]
+
+
+@pytest.mark.parametrize("name", VERSION_7_CASES)
+def test_view_shows_text_of_a_report_of_format_version_7_as_text(
+    run: Run, version_7: Callable[[str], tuple[Path, dict[str, Any]]], name: str
+) -> None:
+    path, _ = version_7(name)
+    file = '<script>alert("1")&amp;\'.flac'
+
+    def change(report: dict[str, Any]) -> None:
+        report["inputs"]["a"]["evidence_set"] = "/Sets/\udc81"
+        b = report["inputs"]["b"]
+        (b["tracks"][0] if "tracks" in b else b)["path"] = f"data/Album/{file}"
+
+    edited = edit(path, change)
+    assert validator.validate(str(edited)).result["outcome"] == validator.VALID
+
+    page = view(run, edited)
+
+    assert "\udc81" not in "".join(page.nodes)
+    assert "/Sets/\\udc81" in page.nodes
+    assert f"data/Album/{file}" in page.nodes
+    assert "<script" not in page.text.lower()
+    assert {tag for tag, _ in page.tags} & ACTIVE_TAGS == set()
 
 
 def test_view_refuses_a_comparison_report_of_a_scope_it_does_not_render(

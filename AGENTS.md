@@ -150,7 +150,7 @@ CopyOfA prints; any other change to a Report's fields is a new format version wi
 own schema file. The test suite validates every Report it produces against its schema.
 
 `copyofa view` validates a file the same way, then `copyofa.viewer` renders a valid
-comparison Report, of any format version 1 to 6, as one self-contained HTML page, with
+comparison Report, of any format version 1 to 7, as one self-contained HTML page, with
 the standard library only.
 The page shows every value as the Report records it and the SHA-256 of the file; it
 holds no script, no link and no external resource, a Content Security Policy forbids
@@ -161,7 +161,8 @@ each scope (the Report's `scope` field) to its layout, derives
 `SUPPORTED_FORMAT_VERSIONS` and `SUPPORTED_SCOPES` from that mapping, so a version or
 a scope cannot be supported without a layout, and `view` refuses a valid comparison
 Report of any other version or scope: it renders scope `tracks` with version 5's
-layout and scope `editions` with a layout of its own.
+layout and scope `editions` with a layout of its own, and version 7 with version 6's
+layouts plus each portion's and segment's offset and speed ratio.
 
 ### Audio decoding
 
