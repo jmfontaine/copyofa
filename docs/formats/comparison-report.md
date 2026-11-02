@@ -324,7 +324,7 @@ minutes at a peak of 4.9 GB to 5.3 GB, and 5.6 GB for a CD against a 96 kHz down
 before the per-channel measurements. A whole comparison, measurements included, needs
 more memory. Version 7 adds the speed estimate and the stretched refinement of each
 chain at a ratio other than 0, so its cost grows with the audio that drifts. Run back
-to back on one Mac on mains power, version 6 (CopyOfA 0.9.0) and version 7 took, with
+to back on one Mac on AC power, version 6 (CopyOfA 0.9.0) and version 7 took, with
 A the 14-track CD pressing of ADR 0009's spike and the peak as macOS's peak memory
 footprint:
 
