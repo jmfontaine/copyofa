@@ -256,12 +256,12 @@ it; the maintainer only reviews its results on the pull request.
 Recorded at the v0.10.0 release review.
 
 - **Delivered in about a day,** the appetite, with no scope cut and AC11 added by
-  amendment, by unattended agents in two
-  stacks: the speed-tolerant comparison with Report format version 7, its schema and
-  text result in [#176](https://github.com/jmfontaine/copyofa/pull/176), and view of
-  version 7 in [#177](https://github.com/jmfontaine/copyofa/pull/177); then how each
-  ratio was set in [#183](https://github.com/jmfontaine/copyofa/pull/183), and the
-  format document's Example as a Report compare printed in
+  amendment, by unattended agents in two stacks: the speed-tolerant comparison with
+  Report format version 7, its schema and text result in
+  [#176](https://github.com/jmfontaine/copyofa/pull/176), and view of version 7 in
+  [#177](https://github.com/jmfontaine/copyofa/pull/177); then how each ratio was set
+  in [#183](https://github.com/jmfontaine/copyofa/pull/183), and the format document's
+  Example as a Report compare printed in
   [#184](https://github.com/jmfontaine/copyofa/pull/184). AC1–AC8 and AC11 have tests,
   and the suite holds 789 tests; AC9 passed through the pull requests' review of the
   documents.
@@ -288,8 +288,8 @@ Recorded at the v0.10.0 release review.
   five and four portions instead of one. Its quiet passages hold dither above 21 kHz
   that the soxr stretch band-limits, so the block test refutes them; the format
   document names this limit. AC10 used track 13, which has no such passages. Its first
-  timing run was invalid: the Mac was in Low Power Mode, and, as observed in the
-  session only, slept during a comparison.
+  timing run was invalid: the Mac was in Low Power Mode, and, in the session only,
+  slept during a comparison.
 - **Left as they are:**
   - B is stretched over a portion's region as one array, about 1.4 GB more for a
     65-minute portion at another speed; Parking Lot
