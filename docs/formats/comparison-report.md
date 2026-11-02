@@ -224,20 +224,24 @@ may miss a portion shorter than about 2.5 s. It finds a speed difference of up t
 The estimate is one per comparison, so a portion whose ratio lies more than about 145
 ppm from it is missed whatever its length, and a short excerpt at a different speed
 inside unrelated audio may not raise it. A portion shorter than 20 s has fewer than 4
-windows and keeps its first ratio, so it lasts only as far as its remaining drift
-passes the block test. Pitch is not corrected: a ratio changes speed and pitch
-together, as a clock or a turntable does. A tempo change that keeps the pitch gives no
-portion, nor does a speed that varies within a portion beyond what the block test
-absorbs; a step in offset, such as an edit, is a portion of its own. The interpolator
-cuts off at 96 % of the Nyquist frequency, and a resampler that made B may cut off
-lower: in a quiet passage that holds much of its energy above that, such as the
-noise-shaped dither between two notes, the block test refutes the match, so a track
-resampled whole can match as several portions at one ratio, each ending at such a
-passage. A boundary at a fade falls about three blocks inside it, where the gain
-fitted over the eight blocks inside the edge stops fitting the faded audio, not where
-the fade gets quiet; a boundary at a crossfade falls where the other audio refutes the
-match. In music that repeats a section, one range of A matches several places in B,
-and each is a portion. The Report's `limitations` state this.
+windows to correct its first ratio: it keeps that ratio, or 0 when it is under 20 ppm,
+so it lasts only as far as its remaining drift passes the block test. Unless the
+stretched refinement refits it, from at least 3 windows, the Report gives that first
+ratio, from the coarse offsets or the estimate, not one refined to a fraction of a
+frame, and the range of ratios the text result prints for a track can include it.
+Pitch is not corrected: a ratio changes speed and pitch together, as a clock or a
+turntable does. A tempo change that keeps the pitch gives no portion, nor does a speed
+that varies within a portion beyond what the block test absorbs; a step in offset,
+such as an edit, is a portion of its own. The interpolator cuts off at 96 % of the
+Nyquist frequency, and a resampler that made B may cut off lower: in a quiet passage
+that holds much of its energy above that, such as the noise-shaped dither between two
+notes, the block test refutes the match, so a track resampled whole can match as
+several portions at one ratio, each ending at such a passage. A boundary at a fade
+falls about three blocks inside it, where the gain fitted over the eight blocks inside
+the edge stops fitting the faded audio, not where the fade gets quiet; a boundary at a
+crossfade falls where the other audio refutes the match. In music that repeats a
+section, one range of A matches several places in B, and each is a portion. The
+Report's `limitations` state this.
 
 Compare writes nothing into either set.
 
@@ -298,16 +302,23 @@ the editions are equivalent. The Report's `limitations` state both.
 their sum. In ADR 0009's spike, the search over two CDs of about 65 min took about 2.5
 minutes at a peak of 4.9 GB to 5.3 GB, and 5.6 GB for a CD against a 96 kHz download,
 before the per-channel measurements. A whole comparison, measurements included, needs
-more memory: of the same sets, two CD pressings took 146 s at a peak of 8.4 GB, a CD
-against the 15-track edition 162 s at 9.0 GB, and a CD against the 96 kHz download,
-imported, 168 s at 8.5 GB (macOS peak memory footprint), all in version 6. Version 7
-adds the speed estimate, about 40 s to 50 s for two CDs, and the stretched refinement
-of each chain at a ratio other than 0, so its cost grows with the audio that drifts.
-Run back to back with version 6 on one Mac in Low Power Mode, the CD against the 96
-kHz download took 1.5 to 1.8 times as long (432 s against 243 s, then 562 s against
-382 s), and two CD pressings and a CD against the 15-track edition at most 1.3 times
-as long; each peaked within 0.3 GB of version 6 or below it. Editions much longer
-than a CD, such as a box set imported as one set, may exhaust memory.
+more memory. Version 7 adds the speed estimate and the stretched refinement of each
+chain at a ratio other than 0, so its cost grows with the audio that drifts. Run back
+to back on one Mac on mains power, version 6 (CopyOfA 0.9.0) and version 7 took, with
+A the 14-track CD pressing of ADR 0009's spike and the peak as macOS's peak memory
+footprint:
+
+| Input B | Version 6 | Version 7 |
+| --- | --- | --- |
+| Another CD pressing | 154 s, 8.45 GB | 205 s, 8.51 GB |
+| The 15-track edition | 186 s, 9.02 GB | 249 s, 8.37 GB |
+| The 96 kHz download, imported | 200 s, 8.46 GB | 387 s, 8.68 GB |
+| An unrelated release | 199 s, 11.31 GB | 227 s, 10.84 GB |
+| Track 13 of A, stretched by +1 %, against that track | 2.0 s, 0.86 GB | 10.5 s, 1.08 GB |
+| Track 13 of A, stretched by +41,667 ppm, against that track | 2.1 s, 0.88 GB | 10.0 s, 1.04 GB |
+
+Editions much longer than a CD, such as a box set imported as one set, may exhaust
+memory.
 
 ## Fields
 
