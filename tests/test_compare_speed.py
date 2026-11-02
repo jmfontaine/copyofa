@@ -462,6 +462,10 @@ def segments_of(*segments: tuple[float, str]) -> list[dict[str, Any]]:
             " at +9.05 ppm (1 segment left out: first ratio)",
         ),
         (
+            [(9.05, "confirmed"), (9.9, "confirmed"), (9.2, "first_ratio")],
+            " at +9.05 ppm to +9.90 ppm (1 segment left out: first ratio)",
+        ),
+        (
             [
                 (9.05, "confirmed"),
                 (9.9, "confirmed"),
@@ -487,6 +491,7 @@ def segments_of(*segments: tuple[float, str]) -> list[dict[str, Any]]:
         "same speed",
         "counted range",
         "one left out",
+        "range and one left out",
         "range and several left out",
         "several states left out",
         "same speed and one left out",
