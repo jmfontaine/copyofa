@@ -1065,26 +1065,28 @@ copyofa view htf.json > htf.html
 
 View first validates the file as [`copyofa validate`](validation-result.md) does, and
 refuses a Report that is invalid, unsupported, or of another kind. It supports
-comparison Reports only, of format version 1, 2, 3, 4, 5 or 6, and renders each
+comparison Reports only, of format version 1, 2, 3, 4, 5, 6 or 7, and renders each
 version, and from version 6 each scope, with its own layout: a version 6 Report of
 scope `tracks` with version 5's layout, plus its scope, and one of scope `editions`
-with the edition layout below. It also refuses a valid comparison Report of any other
-format version, such as one a later CopyOfA printed, rather than show it with a layout
-that could leave fields out: it prints nothing on stdout and one line on stderr naming
-the file, its format version and the versions view supports, and exits 1. It refuses
-a Report of a scope it has no layout for the same way: the line names the file and
-its scope, and the scopes view supports. View does not yet render version 7, which
-compare prints: it refuses a version 7 Report the same way.
+with the edition layout below; a version 7 Report with version 6's layout of its
+scope, plus the offset and speed ratio of each portion and segment. It also refuses a
+valid comparison Report of any other format version, such as one a later CopyOfA
+printed, rather than show it with a layout that could leave fields out: it prints
+nothing on stdout and one line on stderr naming the file, its format version and the
+versions view supports, and exits 1. It refuses a Report of a scope it has no layout
+for the same way: the line names the file and its scope, and the scopes view
+supports.
 
 The page shows every field of the Report with its value as the Report records it, and
 adds only labels and units, for each track a duration computed from its frames and
-sample rate, for versions 4 to 6 each range also in seconds, computed from its frames
+sample rate, for versions 4 to 7 each range also in seconds, computed from its frames
 and the common sample rate, and for an edition comparison each edition's coverage also
 as durations, computed the same way, and each track's name, as the inputs give it,
 beside its position. For a comparison of tracks, it gives:
 
 - the SHA-256 of the exact bytes of the file it was generated from, the Report's kind
-  and format version, for version 6 its scope, and the CopyOfA version that generated
+  and format version, for versions 6 and 7 its scope, and the CopyOfA version that
+  generated
   the page, which is not the Report's own `copyofa_version`, also shown;
 - what the Report leaves out: its `omitted` list, or that it holds none, and for
   version 1 that the Report has no such field;
@@ -1092,18 +1094,20 @@ beside its position. For a comparison of tracks, it gives:
   Baseline, path, track number, first frame and frame count, outcome and reason,
   properties, File Digests, Audio Digest, peak, silence, FLAC MD5 signature and
   limitations;
-- for versions 5 and 6, for each track input, how many error ranges its `track`
+- for versions 5 to 7, for each track input, how many error ranges its `track`
   holds, or that it holds none, and a table of them, one row each in the Report's
   order: offset from the track's first frame, frames, and state;
-- the method, and for versions 4 to 6 a table of its parameters, each by its name in
-  the Report;
+- the method, and for versions 4 to 7 a table of its parameters, each by its name in
+  the Report, a parameter with one value per stage, from version 7, as its values in
+  order;
 - for versions 1 to 3, the measurements: identical audio, offset, overlap, and for the
   downmix and each channel the correlation, gain and residual, with one table of
   residual windows for each of them;
-- for versions 4 to 6, the measurements:
+- for versions 4 to 7, the measurements:
   - identical audio, and how many portions the Report holds, or why it holds none;
   - a table of the portions, in the Report's order, one row each: rank, start frame
-    and frames in A and in B, offset in frames and seconds, residual after the
+    and frames in A and in B, offset in frames and seconds, for version 7 at the
+    portion's first frame and followed by its speed ratio in ppm, residual after the
     per-block gains, and the correlation, gain and residual of the downmix;
   - for each portion, the correlation, gain and residual of the downmix and of each
     channel, with one table of residual windows for each of them;
@@ -1114,7 +1118,8 @@ beside its position. For a comparison of tracks, it gives:
   measurements, the page says that the tracks were not measured;
 - the Report's limitations, word for word.
 
-For a comparison of editions, a version 6 Report of scope `editions`, the page gives
+For a comparison of editions, a version 6 or 7 Report of scope `editions`, the page
+gives
 the same Report details and what it leaves out, the method with its parameters, then:
 
 - for each edition, its Evidence Set location, or that it is left out, Integrity
@@ -1136,11 +1141,14 @@ the same Report details and what it leaves out, the method with its parameters, 
   - each edition's sequence, one row per track: position, name, start frame in the
     sequence, frames, and range in seconds;
   - a table of the portions, one row each: rank, start frame and frames in A and in
-    B, offset in frames and seconds, residual after the per-block gains, and how many
-    segments it holds;
+    B, offset in frames and seconds, for version 7 at the portion's first frame and
+    followed by its speed ratio in ppm, residual after the per-block gains, and how
+    many segments it holds;
   - for each portion, a table of its segments, one row each: in A and in B the
     track's position and name, the start frame and frames in the track, and its range
-    in seconds, then the correlation, gain and residual of the downmix; and for each
+    in seconds, for version 7 the segment's offset at its first frame, in frames and
+    seconds, and its speed ratio in ppm, then the correlation, gain and residual of
+    the downmix; and for each
     segment, the values of the downmix, and of each channel when the Report gives
     them, with one table of residual windows for each of them;
   - for each track of each edition, its unmatched ranges, as for a comparison of

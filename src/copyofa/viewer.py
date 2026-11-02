@@ -44,6 +44,9 @@ class _Layout:
     measurements: _Measurements
     error_ranges: bool
     """Whether the page shows the error ranges of each track input."""
+    speed: bool = False
+    """Whether the page shows each portion's and each segment's speed ratio, and each
+    segment's offset."""
 
 
 _LAYOUTS: dict[tuple[int, str | None], _Layout] = {
@@ -54,6 +57,12 @@ _LAYOUTS: dict[tuple[int, str | None], _Layout] = {
     (5, None): _Layout(_Measurements.PORTIONS, error_ranges=True),
     (6, comparator.TRACKS): _Layout(_Measurements.PORTIONS, error_ranges=True),
     (6, comparator.EDITIONS): _Layout(_Measurements.EDITIONS, error_ranges=True),
+    (7, comparator.TRACKS): _Layout(
+        _Measurements.PORTIONS, error_ranges=True, speed=True
+    ),
+    (7, comparator.EDITIONS): _Layout(
+        _Measurements.EDITIONS, error_ranges=True, speed=True
+    ),
 }
 """The layout of each comparison Report format version this module renders and, from
 version 6, of each scope of that version: a version before 6 has no scope, None."""
@@ -114,7 +123,7 @@ def render(report: dict[str, Any], sha256: str) -> str:
         sections = [
             *_editions_section(inputs),
             *_method_section(report["method"], layout.measurements),
-            *_edition_measurements_section(report),
+            *_edition_measurements_section(report, speed=layout.speed),
         ]
     else:
         title = (
@@ -125,7 +134,10 @@ def render(report: dict[str, Any], sha256: str) -> str:
             *_inputs_section(inputs, error_ranges=layout.error_ranges),
             *_method_section(report["method"], layout.measurements),
             *_measurements_section(
-                report.get("measurements"), report["method"], layout.measurements
+                report.get("measurements"),
+                report["method"],
+                layout.measurements,
+                speed=layout.speed,
             ),
         ]
     body = [
@@ -371,7 +383,7 @@ def _method_section(method: dict[str, Any], layout: _Measurements) -> list[str]:
             _table(
                 ["Parameter", "Value"],
                 [
-                    (f"<code>{_text(name)}</code>", _scalar(value))
+                    (f"<code>{_text(name)}</code>", _parameter(value))
                     for name, value in method["parameters"].items()
                 ],
             ),
@@ -379,8 +391,20 @@ def _method_section(method: dict[str, Any], layout: _Measurements) -> list[str]:
     return parts
 
 
+def _parameter(value: Any) -> str:
+    """Return a parameter's value; from format version 7, a parameter of one value
+    per stage of the method is a list, shown as its values in order."""
+    if isinstance(value, list):
+        return ", ".join(_scalar(item) for item in value)
+    return _scalar(value)
+
+
 def _measurements_section(
-    measurements: dict[str, Any] | None, method: dict[str, Any], layout: _Measurements
+    measurements: dict[str, Any] | None,
+    method: dict[str, Any],
+    layout: _Measurements,
+    *,
+    speed: bool,
 ) -> list[str]:
     if measurements is None:
         return [
@@ -388,7 +412,9 @@ def _measurements_section(
             "<p>The tracks were not measured: the Report holds no measurements.</p>",
         ]
     if layout is _Measurements.PORTIONS:
-        return _portions_section(measurements, method.get("common_sample_rate"))
+        return _portions_section(
+            measurements, method.get("common_sample_rate"), speed=speed
+        )
     # _Measurements.ALIGNMENT: one alignment, its overlap, and the values measured
     # over it.
     absent = measurements.get("absent", {})
@@ -442,8 +468,11 @@ def _measurements_section(
     return parts
 
 
-def _portions_section(measurements: dict[str, Any], rate: int | None) -> list[str]:
-    """Return the measurements of a Report of format version 4: its portions."""
+def _portions_section(
+    measurements: dict[str, Any], rate: int | None, *, speed: bool
+) -> list[str]:
+    """Return the measurements of a Report of format version 4 or later: its
+    portions."""
     portions = measurements["portions"]
     if portions:
         count = len(portions)
@@ -464,7 +493,7 @@ def _portions_section(measurements: dict[str, Any], rate: int | None) -> list[st
     if portions:
         # Many columns of full-precision numbers: the table scrolls rather than
         # breaking a number across lines.
-        table = _portions_table(portions, rate)
+        table = _portions_table(portions, rate, speed=speed)
         parts += ["<h3>Portions</h3>", f'<div class="wide">\n{table}\n</div>']
     for number, portion in enumerate(portions, 1):
         parts += _portion_section(number, portion)
@@ -474,7 +503,9 @@ def _portions_section(measurements: dict[str, Any], rate: int | None) -> list[st
     return parts
 
 
-def _portions_table(portions: Sequence[dict[str, Any]], rate: int | None) -> str:
+def _portions_table(
+    portions: Sequence[dict[str, Any]], rate: int | None, *, speed: bool
+) -> str:
     rows = []
     for number, portion in enumerate(portions, 1):
         downmix = portion["downmix"]
@@ -488,8 +519,7 @@ def _portions_table(portions: Sequence[dict[str, Any]], rate: int | None) -> str
                 _show(portion["b"], "start_frame"),
                 _show(portion["b"], "frames"),
                 _seconds(portion["b"], rate),
-                _show(portion["offset"], "frames"),
-                _show(portion["offset"], "seconds"),
+                *_offset_cells(portion, speed=speed),
                 _show(portion, "block_gain_residual_db"),
                 _show(downmix, "correlation"),
                 _show(downmix, "gain_db"),
@@ -506,8 +536,7 @@ def _portions_table(portions: Sequence[dict[str, Any]], rate: int | None) -> str
             "Track B start frame",
             "Track B frames",
             "Track B range (s, computed)",
-            "Offset (frames)",
-            "Offset (seconds)",
+            *_offset_headers(speed=speed),
             "Residual after the per-block gains (dB)",
             "Downmix correlation",
             "Downmix gain (dB)",
@@ -515,6 +544,27 @@ def _portions_table(portions: Sequence[dict[str, Any]], rate: int | None) -> str
         ],
         rows,
     )
+
+
+def _offset_headers(*, speed: bool) -> list[str]:
+    """Return the headers of a portion's or a segment's offset and, from format
+    version 7, its speed ratio."""
+    if not speed:
+        return ["Offset (frames)", "Offset (seconds)"]
+    return [
+        "Offset at the first frame (frames)",
+        "Offset at the first frame (seconds)",
+        "Speed ratio (ppm)",
+    ]
+
+
+def _offset_cells(entry: dict[str, Any], *, speed: bool) -> list[str]:
+    """Return the cells of a portion's or a segment's offset and, from format
+    version 7, its speed ratio."""
+    cells = [_show(entry["offset"], "frames"), _show(entry["offset"], "seconds")]
+    if speed:
+        cells.append(_show(entry, "speed_ratio_ppm"))
+    return cells
 
 
 def _portion_section(number: int, portion: dict[str, Any]) -> list[str]:
@@ -547,7 +597,7 @@ def _series_section(
     return parts
 
 
-def _edition_measurements_section(report: dict[str, Any]) -> list[str]:
+def _edition_measurements_section(report: dict[str, Any], *, speed: bool) -> list[str]:
     """Return the measurements of a Report of scope `editions`."""
     measurements = report.get("measurements")
     if measurements is None:
@@ -662,12 +712,12 @@ def _edition_measurements_section(report: dict[str, Any]) -> list[str]:
             ),
         ]
     if portions:
-        table = _edition_portions_table(portions, rate)
+        table = _edition_portions_table(portions, rate, speed=speed)
         parts += ["<h3>Portions</h3>", f'<div class="wide">\n{table}\n</div>']
     for number, portion in enumerate(portions, 1):
         rank = _text(portion["rank"])
         heading = f"Portion {number} ({rank})"
-        table = _segments_table(portion["segments"], rate, track)
+        table = _segments_table(portion["segments"], rate, track, speed=speed)
         parts += [
             f"<h3>{heading}: segments</h3>",
             f'<div class="wide">\n{table}\n</div>',
@@ -703,7 +753,7 @@ def _edition_measurements_section(report: dict[str, Any]) -> list[str]:
 
 
 def _edition_portions_table(
-    portions: Sequence[dict[str, Any]], rate: int | None
+    portions: Sequence[dict[str, Any]], rate: int | None, *, speed: bool
 ) -> str:
     return _table(
         [
@@ -715,8 +765,7 @@ def _edition_portions_table(
             "Edition B start frame",
             "Edition B frames",
             "Edition B range (s, computed)",
-            "Offset (frames)",
-            "Offset (seconds)",
+            *_offset_headers(speed=speed),
             "Residual after the per-block gains (dB)",
             "Segments",
         ],
@@ -730,8 +779,7 @@ def _edition_portions_table(
                 _show(portion["b"], "start_frame"),
                 _show(portion["b"], "frames"),
                 _seconds(portion["b"], rate),
-                _show(portion["offset"], "frames"),
-                _show(portion["offset"], "seconds"),
+                *_offset_cells(portion, speed=speed),
                 _show(portion, "block_gain_residual_db"),
                 str(len(portion["segments"])),
             )
@@ -744,6 +792,8 @@ def _segments_table(
     segments: Sequence[dict[str, Any]],
     rate: int | None,
     track: Callable[[str, Any], str],
+    *,
+    speed: bool,
 ) -> str:
     rows = []
     for number, segment in enumerate(segments, 1):
@@ -757,6 +807,10 @@ def _segments_table(
                 _show(extent, "frames"),
                 _seconds(extent, rate),
             ]
+        if speed:
+            # From format version 7, a segment has its own offset within its two
+            # tracks.
+            cells += _offset_cells(segment, speed=speed)
         downmix = segment["downmix"]
         cells += [
             _show(downmix, "correlation"),
@@ -778,6 +832,7 @@ def _segments_table(
                     f"Range in the track of {name} (s, computed)",
                 )
             ),
+            *(_offset_headers(speed=speed) if speed else []),
             "Downmix correlation",
             "Downmix gain (dB)",
             "Downmix residual (dB)",

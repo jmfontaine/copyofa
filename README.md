@@ -297,10 +297,11 @@ limitation. It gives the SHA-256 of the Report file it was generated from, so a
 recipient can check the page against the Report. The page runs no script and loads
 nothing, so it opens in any browser, offline. It draws no conclusion from the
 measurements. For a Report of the current format, it shows the method's parameters,
-a table of the portions with each one's residual windows, the unmatched audio of each
-track, and the error ranges of each track of an acquired set. For a comparison of two
-editions, it also shows each edition's tracks and excluded files, the coverage, the
-correspondences between tracks, and each portion's segments with their measurements.
+a table of the portions with each one's offset, speed ratio and residual windows, the
+unmatched audio of each track, and the error ranges of each track of an acquired set.
+For a comparison of two editions, it also shows each edition's tracks and excluded
+files, the coverage, the correspondences between tracks, and each portion's segments
+with their offsets, speed ratios and measurements.
 [Comparison Report format][comparison-report] describes it.
 
 View exits 0 when it printed the page, 1 when the Report is invalid, unsupported, not a

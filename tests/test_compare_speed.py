@@ -98,8 +98,7 @@ SPEEDS = (0, 10, -100, 0)
 """The speed ratio of each track of edition B against A's, in ppm."""
 
 
-@pytest.fixture
-def drifting(make_set: MakeSet) -> tuple[Path, Path]:
+def drifting_editions(make_set: MakeSet) -> tuple[Path, Path]:
     """Edition A, four tracks of 60 s; edition B, the same tracks after LEADS frames of
     silence, its second and third at the speeds of SPEEDS.
 
@@ -123,6 +122,11 @@ def drifting(make_set: MakeSet) -> tuple[Path, Path]:
             write_audio(source / f"{number:02}.flac", quantized(audio, 24), 24, "FLAC")
 
     return make_set(write_a), make_set(write_b)
+
+
+@pytest.fixture
+def drifting(make_set: MakeSet) -> tuple[Path, Path]:
+    return drifting_editions(make_set)
 
 
 def test_compare_follows_tracks_of_editions_that_drift(
