@@ -150,7 +150,21 @@ Compare finds portions whose speed differs, each at its own constant ratio. The
    A portion's range of B starts at the frame nearest its line at its first frame of
    A, a half rounding up, and ends likewise. An edition's segment starts in B's next
    track at the first frame of A at or after the position of that track's first frame
-   on the line.
+   on the line. Each portion records how its ratio was set, and each segment of an
+   edition records its portion's: *same speed* when its ratio is 0, however it came to
+   be 0 (the chain's line snapped to 0 before or after stretched refinement, its
+   first ratio under 20 ppm with fewer than 4 windows to correct it, or identical
+   audio), and only then; *confirmed* when a refit held within 0.3 frame; *not
+   converged* when a refit succeeded but none held, because the passes ran out or a
+   later pass ended early (its range grew too short, refinement found no portion on
+   the refitted line, or the portion had too few windows to refit again), the portion
+   keeping the line of the last pass that gave one; *first ratio* when no refit
+   succeeded, because the portion on the chain's line had too few windows scoring at
+   least 0.3 to refit at the first pass, so the line is the chain's line before
+   stretched refinement: its first ratio, corrected when decision 3 had enough windows
+   to correct it. A ratio that is not converged or a first ratio and rounds to 0 is at
+   the same speed, refined as ADR 0006 refines it. A merged portion takes the state of
+   the portion whose line it takes.
 
 ## Rationale and alternatives
 

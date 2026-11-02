@@ -576,6 +576,7 @@
         "b": { "$ref": "#/$defs/range" },
         "offset": { "$ref": "#/$defs/offset" },
         "speed_ratio_ppm": { "type": "number" },
+        "ratio_fit": { "$ref": "#/$defs/ratio_fit" },
         "block_gain_residual_db": { "type": "number" },
         "downmix": { "$ref": "#/$defs/values" },
         "channels": {
@@ -591,7 +592,15 @@
           "additionalProperties": false
         }
       },
-      "required": ["rank", "a", "b", "offset", "speed_ratio_ppm", "downmix"],
+      "required": [
+        "rank",
+        "a",
+        "b",
+        "offset",
+        "speed_ratio_ppm",
+        "ratio_fit",
+        "downmix"
+      ],
       "additionalProperties": false,
       "allOf": [
         { "$ref": "#/$defs/same_speed" },
@@ -631,6 +640,9 @@
       "required": ["frames", "seconds"],
       "additionalProperties": false
     },
+    "ratio_fit": {
+      "enum": ["same_speed", "confirmed", "not_converged", "first_ratio"]
+    },
     "same_speed": {
       "if": {
         "properties": { "speed_ratio_ppm": { "const": 0 } },
@@ -638,7 +650,13 @@
       },
       "then": {
         "properties": {
-          "offset": { "properties": { "frames": { "type": "integer" } } }
+          "offset": { "properties": { "frames": { "type": "integer" } } },
+          "ratio_fit": { "const": "same_speed" }
+        }
+      },
+      "else": {
+        "properties": {
+          "ratio_fit": { "enum": ["confirmed", "not_converged", "first_ratio"] }
         }
       }
     },
@@ -1025,6 +1043,7 @@
         "b": { "$ref": "#/$defs/range" },
         "offset": { "$ref": "#/$defs/offset" },
         "speed_ratio_ppm": { "type": "number" },
+        "ratio_fit": { "$ref": "#/$defs/ratio_fit" },
         "block_gain_residual_db": { "type": "number" },
         "segments": {
           "type": "array",
@@ -1037,7 +1056,15 @@
           "additionalProperties": false
         }
       },
-      "required": ["rank", "a", "b", "offset", "speed_ratio_ppm", "segments"],
+      "required": [
+        "rank",
+        "a",
+        "b",
+        "offset",
+        "speed_ratio_ppm",
+        "ratio_fit",
+        "segments"
+      ],
       "additionalProperties": false,
       "allOf": [
         { "$ref": "#/$defs/same_speed" },
@@ -1064,6 +1091,7 @@
         "b": { "$ref": "#/$defs/track_range" },
         "offset": { "$ref": "#/$defs/offset" },
         "speed_ratio_ppm": { "type": "number" },
+        "ratio_fit": { "$ref": "#/$defs/ratio_fit" },
         "downmix": { "$ref": "#/$defs/values" },
         "channels": { "type": "array", "items": { "$ref": "#/$defs/values" } },
         "absent": {
@@ -1072,7 +1100,14 @@
           "additionalProperties": false
         }
       },
-      "required": ["a", "b", "offset", "speed_ratio_ppm", "downmix"],
+      "required": [
+        "a",
+        "b",
+        "offset",
+        "speed_ratio_ppm",
+        "ratio_fit",
+        "downmix"
+      ],
       "additionalProperties": false,
       "allOf": [
         { "$ref": "#/$defs/same_speed" },

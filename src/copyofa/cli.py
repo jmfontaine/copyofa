@@ -18,6 +18,7 @@ from copyofa import (
     evidence_set,
     exporter,
     inspector,
+    locator,
     validator,
     verifier,
     viewer,
@@ -782,24 +783,56 @@ def _print_edition_comparison(report: dict[str, Any]) -> None:
 
 def _ratios(portions: list[dict[str, Any]], position_a: int, position_b: int) -> str:
     """Format the speed ratio of the primary segments joining two tracks, or their
-    range when they differ; nothing when it is 0."""
-    ratios = {
-        segment["speed_ratio_ppm"]
+    range when they differ, counting only those at the same speed or confirmed;
+    nothing when it is 0 and none is left out. Say how many segments it leaves out and
+    how their ratios were set; when it counts none, give the range of the others and
+    how they were set."""
+    segments = [
+        segment
         for portion in portions
         if portion["rank"] == comparator.PRIMARY
         for segment in portion["segments"]
         if segment["a"]["position"] == position_a
         and segment["b"]["position"] == position_b
-    }
-    if not ratios or ratios == {0}:
-        return ""
-    if len(ratios) == 1:
-        return f" at {_ppm(min(ratios))}"
-    return f" at {_ppm(min(ratios))} to {_ppm(max(ratios))}"
+    ]
+    counted = [segment for segment in segments if segment["ratio_fit"] not in _NOTES]
+    left = [segment for segment in segments if segment["ratio_fit"] in _NOTES]
+    ratios = sorted({segment["speed_ratio_ppm"] for segment in counted or left})
+    text = ""
+    if ratios and (ratios != [0] or left):
+        text = f" at {_ppm(ratios[0])}"
+        if len(ratios) > 1:
+            text += f" to {_ppm(ratios[-1])}"
+    if not left:
+        return text
+    fits = {segment["ratio_fit"] for segment in left}
+    notes = ", ".join(note for fit, note in _NOTES.items() if fit in fits)
+    if not counted:
+        return f"{text} ({notes})"
+    noun = "segment" if len(left) == 1 else "segments"
+    return f"{text} ({len(left)} {noun} left out: {notes})"
+
+
+_NOTES = {
+    locator.FIRST_RATIO: "first ratio",
+    locator.NOT_CONVERGED: "not converged",
+}
+"""The note the text result adds to a ratio set by neither the same speed nor a
+confirmed refit."""
 
 
 def _ppm(ratio: float) -> str:
     return f"{_rounded(ratio, 2):+.2f} ppm"
+
+
+def _speed(portion: dict[str, Any]) -> str:
+    """Format a portion's speed ratio, with a note when it is neither at the same
+    speed nor confirmed; nothing at the same speed."""
+    ratio = portion["speed_ratio_ppm"]
+    if not ratio:
+        return ""
+    note = _NOTES.get(portion["ratio_fit"])
+    return f"speed ratio {_ppm(ratio)}" + (f" ({note})" if note else "") + ", "
 
 
 def _edition_track(track: dict[str, Any]) -> str:
@@ -843,12 +876,11 @@ def _print_comparison(report: dict[str, Any]) -> None:
     for number, portion in enumerate(measurements["portions"], start=1):
         offset = portion["offset"]
         downmix = portion["downmix"]
-        ratio = portion["speed_ratio_ppm"]
         print(
             f"Portion {number}, {portion['rank']}: "
             f"A {_seconds(portion['a'], rate)}, B {_seconds(portion['b'], rate)}, "
             f"offset {offset['frames']:+} frames ({offset['seconds']:+.3f} s), "
-            + (f"speed ratio {_ppm(ratio)}, " if ratio else "")
+            + _speed(portion)
             + f"{_value(downmix, 'correlation', 'correlation', 3, '')}, "
             f"{_value(downmix, 'residual_db', 'residual (one gain)', 1, ' dB')}"
         )

@@ -195,12 +195,13 @@ the portions of track A that appear in track B, each at its own offset and speed
 ratio: B may run up to 4.5 % faster or slower, as a tape transfer or a PAL video
 release does, or drift by a few parts per million (ppm), as different masters do. For
 each portion it reports its range in both tracks, its offset, its speed ratio when B
-runs at another speed, as in `speed ratio +9.83 ppm`, and how B relates to A over it:
-correlation, gain and the residual level left after that gain. It finds audio whose
-speed and pitch changed together, not a tempo change that keeps the pitch. It also
-reports the audio that no primary portion covers, with its level. In the example, both
-tracks run at the same speed, and portion 1 covers nearly all of the CD track, with B
-starting 0.792 s later. Portions 2 and 3 match other
+runs at another speed, as in `speed ratio +9.83 ppm`, followed by `(first ratio)` or
+`(not converged)` when no refit of the portion's line confirmed it, and how B relates
+to A over it: correlation, gain and the residual level left after that gain. It finds
+audio whose speed and pitch changed together, not a tempo change that keeps the
+pitch. It also reports the audio that no primary portion covers, with its level. In
+the example, both tracks run at the same speed, and portion 1 covers nearly all of the
+CD track, with B starting 0.792 s later. Portions 2 and 3 match other
 places of B for sections of A that portion 1 also covers; the alternates match
 sections that better portions already cover, less well. The first 4.1 s of A, and the
 first 4.9 s and the last 4.1 s of B, match nothing. When both tracks are lossless and
@@ -236,9 +237,11 @@ track of A naming the tracks of B that hold its audio and how much, and the audi
 one edition holds, per track. The Report splits each portion into segments at the
 track boundaries of both editions and measures each. Editions whose speeds differ, such
 as two masters, match track by track at each track's own ratio, which its line gives,
-as in `at +9.05 ppm`. Matching tracks do not make the editions equivalent. Two CDs
-take about three and a half to six and a half minutes, longer the more of their tracks
-drift, and up to about 11 GB of memory; much longer editions may not fit in memory.
+as in `at +9.05 ppm`, counting only ratios at the same speed or confirmed and saying
+how many segments it left out. Matching tracks do not make the editions equivalent.
+Two CDs take about three and a half to six and a half minutes, longer the more of
+their tracks drift, and up to about 11 GB of memory; much longer editions may not fit
+in memory.
 Compare exits 1 when a track of either edition could not be inspected or decoded, or
 an edition has no track, and 2 when only one input is the root of a set given without
 its track option.
@@ -298,11 +301,12 @@ limitation. It gives the SHA-256 of the Report file it was generated from, so a
 recipient can check the page against the Report. The page runs no script and loads
 nothing, so it opens in any browser, offline. It draws no conclusion from the
 measurements. For a Report of the current format, it shows the method's parameters,
-a table of the portions with each one's offset, speed ratio and residual windows, the
-unmatched audio of each track, and the error ranges of each track of an acquired set.
+a table of the portions with each one's offset, speed ratio, how that ratio was set,
+and residual windows, the unmatched audio of each track, and the error ranges of each
+track of an acquired set.
 For a comparison of two editions, it also shows each edition's tracks and excluded
 files, the coverage, the correspondences between tracks, and each portion's segments
-with their offsets, speed ratios and measurements.
+with their offsets, speed ratios, how those were set, and measurements.
 [Comparison Report format][comparison-report] describes it.
 
 View exits 0 when it printed the page, 1 when the Report is invalid, unsupported, not a

@@ -545,9 +545,9 @@ def test_validate_accepts_a_comparison_report_of_format_version_7_without_a_port
     assert result["format_version"] == 7
 
 
-def test_validate_accepts_a_comparison_report_of_format_version_7_of_editions(
-    run: Run, make_set: MakeSet, tmp_path: Path
-) -> None:
+def compare_editions(run: Run, make_set: MakeSet) -> dict[str, Any]:
+    """Return the Report of two editions of the same two tracks of 6 s."""
+
     def fill(source: Path) -> None:
         for seed in (1, 2):
             samples = signal(6 * RATE, 2, 16, seed=seed)
@@ -555,7 +555,13 @@ def test_validate_accepts_a_comparison_report_of_format_version_7_of_editions(
 
     comparison = run("compare", make_set(fill), make_set(fill), "--json")
     assert comparison.code == 0, comparison.err
-    document = json.loads(comparison.out)
+    return json.loads(comparison.out)
+
+
+def test_validate_accepts_a_comparison_report_of_format_version_7_of_editions(
+    run: Run, make_set: MakeSet, tmp_path: Path
+) -> None:
+    document = compare_editions(run, make_set)
     assert document["scope"] == "editions"
     assert document["measurements"]["portions"][0]["segments"]
 
@@ -565,6 +571,101 @@ def test_validate_accepts_a_comparison_report_of_format_version_7_of_editions(
     assert result["outcome"] == "valid"
     assert result["format_version"] == 7
     assert result["problems"] == []
+
+
+PORTION = "/measurements/portions/0"
+SEGMENT = f"{PORTION}/segments/0"
+
+
+def _at(document: dict[str, Any], pointer: str) -> dict[str, Any]:
+    entry: Any = document
+    for part in pointer.strip("/").split("/"):
+        entry = entry[int(part)] if isinstance(entry, list) else entry[part]
+    return entry
+
+
+RATIO_FIT_CHANGES = {
+    "a portion without it": (PORTION, {"ratio_fit": None}, PORTION),
+    "a portion with another value": (
+        PORTION,
+        {"ratio_fit": "refined"},
+        f"{PORTION}/ratio_fit",
+    ),
+    "a portion at the same speed confirmed": (
+        PORTION,
+        {"ratio_fit": "confirmed"},
+        f"{PORTION}/ratio_fit",
+    ),
+    "a portion at another speed set by the same speed": (
+        PORTION,
+        {"speed_ratio_ppm": 12.5},
+        f"{PORTION}/ratio_fit",
+    ),
+    "a segment without it": (SEGMENT, {"ratio_fit": None}, SEGMENT),
+    "a segment at the same speed at a first ratio": (
+        SEGMENT,
+        {"ratio_fit": "first_ratio"},
+        f"{SEGMENT}/ratio_fit",
+    ),
+    "a segment at another speed set by the same speed": (
+        SEGMENT,
+        {"speed_ratio_ppm": -3.25},
+        f"{SEGMENT}/ratio_fit",
+    ),
+}
+"""Changes to how a ratio was set that schema 7 refuses: where, what, and where the
+problem is."""
+
+
+@pytest.mark.parametrize(
+    ("scope", "name"),
+    [
+        (scope, name)
+        for scope in ("tracks", "editions")
+        for name in RATIO_FIT_CHANGES
+        if scope == "editions" or not name.startswith("a segment")
+    ],
+)
+def test_validate_requires_how_each_ratio_was_set_in_format_version_7(
+    run: Run,
+    reports: dict[str, Path],
+    make_set: MakeSet,
+    tmp_path: Path,
+    scope: str,
+    name: str,
+) -> None:
+    pointer, change, location = RATIO_FIT_CHANGES[name]
+    if scope == "tracks":
+        document = json.loads(reports["comparison"].read_text())
+    else:
+        document = compare_editions(run, make_set)
+    entry = _at(document, pointer)
+    assert (entry["speed_ratio_ppm"], entry["ratio_fit"]) == (0, "same_speed")
+    for key, value in change.items():
+        if value is None:
+            del entry[key]
+        else:
+            entry[key] = value
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 1
+    assert result["outcome"] == "invalid"
+    assert location in {problem["location"] for problem in result["problems"]}, result
+
+
+@pytest.mark.parametrize("ratio_fit", ["confirmed", "not_converged", "first_ratio"])
+def test_validate_accepts_each_way_a_ratio_other_than_0_was_set(
+    run: Run, reports: dict[str, Path], tmp_path: Path, ratio_fit: str
+) -> None:
+    document = json.loads(reports["comparison"].read_text())
+    portion = document["measurements"]["portions"][0]
+    portion.update(speed_ratio_ppm=12.5, ratio_fit=ratio_fit)
+
+    outcome, result = validate(run, save(tmp_path, document))
+
+    assert outcome.code == 0, result
+    assert result["outcome"] == "valid"
 
 
 @pytest.mark.parametrize(
@@ -609,6 +710,8 @@ def test_validate_takes_a_fraction_of_a_frame_only_at_another_speed(
     document = json.loads(reports["comparison"].read_text())
     portion = document["measurements"]["portions"][0]
     portion["speed_ratio_ppm"] = ratio
+    if ratio:
+        portion["ratio_fit"] = "confirmed"
     portion["offset"]["frames"] += 0.25
 
     outcome, result = validate(run, save(tmp_path, document))

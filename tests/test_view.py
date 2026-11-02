@@ -21,7 +21,13 @@ from conftest import (
 )
 from test_compare_portions import A as TRACK
 from test_compare_portions import quantized, write_b
-from test_compare_speed import drifting_editions, stretched
+from test_compare_speed import TRACK as EXCERPT_TRACK
+from test_compare_speed import (
+    drifting_editions,
+    never_converge,
+    short_excerpt,
+    stretched,
+)
 
 import copyofa
 from copyofa import validator, viewer
@@ -165,6 +171,7 @@ OFFSET_HEADERS = [
     "Offset at the first frame (frames)",
     "Offset at the first frame (seconds)",
     "Speed ratio (ppm)",
+    "How the speed ratio was set",
 ]
 
 
@@ -1174,6 +1181,7 @@ def test_view_shows_the_offset_and_speed_ratio_of_each_portion(
         number(portion["offset"]["frames"]),
         number(portion["offset"]["seconds"]),
         number(portion["speed_ratio_ppm"]),
+        "confirmed",
     ]
 
 
@@ -1184,6 +1192,10 @@ def test_view_shows_the_offset_and_speed_ratio_of_each_segment(
     portions = report["measurements"]["portions"]
     segments = [segment for portion in portions for segment in portion["segments"]]
     assert {segment["speed_ratio_ppm"] for segment in segments} > {0}
+    assert {segment["ratio_fit"] for segment in segments} == {
+        "same_speed",
+        "confirmed",
+    }
 
     page = view(run, path)
 
@@ -1192,6 +1204,7 @@ def test_view_shows_the_offset_and_speed_ratio_of_each_segment(
             number(entry["offset"]["frames"]),
             number(entry["offset"]["seconds"]),
             number(entry["speed_ratio_ppm"]),
+            entry["ratio_fit"],
         ]
 
     header, *rows = page.tables["Portions"]
@@ -1206,6 +1219,44 @@ def test_view_shows_the_offset_and_speed_ratio_of_each_segment(
         assert [[row[column] for column in columns] for row in rows] == [
             values(segment) for segment in portion["segments"]
         ]
+
+
+@pytest.mark.parametrize("ratio_fit", ["first_ratio", "not_converged"])
+def test_view_shows_a_speed_ratio_that_is_not_confirmed(
+    run: Run,
+    make_set: MakeSet,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    ratio_fit: str,
+) -> None:
+    if ratio_fit == "first_ratio":
+        a, b = short_excerpt(make_set)
+        inputs = (a / EXCERPT_TRACK, b / EXCERPT_TRACK)
+    else:
+        never_converge(monkeypatch)
+        first = make_set(
+            lambda source: write_audio(
+                source / "a.flac", quantized(TRACK, 16), 16, "FLAC"
+            )
+        )
+        second = make_set(
+            lambda source: write_b(source, stretched(TRACK, 100), "24-bit")
+        )
+        inputs = (first / "data/Album/a.flac", second / "data/Album/b.flac")
+    outcome = run("compare", *inputs, "--json")
+    assert outcome.code == 0, outcome.err
+    path = tmp_path / "report.json"
+    path.write_text(outcome.out, encoding="utf-8")
+    portions = json.loads(outcome.out)["measurements"]["portions"]
+    assert ratio_fit in {portion["ratio_fit"] for portion in portions}
+
+    page = view(run, path)
+
+    header, *rows = page.tables["Portions"]
+    column = header.index("How the speed ratio was set")
+    assert [row[column] for row in rows] == [
+        portion["ratio_fit"] for portion in portions
+    ]
 
 
 @pytest.mark.parametrize("name", VERSION_7_CASES)
