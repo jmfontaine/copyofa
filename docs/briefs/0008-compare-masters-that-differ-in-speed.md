@@ -93,6 +93,17 @@ Version 6 with:
   frame of A to 0.01 frame, an integer when the ratio is 0, and its speed ratio in
   ppm to 0.01, 0 when the speeds agree; its range of B may differ in length from its
   range of A;
+- each portion says how its ratio was set, and each segment of an edition comparison
+  says it from its portion:
+  - the same speed: its ratio is 0, however it came to be 0;
+  - confirmed: its ratio is not 0, and a refit on B stretched along its line held;
+  - not converged: its ratio is not 0, and a refit succeeded but none held, because
+    the passes ran out or a later pass ended early;
+  - first ratio: its ratio is not 0, and no refit succeeded, so its line is the one
+    fitted on its chain before any refit (ADR 0010's decision 3); a portion too short
+    to refit gets it;
+
+  a merged portion says what the portion whose line it takes says;
 - `method.alignment` `speed_tolerant_portions`, and ADR 0010's parameters added to
   `method.parameters`;
 - `limitations`: version 6's, with both of its speed sentences, the track
@@ -109,16 +120,21 @@ Exact field names and the schema are settled in implementation and documented in
 
 ### Text result
 
-- A track comparison's line per portion gives its speed ratio when it is not 0.
+- A track comparison's line per portion gives its speed ratio when it is not 0, and
+  adds "not converged" or "first ratio" when the ratio is one; a confirmed ratio gets
+  no note.
 - An edition comparison's line per track of A gives, for each track of B holding it,
   the speed ratio of its primary segments when it is not 0, or the range of ratios
-  when they differ.
+  when they differ, counting only segments at the same speed or confirmed. When it
+  leaves segments out, it says how many and how their ratios were set. When none is
+  at the same speed or confirmed, it gives the range of the others and says how they
+  were set.
 
 ### View
 
-View renders version 7 of both scopes, with each portion's and segment's ratio and
-offset, under the same rules as today's page, and maps version 7 to its layouts; it
-still renders versions 1 to 6.
+View renders version 7 of both scopes, with each portion's and segment's ratio, how
+it was set, and offset, under the same rules as today's page, and maps version 7 to
+its layouts; it still renders versions 1 to 6.
 
 ## Design decisions
 
@@ -193,6 +209,16 @@ Boundaries are checked within the suite's existing tolerance of 32 frames.
   quality by +1 % and by +41,667 ppm and each imported, gives one portion at its ratio.
   Each comparison meets the memory and time bounds above, and each view opens in a
   browser.
+- **AC11 — How a ratio was set.** In the Report and view: the primary portions of AC2
+  and AC3, and of AC4's tracks 2 and 3, are confirmed; AC1's and AC4's tracks 1 and 4
+  are at the same speed; a portion at a ratio of 20 ppm or more too short to refit,
+  built by the test as it can (for example A all or nearly all of a short excerpt, so
+  the speed estimate sees it, and B holding it at +1 % among unrelated audio), is a
+  first ratio; and a line whose passes run out, as when
+  a test lowers `MAXIMUM_PASSES`, is not converged. In the text result: the first ratio
+  and the line that is not converged carry their note, the other lines carry none, and
+  an edition's line that leaves segments out says so. AC9's documents describe the
+  four states, and ADR 0010's decision 9 records how the code reaches each.
 
 ## Manifesto alignment
 
