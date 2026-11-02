@@ -93,6 +93,10 @@ Version 6 with:
   frame of A to 0.01 frame, an integer when the ratio is 0, and its speed ratio in
   ppm to 0.01, 0 when the speeds agree; its range of B may differ in length from its
   range of A;
+- each portion, and each segment from it, says how its ratio was set: refined, its
+  line refitted until it held; not converged, its line from the last pass when the
+  passes ran out; a first estimate, too short to refit; or the same speed, refined as
+  ADR 0006 refines;
 - `method.alignment` `speed_tolerant_portions`, and ADR 0010's parameters added to
   `method.parameters`;
 - `limitations`: version 6's, with both of its speed sentences, the track
@@ -109,16 +113,18 @@ Exact field names and the schema are settled in implementation and documented in
 
 ### Text result
 
-- A track comparison's line per portion gives its speed ratio when it is not 0.
+- A track comparison's line per portion gives its speed ratio when it is not 0, and
+  says so when that ratio is not refined.
 - An edition comparison's line per track of A gives, for each track of B holding it,
   the speed ratio of its primary segments when it is not 0, or the range of ratios
-  when they differ.
+  when they differ, from refined ratios when there are any, and says when a ratio is
+  not refined.
 
 ### View
 
-View renders version 7 of both scopes, with each portion's and segment's ratio and
-offset, under the same rules as today's page, and maps version 7 to its layouts; it
-still renders versions 1 to 6.
+View renders version 7 of both scopes, with each portion's and segment's ratio, how
+it was set, and offset, under the same rules as today's page, and maps version 7 to
+its layouts; it still renders versions 1 to 6.
 
 ## Design decisions
 
@@ -193,6 +199,10 @@ Boundaries are checked within the suite's existing tolerance of 32 frames.
   quality by +1 % and by +41,667 ppm and each imported, gives one portion at its ratio.
   Each comparison meets the memory and time bounds above, and each view opens in a
   browser.
+- **AC11 — How a ratio was set.** AC2's, AC3's and AC4's portions are refined, AC1's
+  are at the same speed, and a portion at a ratio other than 0 too short to refit is a
+  first estimate, in the Report, the text result and view; a line whose passes run out
+  is not converged.
 
 ## Manifesto alignment
 
