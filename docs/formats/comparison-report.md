@@ -784,68 +784,67 @@ unchanged. A Report with `omitted` is not valid at version 1.
 
 ## Example
 
-Track 4 of an acquired set of *Add Violence* (2017 CD) against track 4 of the 2025
-digital reissue (24-bit, 48 kHz FLAC), with track input A:
+Track 5 of an acquired set of *The Downward Spiral* (the 14-track CD) against track 5
+of the 2017 download (24-bit, 96 kHz FLAC), with track input A:
 
 ```json
 {
   "report_kind": "copyofa.comparison",
   "format_version": 7,
   "scope": "tracks",
-  "copyofa_version": "0.10.0",
-  "compared_at": "2026-10-26T03:15:12Z",
+  "copyofa_version": "0.10.0.dev0",
+  "compared_at": "2026-11-02T22:33:07Z",
   "omitted": [],
   "inputs": {
     "a": {
-      "evidence_set": "/Volumes/Archive/Add Violence CD",
+      "evidence_set": "/Volumes/Archive/TDS CD",
       "integrity_baseline": {
-        "manifest_sha256": "8c86…",
+        "manifest_sha256": "c689…",
         "usable": true,
         "problems": []
       },
       "path": "data/disc.scram.flac",
       "track": {
-        "number": 4,
-        "first_frame": 59373288,
-        "frame_count": 8234940,
-        "error_ranges": []
+        "number": 5,
+        "first_frame": 68362056,
+        "frame_count": 16458120
       },
       "outcome": "interpreted",
-      "expected_digest": "4ad6…",
-      "observed_digest": "4ad6…",
+      "expected_digest": "10fe…",
+      "observed_digest": "10fe…",
       "format": "flac",
       "encoding": "pcm_16",
       "sample_rate": 44100,
       "channels": 2,
       "bits_per_sample": 16,
-      "frames": 8234940,
-      "audio_digest": "pcm1:44100:2:16:a4c1…",
-      "peak": [32768, 32768],
+      "frames": 16458120,
+      "audio_digest": "pcm1:44100:2:16:6168…",
+      "peak": [31961, 31955],
       "leading_silence_frames": 0,
       "trailing_silence_frames": 0
     },
     "b": {
-      "evidence_set": "/Volumes/Archive/Add Violence",
+      "evidence_set": "/Volumes/Archive/TDS 2017",
       "integrity_baseline": {
-        "manifest_sha256": "a871…",
+        "manifest_sha256": "9325…",
         "usable": true,
         "problems": []
       },
-      "path": "data/01-04 Not Anymore.flac",
+      "path": "data/The Downward Spiral (2017 DE) FLAC/05 Closer.flac",
       "outcome": "interpreted",
-      "expected_digest": "416f…",
-      "observed_digest": "416f…",
+      "expected_digest": "dcb8…",
+      "observed_digest": "dcb8…",
       "format": "flac",
       "encoding": "pcm_24",
-      "sample_rate": 48000,
+      "sample_rate": 96000,
       "channels": 2,
       "bits_per_sample": 24,
-      "frames": 9196800,
-      "audio_digest": "pcm1:48000:2:24:aeb2…",
-      "peak": [8136205, 8135850],
+      "frames": 35815780,
+      "audio_digest": "pcm1:96000:2:24:60fe…",
+      "peak": [8364531, 8366265],
       "leading_silence_frames": 0,
       "trailing_silence_frames": 0,
-      "flac_md5_signature": "absent"
+      "flac_md5_signature": "matching"
     }
   },
   "method": {
@@ -918,130 +917,59 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
       {
         "rank": "primary",
         "a": {
-          "start_frame": 180743,
-          "frames": 8053618
+          "start_frame": 15544793,
+          "frames": 901651
         },
         "b": {
-          "start_frame": 215689,
-          "frames": 8053618
+          "start_frame": 15532741,
+          "frames": 901660
         },
         "offset": {
-          "frames": 34946,
-          "seconds": 0.7924263038548753
+          "frames": -12051.82,
+          "seconds": -0.27328390022675736
         },
-        "speed_ratio_ppm": 0.0,
-        "ratio_fit": "same_speed",
-        "block_gain_residual_db": -22.031079860026253,
+        "speed_ratio_ppm": 9.87,
+        "ratio_fit": "not_converged",
+        "block_gain_residual_db": -14.212019312846664,
         "downmix": {
-          "correlation": 0.996859930941858,
-          "gain_db": 0.17258339349911697,
-          "residual_db": -22.027127851256214,
+          "correlation": 0.9793488426138992,
+          "gain_db": -4.5892446611614295,
+          "residual_db": -13.883448341522351,
           "residual_windows": [
             {
               "start_frame": 0,
               "frames": 44100,
-              "residual_db": -14.254952251218452
+              "residual_db": -12.542978444247916
             },
             {
               "start_frame": 44100,
               "frames": 44100,
-              "residual_db": -25.7788955812312
+              "residual_db": -14.795727049845663
             }
           ]
         },
         "channels": [
           {
-            "correlation": 0.9964346736830453,
-            "gain_db": 0.16887083154952615,
-            "residual_db": -21.476451970147288,
+            "correlation": 0.9800221959723813,
+            "gain_db": -4.703508384552041,
+            "residual_db": -14.026036148351631,
             "residual_windows": [
               {
                 "start_frame": 0,
                 "frames": 44100,
-                "residual_db": -14.21993421849833
+                "residual_db": -14.3772784726643
               }
             ]
           },
           {
-            "correlation": 0.9970458322784992,
-            "gain_db": 0.17422724464395617,
-            "residual_db": -22.29176581443863,
+            "correlation": 0.975667856623046,
+            "gain_db": -4.431063233053103,
+            "residual_db": -13.179726060817156,
             "residual_windows": [
               {
                 "start_frame": 0,
                 "frames": 44100,
-                "residual_db": -14.261034741456669
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "rank": "alternate",
-        "a": {
-          "start_frame": 986278,
-          "frames": 77805
-        },
-        "b": {
-          "start_frame": 1777223,
-          "frames": 77805
-        },
-        "offset": {
-          "frames": 790945,
-          "seconds": 17.935260770975056
-        },
-        "speed_ratio_ppm": 0.0,
-        "ratio_fit": "same_speed",
-        "block_gain_residual_db": -15.019716761815886,
-        "downmix": {
-          "correlation": 0.9831640250215374,
-          "gain_db": -0.06247275865201059,
-          "residual_db": -14.764025652478612,
-          "residual_windows": [
-            {
-              "start_frame": 0,
-              "frames": 44100,
-              "residual_db": -15.408633596777289
-            },
-            {
-              "start_frame": 44100,
-              "frames": 33705,
-              "residual_db": -13.965842497247705
-            }
-          ]
-        },
-        "channels": [
-          {
-            "correlation": 0.9836046127542462,
-            "gain_db": -0.05836424650597183,
-            "residual_db": -14.87822744416375,
-            "residual_windows": [
-              {
-                "start_frame": 0,
-                "frames": 44100,
-                "residual_db": -15.510480197953989
-              },
-              {
-                "start_frame": 44100,
-                "frames": 33705,
-                "residual_db": -14.089329066628428
-              }
-            ]
-          },
-          {
-            "correlation": 0.9827297376306026,
-            "gain_db": -0.06607907358359948,
-            "residual_db": -14.654369543351907,
-            "residual_windows": [
-              {
-                "start_frame": 0,
-                "frames": 44100,
-                "residual_db": -15.308154125421096
-              },
-              {
-                "start_frame": 44100,
-                "frames": 33705,
-                "residual_db": -13.85453140244729
+                "residual_db": -9.202315548159792
               }
             ]
           }
@@ -1052,29 +980,29 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
       "a": [
         {
           "start_frame": 0,
-          "frames": 180743,
+          "frames": 15544793,
           "digitally_silent": false,
-          "level_dbfs": -36.77583985814157
+          "level_dbfs": -13.663954241928025
         },
         {
-          "start_frame": 8234361,
-          "frames": 579,
+          "start_frame": 16446444,
+          "frames": 11676,
           "digitally_silent": false,
-          "level_dbfs": -11.76307533610161
+          "level_dbfs": -25.94400209717965
         }
       ],
       "b": [
         {
           "start_frame": 0,
-          "frames": 215689,
+          "frames": 15532741,
           "digitally_silent": false,
-          "level_dbfs": -31.061533712318802
+          "level_dbfs": -9.674310058692063
         },
         {
-          "start_frame": 8269307,
-          "frames": 180253,
+          "start_frame": 16434401,
+          "frames": 18473,
           "digitally_silent": false,
-          "level_dbfs": -20.795944160919614
+          "level_dbfs": -21.537373277410907
         }
       ]
     }
@@ -1084,24 +1012,25 @@ digital reissue (24-bit, 48 kHz FLAC), with track input A:
     "MP3 is lossy: the measurements of an MP3 depend on its decoder.",
     "Tracks at different sample rates are compared at the lower rate, after …",
     "Portions shorter than about 2.5 s may be missed, and the search finds no …",
-    "Speed differences up to ±4.5 % are found, each portion at its own constant …",
+    "Speed differences up to ±4.5 % are found, each portion at its own …",
     "Pitch is not corrected: a speed ratio changes speed and pitch together. …",
     "A short excerpt at a different speed may be missed.",
     "A boundary inside audio below -80 dBFS is placed at the nearest frame …",
-    "A boundary at a fade falls about three blocks of 2048 frames inside it, where …",
+    "A boundary at a fade falls about three blocks of 2048 frames inside it, …",
     "In music that repeats a section, one range of a track can match several …",
     "Channels are paired in the order each file stores them."
   ]
 }
 ```
 
-The example is shortened: a Report holds all 64 hexadecimal digits of each digest,
-every residual window, not just the first ones, and the whole of each limitation. It
-also holds all seven portions: three primary, four alternate. The example keeps the
-first, and the fourth, an alternate. The primary portion covers A from 4.098 s to
-186.720 s, and B starts 34946 frames, about 0.792 s, later. The first 4.1 s of A and
-the first 4.9 s of B, and the last 4.1 s of B, at −20.8 dBFS, match no primary
-portion.
+The example's `evidence_set` paths are placeholders, and it is shortened: a Report
+holds all 64 hexadecimal digits of each digest, every residual window, not just the
+first ones, and the whole of each limitation. Its one portion covers A from 352.490 s
+to 372.935 s, 20.4 s near the end of the track. B holds 9.87 ppm more frames over it,
+so plays slower, at a ratio whose line did not converge (`not_converged`), and starts
+12051.82 frames, about 0.273 s, earlier; the portion spans 9 more frames of B than of
+A. The first 352.5 s of A and 352.2 s of B, and the last 0.26 s of A and 0.42 s of B,
+match no primary portion.
 
 ## Viewing a Report
 
