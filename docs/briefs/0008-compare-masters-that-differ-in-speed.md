@@ -100,8 +100,8 @@ Version 6 with:
   - not converged: its ratio is not 0, and a refit succeeded but none held, because
     the passes ran out or a later pass ended early;
   - first ratio: its ratio is not 0, and no refit succeeded, so its line is the one
-    fitted on its chain (ADR 0010's first ratio); a portion too short to refit gets
-    it;
+    fitted on its chain before any refit (ADR 0010's decision 3); a portion too short
+    to refit gets it;
 
   a merged portion says what the portion whose line it takes says;
 - `method.alignment` `speed_tolerant_portions`, and ADR 0010's parameters added to
@@ -211,9 +211,10 @@ Boundaries are checked within the suite's existing tolerance of 32 frames.
   browser.
 - **AC11 — How a ratio was set.** In the Report and view: the primary portions of AC2
   and AC3, and of AC4's tracks 2 and 3, are confirmed; AC1's and AC4's tracks 1 and 4
-  are at the same speed; a portion at a ratio other than 0 too short to refit, built
-  by the test as it can (for example from audio at +1 % shorter than three windows
-  between unrelated audio), is a first ratio; and a line whose passes run out, as when
+  are at the same speed; a portion at a ratio of 20 ppm or more too short to refit,
+  built by the test as it can (for example A all or nearly all of a short excerpt, so
+  the speed estimate sees it, and B holding it at +1 % among unrelated audio), is a
+  first ratio; and a line whose passes run out, as when
   a test lowers `MAXIMUM_PASSES`, is not converged. In the text result: the first ratio
   and the line that is not converged carry their note, the other lines carry none, and
   an edition's line that leaves segments out says so. AC9's documents describe the
