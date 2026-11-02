@@ -76,6 +76,14 @@ As ADR 0010 decides, for tracks and editions alike:
   pair on the same Mac, measured with v0.9.0 before the change, with 0.3 GB allowed
   for the noise of the measurement; B is stretched over the region a portion needs,
   never as a whole copy of B.
+- **Time.** Each comparison of AC10 takes under 6 minutes, or no more than 2.1 times
+  as long as v0.9.0 does for the same pair, timed back to back on the same Mac in the
+  same power state. Six minutes is v0.9.0's 168 s for the CD against the download, plus
+  the spike's added cost and about 80 s for the stretched measurements the spike did
+  not build; 2.1 is that bound's ratio to 168 s, 2.14, rounded down, so that v0.9.0's
+  time on the day scales the bound to the speed of the run. The 6 minutes stays as a
+  floor because v0.9.0 compares each stretched track in about 2 s, too short for a
+  ratio to it to mean anything.
 
 ### Comparison Report format version 7
 
@@ -138,12 +146,8 @@ None.
 
 Stop and report if, in AC10, a pair at the same speed does not give the primary
 portions it gave in v0.9.0, the download covers less than 66 % of the CD, a whole
-comparison takes 6 minutes or more and over 2.1 times v0.9.0's time for the same pair,
-or memory cannot be held to the bound above without changing ADR 0010's method. Six
-minutes is the spike's added cost over v0.9.0's 168 s, with about 80 s for the
-stretched measurements the spike did not build, and 2.1 times is that bound's ratio to
-168 s: v0.9.0's time for the same pair, measured on the same Mac right before, scales
-it to the speed of the run.
+comparison misses the time bound above, or memory cannot be held to the bound above
+without changing ADR 0010's method.
 Stop and report as well if the residuals of −23 to −24 dB the spike left unexplained
 at −1 % and +1,000 ppm come from the method, not the test's resampling.
 
@@ -187,8 +191,8 @@ Boundaries are checked within the suite's existing tolerance of 32 frames.
   longest portion in each of its drifting tracks at 9 to 11.5 ppm; the unrelated
   release gives no portion; and a CD track, exported, stretched with soxr at its `VHQ`
   quality by +1 % and by +41,667 ppm and each imported, gives one portion at its ratio.
-  Each comparison meets the memory bound above and the time bound of the stop rule,
-  and each view opens in a browser.
+  Each comparison meets the memory and time bounds above, and each view opens in a
+  browser.
 
 ## Manifesto alignment
 
