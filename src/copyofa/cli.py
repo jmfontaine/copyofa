@@ -759,6 +759,7 @@ def _print_edition_comparison(report: dict[str, Any]) -> None:
         holders = [
             f"{labels['b'][pair['b']['position']]} "
             f"{viewer.format_duration(pair['a']['matched_frames'], rate)}"
+            + _ratios(measurements["portions"], position, pair["b"]["position"])
             + (", identical audio" if pair.get("identical_audio") else "")
             for pair in measurements["correspondences"]
             if pair["a"]["position"] == position
@@ -777,6 +778,28 @@ def _print_edition_comparison(report: dict[str, Any]) -> None:
                     f"{_seconds(part, rate)}, {_level(part)}"
                 )
             )
+
+
+def _ratios(portions: list[dict[str, Any]], position_a: int, position_b: int) -> str:
+    """Format the speed ratio of the primary segments joining two tracks, or their
+    range when they differ; nothing when it is 0."""
+    ratios = {
+        segment["speed_ratio_ppm"]
+        for portion in portions
+        if portion["rank"] == comparator.PRIMARY
+        for segment in portion["segments"]
+        if segment["a"]["position"] == position_a
+        and segment["b"]["position"] == position_b
+    }
+    if not ratios or ratios == {0}:
+        return ""
+    if len(ratios) == 1:
+        return f" at {_ppm(min(ratios))}"
+    return f" at {_ppm(min(ratios))} to {_ppm(max(ratios))}"
+
+
+def _ppm(ratio: float) -> str:
+    return f"{_rounded(ratio, 2):+.2f} ppm"
 
 
 def _edition_track(track: dict[str, Any]) -> str:
@@ -820,11 +843,13 @@ def _print_comparison(report: dict[str, Any]) -> None:
     for number, portion in enumerate(measurements["portions"], start=1):
         offset = portion["offset"]
         downmix = portion["downmix"]
+        ratio = portion["speed_ratio_ppm"]
         print(
             f"Portion {number}, {portion['rank']}: "
             f"A {_seconds(portion['a'], rate)}, B {_seconds(portion['b'], rate)}, "
             f"offset {offset['frames']:+} frames ({offset['seconds']:+.3f} s), "
-            f"{_value(downmix, 'correlation', 'correlation', 3, '')}, "
+            + (f"speed ratio {_ppm(ratio)}, " if ratio else "")
+            + f"{_value(downmix, 'correlation', 'correlation', 3, '')}, "
             f"{_value(downmix, 'residual_db', 'residual (one gain)', 1, ' dB')}"
         )
     if "portions" in measurements.get("absent", {}):

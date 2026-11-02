@@ -126,6 +126,31 @@ Compare finds portions whose speed differs, each at its own constant ratio. The
    frames, convergence 0.3 frame, at most 10 passes. Details the implementation
    settles, such as how the stretch extends and the outlier distance of the first
    line, are recorded with it, as ADR 0006's decision 8 records its own.
+9. **Details settled in implementation.** Each window of the estimate is cut from an
+   excerpt of the decimated A a quarter of a window longer on each side, stretched as a
+   whole, so that the resampler's edges fall outside the window. The first line of a
+   chain goes through the best candidate of each of its windows by least squares,
+   leaving out the farthest candidate while it lies more than 32 frames from the line;
+   a chain of one window takes the estimate as its first ratio. A window's offset
+   along a line is the whole frame of its best normalized correlation, within the
+   search radius and not at its edge, plus a fraction, the slope of the phase of the
+   cross-spectrum there, each frequency weighted by its magnitude times its frequency;
+   a fraction of a whole frame or more gives no offset. The offset belongs to the
+   window's middle frame, since a window measures the mean of a drift across it. Each
+   phase of the interpolator is scaled to a gain of 1 at 0 Hz, and frames outside B
+   count as zero. Refinement on the stretched B searches its whole-frame offset as ADR
+   0006 does, and the line moves by it. When the grown portion ends within two blocks
+   of an edge of the stretched region and B goes on there, the region grows on that
+   side by 40 s or its own width, whichever is more, and the refinement runs again.
+   When the refined line holds within 0.3 frame, the portion keeps the refitted line.
+   A chain whose refined ratio rounds to 0 is refined as ADR 0006 refines it. The
+   residual is taken on the line as the Report gives it, to 0.01 frame and 0.01 ppm.
+   Two portions merge when their lines lie within 2 frames of each other at both ends
+   of the frames of A they share; a merged portion takes the line of the longer one.
+   A portion's range of B starts at the frame nearest its line at its first frame of
+   A, a half rounding up, and ends likewise. An edition's segment starts in B's next
+   track at the first frame of A at or after the position of that track's first frame
+   on the line.
 
 ## Rationale and alternatives
 

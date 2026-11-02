@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from conftest import (
-    DAMAGED_ERRORS,
     RATE,
     closed_stdout,
     run_without_stdout,
@@ -20,7 +19,6 @@ from conftest import (
     snapshot,
     write_audio,
 )
-from test_compare_editions import P, Q, acquire, cover_only, write_files
 
 import copyofa
 from copyofa import validator, viewer
@@ -28,7 +26,7 @@ from copyofa import validator, viewer
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
-    from conftest import Run, StandIn
+    from conftest import Run
 
     MakeSet = Callable[[Callable[[Path], None]], Path]
 
@@ -144,15 +142,17 @@ VERSION_4_CASES = sorted(
 VERSION_5_CASES = sorted(
     path.stem for path in (REPORTS / "comparison-5").glob("*.json")
 )
+# Version 6 comparison Reports that compare 0.10.0.dev0 printed before ADR 0010, kept
+# as they were so the page keeps rendering version 6: of scope tracks,
+# `damaged_tracks` and `files`, of the same inputs as version 5's cases of the same
+# names; of scope editions, `editions_measured` (an acquired set against an imported
+# set of its two tracks' audio as 48 kHz files, beside a cover image),
+# `editions_not_measured` (an imported set against one holding only a cover image, so
+# no track) and `editions_damaged` (a set acquired with error ranges against itself,
+# its tracks too short for any portion). tests/test_compare_speed.py compares the
+# same inputs again.
 VERSION_6_CASES = ["damaged_tracks", "files"]
-"""Version 6 Reports that the tests have compare print, as version 5's cases of the
-same names."""
 EDITION_CASES = ["measured", "not measured", "damaged"]
-"""Version 6 Reports of scope editions that the tests have compare print: `measured`
-(an acquired set against an imported set of its two tracks' audio as 48 kHz files,
-beside a cover image), `not measured` (an imported set against one holding only a
-cover image, so no track), `damaged` (a set acquired with error ranges against
-itself, its tracks too short for any portion)."""
 
 
 @pytest.fixture
@@ -197,74 +197,30 @@ def test_every_case_is_stored() -> None:
         "portions",
         "too_short",
     ]
+    assert sorted(
+        path.stem for path in (REPORTS / "comparison-6").glob("*.json")
+    ) == sorted(
+        [
+            *VERSION_6_CASES,
+            *(f"editions_{name.replace(' ', '_')}" for name in EDITION_CASES),
+        ]
+    )
 
 
 @pytest.fixture
 def version_6(
-    run: Run, make_set: MakeSet, damaged_set: Path, tmp_path: Path
+    report_of: Callable[..., tuple[Path, dict[str, Any]]],
 ) -> Callable[[str], tuple[Path, dict[str, Any]]]:
-    """Have compare print a version 6 Report of a case; return it."""
-
-    def _version_6(name: str) -> tuple[Path, dict[str, Any]]:
-        if name == "damaged_tracks":
-            arguments: tuple[str | Path, ...] = (
-                damaged_set,
-                damaged_set,
-                "--track-a",
-                "1",
-                "--track-b",
-                "2",
-            )
-        else:
-            assert name == "files"
-            samples = signal(6 * RATE, 2, 16, seed=23)
-            sets = [
-                make_set(
-                    lambda source: write_audio(source / "a.flac", samples, 16, "FLAC")
-                )
-                for _ in range(2)
-            ]
-            arguments = tuple(path / "data/Album/a.flac" for path in sets)
-        outcome = run("compare", *arguments, "--json")
-        assert outcome.code == 0, outcome.err
-        path = tmp_path / f"{name}-6.json"
-        path.write_text(outcome.out, encoding="utf-8")
-        report = json.loads(outcome.out)
-        assert (report["format_version"], report["scope"]) == (6, "tracks")
-        return path, report
-
-    return _version_6
+    """Copy a stored version 6 Report of scope tracks of a case."""
+    return lambda name: report_of(name, 6)
 
 
 @pytest.fixture
 def editions(
-    run: Run,
-    make_set: MakeSet,
-    make_acquired_set: Callable[..., Path],
-    redumper: StandIn,
-    tmp_path: Path,
+    report_of: Callable[..., tuple[Path, dict[str, Any]]],
 ) -> Callable[[str], tuple[Path, dict[str, Any]]]:
-    """Have compare print a version 6 Report of scope editions of a case."""
-
-    def _editions(name: str) -> tuple[Path, dict[str, Any]]:
-        if name == "measured":
-            a = acquire(make_acquired_set, redumper, [P, Q])
-            b = make_set(write_files)
-        elif name == "damaged":
-            a = b = make_acquired_set(code=1, errors=DAMAGED_ERRORS)
-        else:
-            assert name == "not measured"
-            a = make_set(write_files)
-            b = make_set(cover_only)
-        outcome = run("compare", a, b, "--json")
-        assert outcome.code == (1 if name == "not measured" else 0), outcome.err
-        path = tmp_path / f"editions-{name.replace(' ', '_')}.json"
-        path.write_text(outcome.out, encoding="utf-8")
-        report = json.loads(outcome.out)
-        assert (report["format_version"], report["scope"]) == (6, "editions")
-        return path, report
-
-    return _editions
+    """Copy a stored version 6 Report of scope editions of a case."""
+    return lambda name: report_of(f"editions_{name.replace(' ', '_')}", 6)
 
 
 @pytest.fixture(
@@ -1144,6 +1100,29 @@ def test_view_refuses_a_comparison_report_of_a_version_it_does_not_render(
     )
 
 
+def test_view_refuses_a_comparison_report_of_format_version_7(
+    run: Run, make_set: MakeSet, tmp_path: Path
+) -> None:
+    samples = signal(RATE, 2, 16)
+    sets = [
+        make_set(lambda source: write_audio(source / "a.flac", samples, 16, "FLAC"))
+        for _ in range(2)
+    ]
+    compared = run("compare", *(path / "data/Album/a.flac" for path in sets), "--json")
+    assert json.loads(compared.out)["format_version"] == 7
+    path = tmp_path / "report.json"
+    path.write_text(compared.out, encoding="utf-8")
+
+    outcome = run("view", path)
+
+    assert outcome.code == 1
+    assert outcome.out == ""
+    assert outcome.err == (
+        f"copyofa: {path} is a comparison Report of format version 7; view supports "
+        "format versions 1, 2, 3, 4, 5 and 6\n"
+    )
+
+
 def test_view_refuses_a_comparison_report_of_a_scope_it_does_not_render(
     run: Run,
     editions: Callable[[str], tuple[Path, dict[str, Any]]],
@@ -1475,18 +1454,13 @@ def test_view_shows_the_error_ranges_of_each_track_input(
 @pytest.mark.parametrize("version", [5, 6])
 def test_view_shows_why_an_input_has_no_error_ranges(
     run: Run,
-    acquired_set: Path,
     report_of: Callable[..., tuple[Path, dict[str, Any]]],
     version_6: Callable[[str], tuple[Path, dict[str, Any]]],
-    tmp_path: Path,
     version: int,
 ) -> None:
     path, _ = report_of("files", 5) if version == 5 else version_6("files")
-    image = acquired_set / "data/disc.scram.flac"
-    outcome = run("compare", acquired_set, image, "--track-a", "1", "--json")
-    assert outcome.code == 0, outcome.err
-    clean = tmp_path / "clean.json"
-    clean.write_text(outcome.out, encoding="utf-8")
+    # Track 1 of a set acquired without errors, against its image.
+    clean, _ = report_of("acquired_track", 5)
 
     files = view(run, path)
     tracks = view(run, clean)
