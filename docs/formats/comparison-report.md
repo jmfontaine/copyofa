@@ -1025,12 +1025,12 @@ of the 2017 download (24-bit, 96 kHz FLAC), with track input A:
 
 The example's `evidence_set` paths are placeholders, and it is shortened: a Report
 holds all 64 hexadecimal digits of each digest, every residual window, not just the
-first ones, and the whole of each limitation. Its
-one portion covers A from 352.490 s to 372.935 s, 20.4 s near the end of the track. B
-holds 9.87 ppm more frames over it, so plays slower, at a ratio whose line did not
-converge (`not_converged`), and starts 12051.82 frames, about 0.273 s, earlier; the
-portion spans 9 more frames of B than of A. The first 352.5 s of A and 352.2 s of B,
-and the last 0.26 s of A and 0.42 s of B, match no primary portion.
+first ones, and the whole of each limitation. Its one portion covers A from 352.490 s
+to 372.935 s, 20.4 s near the end of the track. B holds 9.87 ppm more frames over it,
+so plays slower, at a ratio whose line did not converge (`not_converged`), and starts
+12051.82 frames, about 0.273 s, earlier; the portion spans 9 more frames of B than of
+A. The first 352.5 s of A and 352.2 s of B, and the last 0.26 s of A and 0.42 s of B,
+match no primary portion.
 
 ## Viewing a Report
 
