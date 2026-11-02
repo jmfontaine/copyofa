@@ -125,7 +125,7 @@ Compare finds portions whose speed differs, each at its own constant ratio. The
    refit window score 0.3, at least 3 windows, radius 12 frames, outlier distance 3
    frames, convergence 0.3 frame, at most 10 passes. Details the implementation
    settles, such as how the stretch extends and the outlier distance of the first
-   line, are recorded with it, as ADR 0006's decision 8 records its own.
+   line, are recorded in decision 9, as ADR 0006's decision 8 records its own.
 9. **Details settled in implementation.** Each window of the estimate is cut from an
    excerpt of the decimated A a quarter of a window longer on each side, stretched as a
    whole, so that the resampler's edges fall outside the window. The first line of a
