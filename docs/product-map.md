@@ -252,7 +252,13 @@ the collector already owns.
 
 ### Next
 
-None planned; the v0.10.0 release review chooses it from Later.
+- **Bound Compare's Memory and Time** — Compare and Discover Relationships. S3 and S4
+  for long tracks and editions: compare's memory grows with the inputs' combined length
+  and its time with the product of their lengths, so two CDs already peak at 8 to 11 GB
+  and take 3 to 7 minutes, and two-disc editions likely exceed a 16 GB Mac. Chosen at
+  the v0.10.0 release review, from
+  [Parking Lot #76](https://github.com/jmfontaine/copyofa/discussions/76); it also
+  makes Find Related Audio Among Selected Material feasible later.
 
 ### Later
 

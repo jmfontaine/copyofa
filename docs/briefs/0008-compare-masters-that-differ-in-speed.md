@@ -250,3 +250,58 @@ Report, schema, text result and view:
 AC10 runs on the maintainer's Mac, from the sets already in its vault and the two
 stretched tracks an agent exports, stretches and imports there, so an agent can run
 it; the maintainer only reviews its results on the pull request.
+
+## Delivery notes
+
+Recorded at the v0.10.0 release review.
+
+- **Delivered in about a day,** the appetite, with no scope cut and AC11 added by
+  amendment, by unattended agents in two stacks: the speed-tolerant comparison with
+  Report format version 7, its schema and text result in
+  [#176](https://github.com/jmfontaine/copyofa/pull/176), and view of version 7 in
+  [#177](https://github.com/jmfontaine/copyofa/pull/177); then how each ratio was set
+  in [#183](https://github.com/jmfontaine/copyofa/pull/183), and the format document's
+  Example as a Report compare printed in
+  [#184](https://github.com/jmfontaine/copyofa/pull/184). AC1–AC8 and AC11 have tests,
+  and the suite holds 789 tests; AC9 passed through the pull requests' review of the
+  documents.
+- **AC10, on the maintainer's Mac, run by an agent** and recorded on #176, on AC
+  power, each pair back to back with v0.9.0: the other pressing gave one primary
+  portion at −37,634 frames at a ratio of 0; the 15-track edition two primary
+  portions, its bonus track unmatched; the 2017 download 66.11 % of the CD, its
+  drifting tracks' longest portions at 9.05 to 11.35 ppm; the unrelated release no
+  portion; and track 13, stretched by +1 % and by +41,667 ppm, one whole-track portion
+  at each ratio. The comparisons of the CD against another CD or the download took 205
+  to 387 s against v0.9.0's 154 to 200 s, at peaks of 8.4 to 10.8 GB against 8.5 to
+  11.3 GB.
+- **Amended during delivery:**
+  - The time bound ([#179](https://github.com/jmfontaine/copyofa/pull/179)): the 2017
+    download took 387 s, over the flat 6 minutes, while v0.9.0 took 200 s for it
+    rather than the 168 s the bound assumed. The bound now scales to v0.9.0's time on
+    the same Mac, with 6 minutes as a floor.
+  - How each ratio was set ([#180](https://github.com/jmfontaine/copyofa/pull/180)): a
+    portion too short to refit kept its first ratio, 41,676.61 ppm against a true
+    41,667.00 in AC10's first run, and an edition's range per track mixed such ratios
+    with confirmed ones. The maintainer chose to say how each ratio was set before the
+    release, in version 7 itself.
+- **Observed during delivery:** track 2 of the pressing, stretched the same way, gave
+  five and four portions instead of one. Its quiet passages hold dither above 21 kHz
+  that the soxr stretch band-limits, so the block test refutes them; the format
+  document names this limit. AC10 used track 13, which has no such passages. Its first
+  timing run was invalid: the Mac was in Low Power Mode, and, in the session only,
+  slept during a comparison.
+- **Left as they are:**
+  - B is stretched over a portion's region as one array, about 1.4 GB more for a
+    65-minute portion at another speed; Parking Lot
+    [#76](https://github.com/jmfontaine/copyofa/discussions/76), the next outcome,
+    takes it.
+  - The capture of AC1 over the 221 comparisons of v0.9.0's suite ran once, from a
+    probe outside the repository; the stored version 6 Reports keep AC1 tested.
+  - The test's first-ratio portion, from an excerpt at −41,667 ppm, has a residual of
+    about −11.7 dB, near the −10 dB acceptance bar; no other ratio probed gave a short
+    portion at all, as ADR 0010's limitation on short excerpts leads to expect.
+- **Known limit:** a comparison takes up to about 2 times v0.9.0's time for the CD
+  against another CD or the download when many portions drift, and about 5 times for
+  a single track at another speed, which still takes about 10 s, as the format
+  document's table states. In the 2017 download, 54 of its 97 primary portions keep a
+  first ratio.
