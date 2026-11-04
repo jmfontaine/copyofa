@@ -176,7 +176,7 @@ _PIECE_FRAMES = 1 << 20
 """Frames of a Lazy downmix decimated at a time."""
 _ALIGNMENT_BYTES = 4096
 """Each array a Lazy downmix gives lies where it would in an array of the whole
-downmix, modulo this many bytes (see _empty_at)."""
+downmix, modulo this many bytes (see empty_at)."""
 _PPM = 1e-6
 _EDGE_FRAMES = 2 * BLOCK_FRAMES
 """A portion refined on stretched B that ends this close to the stretched range,
@@ -371,7 +371,7 @@ class _Blocks:
         if first == last:
             base = first * _LAZY_BLOCK_FRAMES
             return self._block(first)[start - base : stop - base]
-        out = _empty_at(start, stop - start)
+        out = empty_at(start, stop - start)
         for index in range(first, last + 1):
             base = index * _LAZY_BLOCK_FRAMES
             low = max(start, base)
@@ -383,7 +383,7 @@ class _Blocks:
 
     def fresh(self, start: int, stop: int) -> Samples:
         """Return the frames [start, stop), read without keeping them."""
-        out = _empty_at(start, stop - start)
+        out = empty_at(start, stop - start)
         self._read(start, out)
         return out
 
@@ -401,14 +401,14 @@ class _Blocks:
         return block
 
 
-def _empty_at(first: int, length: int) -> Samples:
+def empty_at(first: int, length: int) -> Samples:
     """Return an uninitialized array for frames [first, first + length) of a downmix,
     each frame lying where it would in an array of the whole downmix, modulo
     _ALIGNMENT_BYTES.
 
     The dot product of the BLAS NumPy uses can round differently at another alignment
-    of the same values, so a downmix read in pieces gives each score, fit and sum
-    that the whole downmix, as one array, gives.
+    of the same values, so a downmix held in pieces, each made with this, gives each
+    score, fit and sum that the whole downmix, as one array, gives.
     """
     slack = _ALIGNMENT_BYTES // 8
     buffer = np.empty(length + slack)
@@ -548,7 +548,7 @@ def _coarse(
     decimated = []
     for stream, output in zip(streams, outputs, strict=True):
         output.append(stream.resample_chunk(np.zeros(0), last=True))
-        y = _empty_at(0, sum(len(part) for part in output))
+        y = empty_at(0, sum(len(part) for part in output))
         np.concatenate(output, out=y)
         output.clear()
         y[1:] -= FIRST_DIFFERENCE * y[:-1]

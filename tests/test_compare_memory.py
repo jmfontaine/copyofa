@@ -227,3 +227,22 @@ def test_compare_fails_when_it_cannot_write_the_decoded_audio(
         "copyofa: cannot hold the decoded audio in a temporary file: "
         "[Errno 28] No space left on device"
     )
+
+
+@pytest.mark.parametrize("channels", range(1, 10))
+def test_a_downmix_is_the_mean_of_the_channels_to_the_bit(channels: int) -> None:
+    """The downmix compare reads back from its temporary file is the one it took as
+    the mean of each frame's channels, so the Reports stay the same."""
+    rng = np.random.default_rng(channels)
+    shape = (100_000, channels)
+    samples = np.ldexp(
+        rng.uniform(-1, 1, shape), rng.integers(-160, 128, shape)
+    ).astype(np.float32)
+    samples[::5] = -0.0
+    samples[1::9, 0] = -0.0
+    samples[2::11, -1] = np.inf
+    expected = samples.mean(axis=1, dtype=np.float64)
+
+    downmix = comparator._downmix(samples)
+
+    assert downmix.tobytes() == expected.tobytes()

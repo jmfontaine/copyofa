@@ -421,8 +421,8 @@ def _measure(a: _Audio, b: _Audio, rate: int) -> dict[str, Any]:
     identical = a.digest is not None and a.digest == b.digest
     samples_a = _resample(a, rate)
     samples_b = _resample(b, rate)
-    downmix_a = samples_a.mean(axis=1, dtype=np.float64)
-    downmix_b = samples_b.mean(axis=1, dtype=np.float64)
+    downmix_a = _downmix(samples_a)
+    downmix_b = _downmix(samples_b)
 
     measurements: dict[str, Any] = {}
     portions: list[locator.Portion] = []
@@ -497,7 +497,9 @@ class _Edition:
         """Each track's first byte in the file, and its channel count."""
         self.audible = False
         """Whether the downmix of the sequence holds a frame other than zero."""
-        self._held: tuple[int, npt.NDArray[np.float32]] | None = None
+        self._held: (
+            tuple[int, npt.NDArray[np.float32], npt.NDArray[np.float64]] | None
+        ) = None
 
     def add(self, samples: npt.NDArray[np.float32], digest: str | None) -> None:
         """Add a track, its samples at the common rate, at the end of the sequence."""
@@ -512,7 +514,7 @@ class _Edition:
         self.starts.append(self.starts[-1] + len(samples))
         self.digests.append(digest)
         if not self.audible:
-            self.audible = bool(samples.mean(axis=1, dtype=np.float64).any())
+            self.audible = bool(_downmix(samples).any())
 
     @functools.cached_property
     def downmix(self) -> locator.Lazy:
@@ -532,14 +534,23 @@ class _Edition:
 
     def samples(self, index: int) -> npt.NDArray[np.float32]:
         """Return a track's samples, shaped (frames, channels); the last track read
-        is kept until another is."""
-        if self._held is None or self._held[0] != index:
-            self._held = None
-            self._held = (index, self._read(index, 0, self.frames(index)))
-        return self._held[1]
+        is kept, with its downmix, until another is."""
+        return self._hold(index)[1]
 
     def downmix_of(self, index: int) -> npt.NDArray[np.float64]:
-        return self.downmix[self.starts[index] : self.starts[index + 1]]
+        """Return a track's downmix, where it would lie in an array of the whole
+        downmix (see locator.empty_at)."""
+        return self._hold(index)[2]
+
+    def _hold(
+        self, index: int
+    ) -> tuple[int, npt.NDArray[np.float32], npt.NDArray[np.float64]]:
+        if self._held is None or self._held[0] != index:
+            self._held = None
+            samples = self._read(index, 0, self.frames(index))
+            out = locator.empty_at(self.starts[index], len(samples))
+            self._held = (index, samples, _downmix(samples, out))
+        return self._held
 
     def _read(self, index: int, first: int, last: int) -> npt.NDArray[np.float32]:
         """Read frames [first, last) of a track from the file."""
@@ -567,8 +578,9 @@ class _Edition:
             index = self.track_at(frame)
             first = self.starts[index]
             end = min(stop, self.starts[index + 1])
-            self._read(index, frame - first, end - first).mean(
-                axis=1, dtype=np.float64, out=out[frame - start : end - start]
+            _downmix(
+                self._read(index, frame - first, end - first),
+                out[frame - start : end - start],
             )
             frame = end
 
@@ -577,6 +589,31 @@ def _spool_error(error: OSError) -> TemporaryAudioError:
     return TemporaryAudioError(
         f"cannot hold the decoded audio in a temporary file: {error}"
     )
+
+
+_ORDERED_CHANNELS = 8
+"""NumPy sums fewer values than this in order, and more pairwise."""
+
+
+def _downmix(
+    samples: npt.NDArray[np.float32], out: npt.NDArray[np.float64] | None = None
+) -> npt.NDArray[np.float64]:
+    """Return the mean of each frame's channels, in float64, into out if given.
+
+    This is samples.mean(axis=1, dtype=np.float64) to the bit: below
+    _ORDERED_CHANNELS channels NumPy's mean adds a frame's values in order to 0, then
+    divides by their count, as this does a channel at a time, several times faster.
+    """
+    channels = samples.shape[1]
+    if channels >= _ORDERED_CHANNELS:
+        return samples.mean(axis=1, dtype=np.float64, out=out)
+    if out is None:
+        out = np.empty(len(samples))
+    np.add(samples[:, 0], 0.0, out=out, dtype=np.float64)
+    for channel in range(1, channels):
+        out += samples[:, channel]
+    out /= channels
+    return out
 
 
 @dataclass(frozen=True)
