@@ -40,7 +40,7 @@ jobs:
           persist-credentials: false
       # Prints docs-only=true only when every changed path is on the list below,
       # its one place. Any failure ends the step before it prints anything, so
-      # the gated jobs run.
+      # the gated jobs run, and `CI passed` fails, since `changes` failed.
       - id: classify
         name: List the changed files
         env:

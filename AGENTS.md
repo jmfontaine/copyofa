@@ -284,9 +284,9 @@ its files into the repository or the tests.
 ### CI
 
 - `.github/workflows/ci.yml` runs on pushes to `main` and on every pull request:
-  every pre-commit hook and `--verifytypes`, then the tests, then
-  builds and install-tests the distributions. Actions are pinned to commit
-  SHAs, and no checkout keeps its token
+  every pre-commit hook and `--verifytypes`, then, except on a documentation-only
+  pull request (below), the tests, then builds and install-tests the distributions.
+  Actions are pinned to commit SHAs, and no checkout keeps its token
 - `CI passed`, the `ci-passed` job in `ci.yml`, is the only required status check. It
   needs every other job in that workflow, so a job added there joins its `needs`, and
   the ruleset never changes
