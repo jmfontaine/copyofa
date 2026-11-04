@@ -21,6 +21,55 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Whether a pull request changes only files that cannot affect the build, the
+  # tests or the distributions, so `build`, `test`, `wheel` and `sdist` can
+  # skip. A workflow-level `paths-ignore` would skip `CI passed` too, the
+  # required check, and the pull request could not merge. Pushes to `main` and
+  # the publish workflow's call skip this job, and every job runs.
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-26.04
+    outputs:
+      docs-only: ${{ steps.classify.outputs.docs-only }}
+    steps:
+      # A pull request's run checks out the merge of its head into its base;
+      # depth 2 fetches both parents.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      # Prints docs-only=true only when every changed path is on the list below,
+      # its one place. Any failure ends the step before it prints anything, so
+      # the gated jobs run, and `CI passed` fails, since `changes` failed.
+      - id: classify
+        name: List the changed files
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Diff the merge against its base parent, and only if its other
+          # parent is the pull request's head. --no-renames lists both sides of
+          # a rename, so moving a file into docs/ still counts its old path.
+          test "$(git rev-parse HEAD^2)" = "$HEAD_SHA"
+          git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/changed"
+          docs_only=false
+          while IFS= read -r -d '' path; do
+            case $path in
+              # Project documents: in neither distribution, and read by no
+              # test, script or build step. Lint checks their Markdown and
+              # spelling.
+              docs/*) docs_only=true ;;
+              # cspell's word list, read only by the cspell hook in lint.
+              cspell.json) docs_only=true ;;
+              # Guidance for agents and contributors: in neither distribution,
+              # and read by no test, script or build step. (README.md is not
+              # here: it is the package's readme, in the sdist and checked by
+              # twine.)
+              AGENTS.md | CONTRIBUTING.md) docs_only=true ;;
+              *) docs_only=false; break ;;
+            esac
+          done < "$RUNNER_TEMP/changed"
+          echo "docs-only=$docs_only" >> "$GITHUB_OUTPUT"
+
   lint:
     runs-on: ubuntu-26.04
     steps:
@@ -40,7 +89,15 @@ jobs:
       - name: Verify public API type completeness
         run: uv run pyright --ignoreexternal --verifytypes copyofa
 
+  # The jobs a pull request that changes only documentation skips. !cancelled()
+  # runs them when `changes` is skipped (not a pull request) or failed. A job
+  # without a status check in its `if` skips whenever any job it depends on,
+  # even indirectly, is skipped or failed, so `wheel` and `sdist` check
+  # `build`'s result instead: they run when it succeeded and the run was not
+  # canceled.
   test:
+    needs: [changes]
+    if: ${{ !cancelled() && needs.changes.outputs.docs-only != 'true' }}
     runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
@@ -77,6 +134,8 @@ jobs:
       - run: uv run --no-sync python ${{ matrix.warnings }} -m pytest --cov
 
   build:
+    needs: [changes]
+    if: ${{ !cancelled() && needs.changes.outputs.docs-only != 'true' }}
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -104,6 +163,7 @@ jobs:
   # metadata instead of uv.lock, and test that.
   wheel:
     needs: [build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
@@ -139,6 +199,7 @@ jobs:
 
   sdist:
     needs: [build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -162,10 +223,11 @@ jobs:
 
   # The one status check `main` requires. It needs every job above, so adding,
   # renaming or resizing a job (or a matrix) never touches the ruleset. Keep its
-  # `needs` in step with the jobs.
+  # `needs` in step with the jobs. A skipped job counts as passed, such as the
+  # jobs a documentation-only pull request skips.
   ci-passed:
     name: CI passed
-    needs: [build, lint, sdist, test, wheel]
+    needs: [build, changes, lint, sdist, test, wheel]
     if: always()
     runs-on: ubuntu-26.04
     steps:

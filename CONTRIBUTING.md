@@ -106,7 +106,9 @@ Pull requests are squash-merged, so the pull request title becomes the commit on
 write it as a Conventional Commit, with `!` before the colon for a breaking change.
 
 The `CI passed` check summarizes every CI job and must be green before a pull request
-merges.
+merges. On a pull request that changes only files under `docs/`, `cspell.json`,
+`AGENTS.md` or `CONTRIBUTING.md`, CI runs its lint job and skips the build and test
+jobs, which those files cannot affect.
 
 ## Releasing
 

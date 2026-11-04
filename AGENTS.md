@@ -284,12 +284,17 @@ its files into the repository or the tests.
 ### CI
 
 - `.github/workflows/ci.yml` runs on pushes to `main` and on every pull request:
-  every pre-commit hook and `--verifytypes`, then the tests, then
-  builds and install-tests the distributions. Actions are pinned to commit
-  SHAs, and no checkout keeps its token
+  every pre-commit hook and `--verifytypes`, then, except on a documentation-only
+  pull request (below), the tests, then builds and install-tests the distributions.
+  Actions are pinned to commit SHAs, and no checkout keeps its token
 - `CI passed`, the `ci-passed` job in `ci.yml`, is the only required status check. It
   needs every other job in that workflow, so a job added there joins its `needs`, and
   the ruleset never changes
+- On a pull request whose changed files are all on the list in `ci.yml`'s `changes`
+  job (`docs/**`, `cspell.json`, `AGENTS.md`, `CONTRIBUTING.md`), `build`, `test`,
+  `wheel` and `sdist` skip, and `lint` and `CI passed` run. Pushes to `main` and the
+  publish workflow's call run every job. A file added to that list must be in neither
+  distribution and read by no test, script or build step
 - Dependabot opens weekly grouped updates for GitHub Actions and `uv.lock`, with
   `build:` commit messages and the `dependencies` and `build` labels; it moves the
   lock only, never the minimum versions in `pyproject.toml`
