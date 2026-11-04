@@ -202,10 +202,11 @@ its Acquisition Record, an imported set's audio files in the order of their path
 locator runs unchanged on the two sequences, and each portion is split at both
 editions' track boundaries into segments, measured as portions are, from which the
 Report's `scope` `editions` derives track correspondences, unmatched audio per track
-and coverage. Each track is resampled to the common rate, read from the headers
-before decoding, block by block as it is decoded, and written as float32 to its
-edition's temporary file, which has no name where the system allows it and goes when
-compare ends, as [brief 0009](docs/briefs/0009-bound-compares-memory-and-time.md)
+and coverage. Each track is decoded whole, as inspect checks it, then resampled to
+the common rate, read from the headers before decoding, a decoded block at a time,
+and written as float32 to its edition's temporary file, which has no name where the
+system allows it and goes when compare ends, as
+[brief 0009](docs/briefs/0009-bound-compares-memory-and-time.md)
 decides. Compare reads a track's audio back from that file when a step needs it,
 never holding either edition whole. Resampling and decimation go through soxr's
 streaming resampler, which carries its state across blocks, so each result is a

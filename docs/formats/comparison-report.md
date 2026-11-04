@@ -318,27 +318,34 @@ even when the segments it counts are all at the same speed, as in
 range of the others and how they were set, as in `at +9.08 ppm (first ratio)`.
 Otherwise a track of B holding a track of A at the same speed gets no ratio.
 
-**Known limit.** Time grows with the product of the editions' lengths, and memory with
-their sum. In ADR 0009's spike, the search over two CDs of about 65 min took about 2.5
-minutes at a peak of 4.9 GB to 5.3 GB, and 5.6 GB for a CD against a 96 kHz download,
-before the per-channel measurements. A whole comparison, measurements included, needs
-more memory. Version 7 adds the speed estimate and the stretched refinement of each
-chain at a ratio other than 0, so its cost grows with the audio that drifts. Run back
-to back on one Mac on AC power, version 6 (CopyOfA 0.9.0) and version 7 took, with
-A the 14-track CD pressing of ADR 0009's spike and the peak as macOS's peak memory
-footprint:
+**Known limit.** Time grows with the product of the editions' lengths. Memory grows
+with the longest track of either edition, beyond the downmixes the search decimates and
+the search itself, which grow with the editions' lengths: compare holds a track's
+decoded audio only while a step needs it, and keeps each edition's, as float32 samples
+at the common rate, in a temporary file it removes when it ends. That file takes, on
+the disk of the system's temporary directory, 8 bytes per frame of stereo audio, about
+1.4 GB for a CD of 65 min. Version 7 adds the speed estimate and the stretched
+refinement of each chain at a ratio other than 0, so its cost grows with the audio that
+drifts. Run back to back on one Mac with 24 GB of memory, on AC power, CopyOfA 0.10.0
+and 0.11.0, which give the same Reports, took, with A the 14-track CD pressing of ADR
+0009's spike and the peak as macOS's peak memory footprint (each time the mean of two
+runs and each peak the higher of the two, except for the last two comparisons, run
+once):
 
-| Input B | Version 6 | Version 7 |
+| Comparison | CopyOfA 0.10.0 | CopyOfA 0.11.0 |
 | --- | --- | --- |
-| Another CD pressing | 154 s, 8.45 GB | 205 s, 8.51 GB |
-| The 15-track edition | 186 s, 9.02 GB | 249 s, 8.37 GB |
-| The 96 kHz download, imported | 200 s, 8.46 GB | 387 s, 8.68 GB |
-| An unrelated release | 199 s, 11.31 GB | 227 s, 10.84 GB |
-| Track 13 of A, stretched by +1 %, against that track | 2.0 s, 0.86 GB | 10.5 s, 1.08 GB |
-| Track 13 of A, stretched by +41,667 ppm, against that track | 2.1 s, 0.88 GB | 10.0 s, 1.04 GB |
+| A against another CD pressing | 190 s, 8.51 GB | 192 s, 2.47 GB |
+| A against the 15-track edition | 211 s, 9.21 GB | 212 s, 1.98 GB |
+| A against the 96 kHz download, imported | 300 s, 7.81 GB | 297 s, 1.54 GB |
+| A against an unrelated release, one track of 71 min | 191 s, 12.40 GB | 192 s, 2.93 GB |
+| Track 13 of A, stretched by +1 %, against that track | 8.3 s, 1.08 GB | 8.9 s, 0.99 GB |
+| Track 13 of A, stretched by +41,667 ppm, against that track | 7.7 s, 1.03 GB | 8.5 s, 1.00 GB |
+| *Tron: Ares; Divergence*, two discs, against itself | 884 s, 16.20 GB, swapping | 945 s, 2.79 GB |
+| *Deviations*, two discs, the WAV download against the MP3 | 1441 s, 18.32 GB, swapping | 1360 s, 3.05 GB |
 
-Editions much longer than a CD, such as a box set imported as one set, may exhaust
-memory.
+Editions much longer than these, such as a box set imported as one set, need memory
+for their decimated downmixes and the search, and disk for their temporary files, in
+proportion to their length.
 
 ## Fields
 
