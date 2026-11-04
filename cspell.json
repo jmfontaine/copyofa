@@ -49,6 +49,7 @@
     "furb",
     "fulltoc",
     "gapless",
+    "getbufsize",
     "geteuid",
     "getpid",
     "ignoreexternal",

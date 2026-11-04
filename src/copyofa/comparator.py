@@ -1207,34 +1207,65 @@ def _described(read: _Reader, channels: int, start: int, stop: int) -> dict[str,
 _SQUARED_PIECE = 1 << 16
 """The most values _power reads and squares at once."""
 
+# KLUDGE: NumPy before 2.3 sums an array a buffer of values (np.getbufsize()) at a
+# time, one after another, rather than pairwise as a whole, so _power follows each
+# order to give np.mean's value to the bit. Remove the buffered order once NumPy's
+# minimum in pyproject.toml is 2.3 or later.
+_BUFFERED_SUMS = np.lib.NumpyVersion(np.__version__) < "2.3.0"
+"""Whether this NumPy sums an array a buffer of values at a time."""
+
 
 def _power(read: _Reader, channels: int, start: int, stop: int) -> float:
     """Return the mean square of frames [start, stop) of a track, as
     np.mean(np.square(samples[start:stop], dtype=np.float64)) gives it, to the bit,
     reading the range in pieces.
 
-    NumPy sums a contiguous float64 array pairwise, splitting it, above 128 values,
-    at half its count rounded down to a multiple of 8; splitting it the same way
-    down to pieces of _SQUARED_PIECE values gives the same sum.
+    NumPy 2.3 and later sum a contiguous float64 array pairwise, splitting it, above
+    128 values, at half its count rounded down to a multiple of 8; splitting it the
+    same way down to pieces of _SQUARED_PIECE values gives the same sum. Earlier
+    versions sum it a buffer at a time, each buffer pairwise, adding each to the sum
+    of those before it.
     """
     count = (stop - start) * channels
-    return _sum_of_squares(read, channels, start * channels, count) / count
+    first = start * channels
+    if not _BUFFERED_SUMS:
+        return _sum_of_squares(read, channels, first, count) / count
+    buffer = np.getbufsize()
+    total = 0.0
+    if buffer > _SQUARED_PIECE:
+        for low in range(0, count, buffer):
+            size = min(buffer, count - low)
+            total += _sum_of_squares(read, channels, first + low, size)
+        return total / count
+    piece = buffer * (_SQUARED_PIECE // buffer)
+    for offset in range(0, count, piece):
+        squares = _squares(read, channels, first + offset, min(piece, count - offset))
+        for low in range(0, len(squares), buffer):
+            total += float(squares[low : low + buffer].sum())
+    return total / count
 
 
 def _sum_of_squares(read: _Reader, channels: int, first: int, count: int) -> float:
     """Sum the squares of count values of a track, its frames' values in order, from
     value first on, in NumPy's pairwise order."""
     if count <= _SQUARED_PIECE:
-        frame = first // channels
-        values = read(frame, -(-(first + count) // channels)).reshape(-1)
-        skip = first - frame * channels
-        piece = values[skip : skip + count]
-        return float(np.square(piece, dtype=np.float64).sum())
+        return float(_squares(read, channels, first, count).sum())
     half = count // 2
     half -= half % 8
     return _sum_of_squares(read, channels, first, half) + _sum_of_squares(
         read, channels, first + half, count - half
     )
+
+
+def _squares(
+    read: _Reader, channels: int, first: int, count: int
+) -> npt.NDArray[np.float64]:
+    """Return the squares of count values of a track, its frames' values in order,
+    from value first on."""
+    frame = first // channels
+    values = read(frame, -(-(first + count) // channels)).reshape(-1)
+    skip = first - frame * channels
+    return np.square(values[skip : skip + count], dtype=np.float64)
 
 
 def _resample(audio: _Audio, rate: int) -> npt.NDArray[np.float32]:
