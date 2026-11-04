@@ -9,6 +9,7 @@ ends.
 from __future__ import annotations
 
 import errno
+import gc
 import json
 import tempfile
 import tracemalloc
@@ -90,6 +91,27 @@ def test_an_edition_comparison_holds_what_its_longest_track_needs(
 
     two, four = peaks
     assert four <= GROWTH * two, f"{two / 1e6:.0f} MB, then {four / 1e6:.0f} MB"
+
+
+def test_an_edition_comparison_keeps_no_audio_once_it_ends(make_set: MakeSet) -> None:
+    # One track each, matched, so that each edition holds its track and its
+    # downmix to the end.
+    track = quantized(noise(TRACK_SECONDS, 1), 16)
+    a, b = edition(make_set, [track]), edition(make_set, [track])
+    held = len(track) * 2 * 4
+    gc.collect()
+    gc.disable()
+    tracemalloc.start()
+    try:
+        before = tracemalloc.get_traced_memory()[0]
+        report = comparator.compare(str(a), str(b))
+        kept = tracemalloc.get_traced_memory()[0] - before
+    finally:
+        tracemalloc.stop()
+        gc.enable()
+
+    assert report["measurements"]["portions"]
+    assert kept < held / 4, f"{kept / 1e6:.1f} MB kept"
 
 
 @dataclass(frozen=True)
@@ -246,3 +268,19 @@ def test_a_downmix_is_the_mean_of_the_channels_to_the_bit(channels: int) -> None
     downmix = comparator._downmix(samples)
 
     assert downmix.tobytes() == expected.tobytes()
+
+
+@pytest.mark.parametrize("frames", [1, 7, 129, 65_537, 400_003])
+@pytest.mark.parametrize("channels", [1, 2, 6])
+def test_a_level_is_the_mean_square_of_the_range_to_the_bit(
+    frames: int, channels: int
+) -> None:
+    """Compare takes an unmatched range's level in pieces, without a float64 copy of
+    the range, and gets the value it took from that copy, so the Reports stay the
+    same."""
+    rng = np.random.default_rng(frames * channels)
+    samples = rng.uniform(-1, 1, (frames + 3, channels)).astype(np.float32)
+    part = samples[3:]
+    expected = float(np.mean(np.square(part, dtype=np.float64)))
+
+    assert comparator._power(part) == expected

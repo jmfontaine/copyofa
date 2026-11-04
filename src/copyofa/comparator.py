@@ -383,19 +383,20 @@ def _inspect_track(
             }
         )
         return entry, None
+    blocks: list[npt.NDArray[np.float32]] = []
     with inspector.open_accepted(root, disc.image, disc.image_digest) as image:
-        found, audio = _decode_recorded(image, disc, track)
-    entry.update(found)
-    return entry, audio
+        entry.update(_decode_recorded(image, disc, track, blocks))
+    return entry, _audio_of(entry, blocks)
 
 
 def _decode_recorded(
     image: inspector.AcceptedFile,
     disc: inspector.AcquiredDisc,
     track: inspector.RecordedTrack,
-) -> tuple[dict[str, Any], _Audio | None]:
+    blocks: list[npt.NDArray[np.float32]],
+) -> dict[str, Any]:
     """Check one track of an acquired set from its opened image as inspect does, and
-    decode it when it can; return its entry from `path` on."""
+    decode it into blocks when it can; return its entry from `path` on."""
     recorded: dict[str, Any] = {
         "number": track.number,
         "first_frame": track.first_frame,
@@ -406,14 +407,13 @@ def _decode_recorded(
             error_range.to_json() for error_range in track.error_ranges
         ]
     entry: dict[str, Any] = {"path": disc.image, "track": recorded}
-    blocks: list[npt.NDArray[np.float32]] = []
     findings = inspector.decode_track(image, track, blocks.append)
     entry["outcome"] = findings.pop("outcome")
     entry["expected_digest"] = disc.image_digest
     if "observed_digest" in findings:
         entry["observed_digest"] = findings.pop("observed_digest")
     entry.update(findings)
-    return entry, _audio_of(entry, blocks)
+    return entry
 
 
 def _measure(a: _Audio, b: _Audio, rate: int) -> dict[str, Any]:
@@ -479,17 +479,19 @@ class _Listing:
 class _Edition:
     """The tracks of an edition at the common rate, joined in order without gap.
 
-    Each track's samples go to a temporary file as the track is decoded, and are
-    read back as each step needs them, so that the edition is never held whole
-    (brief 0009). The file goes when the comparison ends; where the system allows
-    it, as on Linux and macOS, it has no name from the start, so it goes with the
-    process too.
+    Each track's samples go to a temporary file as the track is decoded, resampled a
+    block at a time, and are read back as each step needs them, so that the edition
+    is never held whole (brief 0009). The file goes when the comparison ends; where
+    the system allows it, as on Linux and macOS, it has no name from the start, so it
+    goes with the process too.
     """
 
-    def __init__(self, file: FileIO) -> None:
-        """Make an edition of no track yet, held in file, an empty temporary file
-        without a buffer, so that closing it has no write left to fail."""
+    def __init__(self, file: FileIO, rate: int) -> None:
+        """Make an edition of no track yet at the common rate, held in file, an empty
+        temporary file without a buffer, so that closing it has no write left to
+        fail."""
         self._file = file
+        self.rate = rate
         self.starts = [0]
         """Each track's first frame in the sequence, then the sequence's frame count."""
         self.digests: list[str | None] = []
@@ -497,30 +499,65 @@ class _Edition:
         """Each track's first byte in the file, and its channel count."""
         self.audible = False
         """Whether the downmix of the sequence holds a frame other than zero."""
-        self._held: (
-            tuple[int, npt.NDArray[np.float32], npt.NDArray[np.float64]] | None
-        ) = None
+        self._held: tuple[int, npt.NDArray[np.float32]] | None = None
+        self._held_downmix: npt.NDArray[np.float64] | None = None
 
-    def add(self, samples: npt.NDArray[np.float32], digest: str | None) -> None:
-        """Add a track, its samples at the common rate, at the end of the sequence."""
-        # As one dimension, so that a track of no frame casts to no byte.
+    def add(
+        self,
+        blocks: list[npt.NDArray[np.float32]],
+        channels: int,
+        rate: int,
+        digest: str | None,
+    ) -> None:
+        """Add a track, decoded as blocks at rate, at the end of the sequence.
+
+        The track is resampled to the common rate as _resample resamples it in one
+        call: soxr's streaming resampler, which carries its state across blocks,
+        gives the same samples. Each block leaves the list once written.
+        """
+        stream = None
+        if rate != self.rate:
+            stream = soxr.ResampleStream(
+                rate, self.rate, channels, dtype="float32", quality=RESAMPLER_QUALITY
+            )
+        try:
+            place = self._file.tell()
+        except OSError as error:
+            raise _spool_error(error) from error
+        frames = 0
+        blocks.reverse()
+        while blocks:
+            block = blocks.pop()
+            if stream is not None:
+                block = stream.resample_chunk(block, last=not blocks)
+            self._write(block)
+            frames += len(block)
+            if not self.audible:
+                self.audible = bool(_downmix(block).any())
+        self._places.append((place, channels))
+        self.starts.append(self.starts[-1] + frames)
+        self.digests.append(digest)
+
+    def _write(self, samples: npt.NDArray[np.float32]) -> None:
+        # As one dimension, so that a block of no frame casts to no byte.
         data = memoryview(np.ascontiguousarray(samples).reshape(-1)).cast("B")
         try:
-            self._places.append((self._file.tell(), samples.shape[1]))
             while data:
                 data = data[self._file.write(data) :]
         except OSError as error:
             raise _spool_error(error) from error
-        self.starts.append(self.starts[-1] + len(samples))
-        self.digests.append(digest)
-        if not self.audible:
-            self.audible = bool(_downmix(samples).any())
 
     @functools.cached_property
     def downmix(self) -> locator.Lazy:
         """The downmix of the sequence, read from the file as the search needs it,
         once every track is added."""
         return locator.Lazy(self.starts[-1], self._read_downmix)
+
+    def release(self) -> None:
+        """Let go of the audio held, once the comparison ends: the edition and its
+        downmix refer to each other, so they go only with the garbage collector."""
+        self._held = self._held_downmix = None
+        self.__dict__.pop("downmix", None)
 
     def __len__(self) -> int:
         return len(self.digests)
@@ -534,23 +571,20 @@ class _Edition:
 
     def samples(self, index: int) -> npt.NDArray[np.float32]:
         """Return a track's samples, shaped (frames, channels); the last track read
-        is kept, with its downmix, until another is."""
-        return self._hold(index)[1]
+        is kept, with its downmix once asked for, until another is."""
+        if self._held is None or self._held[0] != index:
+            self._held = self._held_downmix = None
+            self._held = (index, self._read(index, 0, self.frames(index)))
+        return self._held[1]
 
     def downmix_of(self, index: int) -> npt.NDArray[np.float64]:
         """Return a track's downmix, where it would lie in an array of the whole
         downmix (see locator.empty_at)."""
-        return self._hold(index)[2]
-
-    def _hold(
-        self, index: int
-    ) -> tuple[int, npt.NDArray[np.float32], npt.NDArray[np.float64]]:
-        if self._held is None or self._held[0] != index:
-            self._held = None
-            samples = self._read(index, 0, self.frames(index))
+        samples = self.samples(index)
+        if self._held_downmix is None:
             out = locator.empty_at(self.starts[index], len(samples))
-            self._held = (index, samples, _downmix(samples, out))
-        return self._held
+            self._held_downmix = _downmix(samples, out)
+        return self._held_downmix
 
     def _read(self, index: int, first: int, last: int) -> npt.NDArray[np.float32]:
         """Read frames [first, last) of a track from the file."""
@@ -662,10 +696,11 @@ def _compare_editions(
                 )
             except OSError as error:
                 raise _spool_error(error) from error
-            edition = _Edition(file)
+            edition = _Edition(file, rate)
+            stack.callback(edition.release)
             editions.append(edition)
             entry = _inspect_edition(
-                name, root, listing, edition, rate, omit_locations, progress
+                name, root, listing, edition, omit_locations, progress
             )
             if omit_locations:
                 omitted.append(f"/inputs/{name}/evidence_set")
@@ -714,7 +749,6 @@ def _inspect_edition(
     root: Path,
     listing: _Listing,
     edition: _Edition,
-    rate: int,
     omit_location: bool,
     progress: Callable[[str | None, dict[str, Any]], None] | None,
 ) -> dict[str, Any]:
@@ -727,24 +761,32 @@ def _inspect_edition(
     entry["integrity_baseline"] = listing.baseline.to_json()
     tracks: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
+    blocks: list[npt.NDArray[np.float32]] = []
 
-    def add(found: dict[str, Any], audio: _Audio | None) -> None:
+    def add(found: dict[str, Any]) -> None:
         track = {"position": len(tracks) + 1, **found}
         tracks.append(track)
         if progress is not None:
             progress(name, track)
-        if audio is not None:
-            edition.add(_resample(audio, rate), audio.digest)
+        if found["outcome"] == inspector.INTERPRETED:
+            edition.add(
+                blocks,
+                found["channels"],
+                found["sample_rate"],
+                found.get("audio_digest"),
+            )
+        # The samples at the track's own rate go before the next track is decoded.
+        blocks.clear()
 
     disc = listing.disc
     if disc is not None:
         with inspector.open_accepted(root, disc.image, disc.image_digest) as image:
             for recorded in disc.tracks:
-                add(*_decode_recorded(image, disc, recorded))
+                add(_decode_recorded(image, disc, recorded, blocks))
     for path, digest in listing.files:
-        blocks: list[npt.NDArray[np.float32]] = []
         found = inspector.inspect_file(root, path, digest, blocks.append)
         if found["outcome"] == inspector.NOT_INTERPRETED:
+            blocks.clear()
             item = {
                 "path": path,
                 "outcome": found["outcome"],
@@ -754,11 +796,7 @@ def _inspect_edition(
             if progress is not None:
                 progress(name, item)
             continue
-        audio = _audio_of(found, blocks)
-        blocks.clear()
-        add(found, audio)
-        # The samples at the file's own rate go before the next file is decoded.
-        del audio
+        add(found)
     entry["tracks"] = tracks
     entry["excluded"] = excluded
     if listing.reason is not None:
@@ -1093,9 +1131,37 @@ def _described(
     part = samples[start:stop]
     entry["digitally_silent"] = not part.any()
     if part.any():
-        power = float(np.mean(np.square(part, dtype=np.float64)))
-        entry["level_dbfs"] = 10 * math.log10(power)
+        entry["level_dbfs"] = 10 * math.log10(_power(part))
     return entry
+
+
+_SQUARED_PIECE = 1 << 16
+"""The most values _power squares at once."""
+
+
+def _power(part: npt.NDArray[np.float32]) -> float:
+    """Return the mean square of a range of samples, as
+    np.mean(np.square(part, dtype=np.float64)) gives it, to the bit, without a
+    float64 copy of the range.
+
+    NumPy sums a contiguous float64 array pairwise, splitting it, above 128 values,
+    at half its count rounded down to a multiple of 8; splitting it the same way
+    down to pieces of _SQUARED_PIECE values gives the same sum.
+    """
+    values = part.reshape(-1)
+    return _sum_of_squares(values, 0, len(values)) / len(values)
+
+
+def _sum_of_squares(values: npt.NDArray[np.float32], start: int, count: int) -> float:
+    """Sum the squares of count values from start on, in NumPy's pairwise order."""
+    if count <= _SQUARED_PIECE:
+        piece = values[start : start + count]
+        return float(np.square(piece, dtype=np.float64).sum())
+    half = count // 2
+    half -= half % 8
+    return _sum_of_squares(values, start, half) + _sum_of_squares(
+        values, start + half, count - half
+    )
 
 
 def _resample(audio: _Audio, rate: int) -> npt.NDArray[np.float32]:
