@@ -163,10 +163,10 @@ Each criterion is verified by an automated test unless stated otherwise.
   the same test fails on v0.10.0.
 - **AC3 — Audio read again is the audio checked.** If compare reads a file again, a
   file changed after the integrity check gives the Report compare gives today for a
-  file modified since import: its track `failed`, with a reason that says the file
-  changed during the comparison, no measurements, and exit 1. If compare writes
-  temporary files, none remains after a comparison that succeeds, one that fails, and
-  one canceled with Ctrl-C (exit 130).
+  file that changed while it was inspected: its track `not_inspected`, with a reason
+  that says the file changed during the comparison, no measurements, and exit 1. If
+  compare writes temporary files, none remains after a comparison that succeeds, one
+  that fails, and one canceled with Ctrl-C (exit 130).
 - **AC4 — Schema and view unchanged.** Every Report the test suite produces validates
   against the version 7 schema, and view renders it as before.
 - **AC5 — Documented.** `docs/formats/comparison-report.md`'s known limit gives
