@@ -241,24 +241,18 @@ the collector already owns.
 
 ### Now
 
-- **[v0.10.0](https://github.com/jmfontaine/copyofa/milestone/10): Compare Masters
-  That Differ in Speed** — Compare and Discover Relationships; Share and Evaluate
-  Findings. S3 and S4 for audio whose speed differs, by parts per million between two
-  clocks or by up to 4.5 %: compare fits a speed ratio to each portion, and the Report
-  and its view give it. Specified in
-  [brief 0008](briefs/0008-compare-masters-that-differ-in-speed.md), with the method
-  decided in
-  [ADR 0010](decisions/0010-locate-portions-across-speed-differences.md).
+- **[v0.11.0](https://github.com/jmfontaine/copyofa/milestone/11): Bound Compare's
+  Memory and Time** — Compare and Discover Relationships. S4 for editions longer than
+  a CD: an edition comparison holds only the audio each step needs, so two CDs compare
+  in at most 4 GB instead of 8 to 11 GB, and two-disc editions, which peak at 16 GB
+  today, in at most 8 GB, with the same Reports and no slower. A spike measures a
+  search whose time need not grow with the product of the editions' lengths. Specified
+  in [brief 0009](briefs/0009-bound-compares-memory-and-time.md); it also makes Find
+  Related Audio Among Selected Material feasible later.
 
 ### Next
 
-- **Bound Compare's Memory and Time** — Compare and Discover Relationships. S3 and S4
-  for long tracks and editions: compare's memory grows with the inputs' combined length
-  and its time with the product of their lengths, so two CDs already peak at 8 to 11 GB
-  and take 3 to 7 minutes, and two-disc editions likely exceed a 16 GB Mac. Chosen at
-  the v0.10.0 release review, from
-  [Parking Lot #76](https://github.com/jmfontaine/copyofa/discussions/76); it also
-  makes Find Related Audio Among Selected Material feasible later.
+None planned; the v0.11.0 release review chooses it from Later.
 
 ### Later
 
