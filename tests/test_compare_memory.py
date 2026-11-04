@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import errno
 import gc
+import itertools
 import json
 import tempfile
 import tracemalloc
@@ -18,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
+import soxr
 from conftest import RATE, write_audio
 from test_compare_editions import cover_only
 from test_compare_portions import noise, quantized
@@ -286,3 +288,58 @@ def test_a_level_is_the_mean_square_of_the_range_to_the_bit(
         return samples[first:last].copy()
 
     assert comparator._power(read, channels, 3, frames + 3) == expected
+
+
+_STREAMED = [
+    pytest.param(
+        44_100,
+        44_100 / factor,
+        locator.DECIMATION_QUALITY,
+        np.float64,
+        id=f"decimation by {factor}",
+    )
+    for factor in sorted({locator.DECIMATION, *locator.ESTIMATE_DECIMATION_FACTORS})
+] + [
+    pytest.param(
+        44_100,
+        44_100 / locator.DECIMATION * (1 + 41_667e-6),
+        locator.DECIMATION_QUALITY,
+        np.float64,
+        id="decimation stretched by +41,667 ppm",
+    ),
+    pytest.param(
+        96_000,
+        44_100,
+        comparator.RESAMPLER_QUALITY,
+        np.float32,
+        id="to the common rate",
+    ),
+]
+
+
+@pytest.mark.parametrize("channels", [1, 2])
+@pytest.mark.parametrize(("rate", "target", "quality", "dtype"), _STREAMED)
+def test_streamed_resampling_matches_one_call_to_the_bit(
+    rate: int, target: float, quality: str, dtype: type, channels: int
+) -> None:
+    """Compare decimates and resamples audio a piece at a time through soxr's
+    streaming resampler, and gets what one call on the whole audio gives, so the
+    Reports stay the same."""
+    rng = np.random.default_rng(channels)
+    audio = rng.uniform(-1, 1, (200_003, channels)).astype(dtype)
+    if channels == 1:
+        audio = audio[:, 0].copy()
+    stream = soxr.ResampleStream(rate, target, channels, dtype=dtype, quality=quality)
+    parts, first = [], 0
+    for size in itertools.cycle((1, 4_097, 31, 65_536, 999)):
+        if first >= len(audio):
+            break
+        parts.append(stream.resample_chunk(audio[first : first + size]))
+        first += size
+    parts.append(stream.resample_chunk(audio[:0], last=True))
+    streamed = np.concatenate(parts)
+
+    expected = soxr.resample(audio, rate, target, quality=quality)
+
+    assert streamed.dtype == expected.dtype
+    assert streamed.tobytes() == expected.tobytes()
