@@ -684,6 +684,9 @@ def _compare(args: argparse.Namespace) -> int:
     except (verifier.NotAnEvidenceSetError, comparator.InputsError) as error:
         print(f"copyofa: {error}", file=sys.stderr)
         return EXIT_USAGE
+    except comparator.TemporaryAudioError as error:
+        print(f"copyofa: {_printable(str(error))}", file=sys.stderr)
+        return EXIT_PROBLEM
     if args.json:
         _print_json(report)
     elif report["scope"] == comparator.EDITIONS:

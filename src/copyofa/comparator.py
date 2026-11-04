@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import bisect
+import contextlib
+import functools
 import itertools
 import math
 import stat
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -22,6 +25,7 @@ from copyofa.errors import CopyOfAError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from io import FileIO
 
     import numpy.typing as npt
 
@@ -112,6 +116,10 @@ class InputsError(CopyOfAError):
     """Inputs that are neither two tracks nor two editions."""
 
 
+class TemporaryAudioError(CopyOfAError):
+    """The decoded audio of an edition cannot be held in a temporary file."""
+
+
 @dataclass(frozen=True)
 class _Audio:
     """The decoded frames of an interpreted track."""
@@ -141,11 +149,13 @@ def compare(
     and each input's Report entry once it is inspected, or, for editions, with the
     edition's name, `a` or `b`, and the entry of each of its tracks and excluded
     files. With omit_locations, the Report holds no location of an Evidence Set,
-    and its `omitted` lists what it leaves out. Writes nothing. Raises InputsError
-    when an input is the root of an Evidence Set without a track number and the
-    other is not, and verifier.NotAnEvidenceSetError when a file is not under the
-    `data/` directory of an Evidence Set, or a set root given with a track number is
-    not an Evidence Set.
+    and its `omitted` lists what it leaves out. Writes nothing but an edition's
+    decoded audio, to a temporary file it removes when it returns or raises. Raises
+    InputsError when an input is the root of an Evidence Set without a track number
+    and the other is not, verifier.NotAnEvidenceSetError when a file is not under
+    the `data/` directory of an Evidence Set, or a set root given with a track
+    number is not an Evidence Set, and TemporaryAudioError when that temporary file
+    cannot be written or read back.
     """
     givens = ((input_a, track_a), (input_b, track_b))
     roots = [_set_root(given) if track is None else None for given, track in givens]
@@ -419,11 +429,15 @@ def _measure(a: _Audio, b: _Audio, rate: int) -> dict[str, Any]:
     if identical:
         measurements["identical_audio"] = True
         # Identical tracks match at 0 without a search, unless there is no frame.
-        missing = _no_frames(downmix_a, "track A")
+        missing = _no_frames(len(downmix_a), "track A")
         if missing is None:
             portions.append(locator.Portion(0, len(downmix_a), 0, None))
     else:
-        missing = _unsearchable(downmix_a, downmix_b, rate)
+        missing = _unsearchable(
+            (len(downmix_a), len(downmix_b)),
+            (bool(downmix_a.any()), bool(downmix_b.any())),
+            rate,
+        )
         if missing is None:
             portions = locator.locate(downmix_a, downmix_b, rate)
             if not portions:
@@ -462,15 +476,52 @@ class _Listing:
     """Why the set gives no track; None when it gives its tracks."""
 
 
-@dataclass(frozen=True)
 class _Edition:
-    """The tracks of an edition at the common rate, joined in order without gap."""
+    """The tracks of an edition at the common rate, joined in order without gap.
 
-    tracks: list[_Audio]
-    starts: list[int]
-    """Each track's first frame in the sequence, then the sequence's frame count."""
-    downmix: npt.NDArray[np.float64]
-    """The downmix of the sequence: each track's downmix, in order."""
+    Each track's samples go to a temporary file as the track is decoded, and are
+    read back as each step needs them, so that the edition is never held whole
+    (brief 0009). The file goes when the comparison ends; where the system allows
+    it, as on Linux and macOS, it has no name from the start, so it goes with the
+    process too.
+    """
+
+    def __init__(self, file: FileIO) -> None:
+        """Make an edition of no track yet, held in file, an empty temporary file
+        without a buffer, so that closing it has no write left to fail."""
+        self._file = file
+        self.starts = [0]
+        """Each track's first frame in the sequence, then the sequence's frame count."""
+        self.digests: list[str | None] = []
+        self._places: list[tuple[int, int]] = []
+        """Each track's first byte in the file, and its channel count."""
+        self.audible = False
+        """Whether the downmix of the sequence holds a frame other than zero."""
+        self._held: tuple[int, npt.NDArray[np.float32]] | None = None
+
+    def add(self, samples: npt.NDArray[np.float32], digest: str | None) -> None:
+        """Add a track, its samples at the common rate, at the end of the sequence."""
+        # As one dimension, so that a track of no frame casts to no byte.
+        data = memoryview(np.ascontiguousarray(samples).reshape(-1)).cast("B")
+        try:
+            self._places.append((self._file.tell(), samples.shape[1]))
+            while data:
+                data = data[self._file.write(data) :]
+        except OSError as error:
+            raise _spool_error(error) from error
+        self.starts.append(self.starts[-1] + len(samples))
+        self.digests.append(digest)
+        if not self.audible:
+            self.audible = bool(samples.mean(axis=1, dtype=np.float64).any())
+
+    @functools.cached_property
+    def downmix(self) -> locator.Lazy:
+        """The downmix of the sequence, read from the file as the search needs it,
+        once every track is added."""
+        return locator.Lazy(self.starts[-1], self._read_downmix)
+
+    def __len__(self) -> int:
+        return len(self.digests)
 
     def track_at(self, frame: int) -> int:
         """Return the index of the track holding a frame of the sequence."""
@@ -479,8 +530,53 @@ class _Edition:
     def frames(self, index: int) -> int:
         return self.starts[index + 1] - self.starts[index]
 
+    def samples(self, index: int) -> npt.NDArray[np.float32]:
+        """Return a track's samples, shaped (frames, channels); the last track read
+        is kept until another is."""
+        if self._held is None or self._held[0] != index:
+            self._held = None
+            self._held = (index, self._read(index, 0, self.frames(index)))
+        return self._held[1]
+
     def downmix_of(self, index: int) -> npt.NDArray[np.float64]:
         return self.downmix[self.starts[index] : self.starts[index + 1]]
+
+    def _read(self, index: int, first: int, last: int) -> npt.NDArray[np.float32]:
+        """Read frames [first, last) of a track from the file."""
+        place, channels = self._places[index]
+        samples = np.empty((last - first, channels), dtype=np.float32)
+        wanted = memoryview(samples.reshape(-1)).cast("B")
+        try:
+            self._file.seek(place + first * channels * samples.itemsize)
+            while wanted:
+                read = self._file.readinto(wanted)
+                if not read:
+                    raise TemporaryAudioError(
+                        "the temporary file of the decoded audio ended early"
+                    )
+                wanted = wanted[read:]
+        except OSError as error:
+            raise _spool_error(error) from error
+        return samples
+
+    def _read_downmix(self, start: int, out: npt.NDArray[np.float64]) -> None:
+        """Fill out with the downmix of the sequence from its frame start on."""
+        stop = start + len(out)
+        frame = start
+        while frame < stop:
+            index = self.track_at(frame)
+            first = self.starts[index]
+            end = min(stop, self.starts[index + 1])
+            self._read(index, frame - first, end - first).mean(
+                axis=1, dtype=np.float64, out=out[frame - start : end - start]
+            )
+            frame = end
+
+
+def _spool_error(error: OSError) -> TemporaryAudioError:
+    return TemporaryAudioError(
+        f"cannot hold the decoded audio in a temporary file: {error}"
+    )
 
 
 @dataclass(frozen=True)
@@ -519,27 +615,33 @@ def _compare_editions(
     )
     inputs: dict[str, dict[str, Any]] = {}
     omitted: list[str] = []
-    editions: list[list[_Audio]] = []
     reasons: list[str] = []
-    for name, root, listing in zip("ab", roots, listings, strict=True):
-        entry, tracks = _inspect_edition(
-            name, root, listing, rate, omit_locations, progress
-        )
-        if omit_locations:
-            omitted.append(f"/inputs/{name}/evidence_set")
-        inputs[name] = entry
-        if (reason := _unmeasured(name, entry)) is not None:
-            reasons.append(reason)
-        editions.append([audio for audio in tracks if audio is not None])
-    method = _method()
-    report = _report(EDITIONS, compared_at, omitted, inputs, method)
-    if reasons:
-        report["absent"] = {"measurements": "; ".join(reasons)}
-    else:
-        method["common_sample_rate"] = rate
-        report["measurements"] = _measure_editions(
-            _join(editions[0]), _join(editions[1]), rate
-        )
+    with contextlib.ExitStack() as stack:
+        editions: list[_Edition] = []
+        for name, root, listing in zip("ab", roots, listings, strict=True):
+            try:
+                file = stack.enter_context(
+                    tempfile.TemporaryFile(prefix="copyofa-", buffering=0)
+                )
+            except OSError as error:
+                raise _spool_error(error) from error
+            edition = _Edition(file)
+            editions.append(edition)
+            entry = _inspect_edition(
+                name, root, listing, edition, rate, omit_locations, progress
+            )
+            if omit_locations:
+                omitted.append(f"/inputs/{name}/evidence_set")
+            inputs[name] = entry
+            if (reason := _unmeasured(name, entry)) is not None:
+                reasons.append(reason)
+        method = _method()
+        report = _report(EDITIONS, compared_at, omitted, inputs, method)
+        if reasons:
+            report["absent"] = {"measurements": "; ".join(reasons)}
+        else:
+            method["common_sample_rate"] = rate
+            report["measurements"] = _measure_editions(editions[0], editions[1], rate)
     method["alignment"] = ALIGNMENT
     method["parameters"] = dict(locator.PARAMETERS)
     report["limitations"] = [*LIMITATIONS, *EDITION_LIMITATIONS]
@@ -574,30 +676,28 @@ def _inspect_edition(
     name: str,
     root: Path,
     listing: _Listing,
+    edition: _Edition,
     rate: int,
     omit_location: bool,
     progress: Callable[[str | None, dict[str, Any]], None] | None,
-) -> tuple[dict[str, Any], list[_Audio | None]]:
+) -> dict[str, Any]:
     """Check each track of an edition as inspect does and decode it when it can;
-    return the edition's entry and each track's audio at the common rate."""
+    add each decoded track, at the common rate, to edition, and return the edition's
+    entry."""
     entry: dict[str, Any] = {}
     if not omit_location:
         entry["evidence_set"] = str(root)
     entry["integrity_baseline"] = listing.baseline.to_json()
     tracks: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
-    decoded: list[_Audio | None] = []
 
     def add(found: dict[str, Any], audio: _Audio | None) -> None:
         track = {"position": len(tracks) + 1, **found}
         tracks.append(track)
         if progress is not None:
             progress(name, track)
-        decoded.append(
-            None
-            if audio is None
-            else _Audio(_resample(audio, rate), rate, audio.digest)
-        )
+        if audio is not None:
+            edition.add(_resample(audio, rate), audio.digest)
 
     disc = listing.disc
     if disc is not None:
@@ -626,7 +726,7 @@ def _inspect_edition(
     entry["excluded"] = excluded
     if listing.reason is not None:
         entry["reason"] = listing.reason
-    return entry, decoded
+    return entry
 
 
 def _unmeasured(name: str, entry: dict[str, Any]) -> str | None:
@@ -648,19 +748,6 @@ def _unmeasured(name: str, entry: dict[str, Any]) -> str | None:
     return f"the tracks at positions {listed} of {edition} are not interpreted"
 
 
-def _join(tracks: list[_Audio]) -> _Edition:
-    """Join an edition's tracks, at the common rate, in order without gap."""
-    starts = [0]
-    for audio in tracks:
-        starts.append(starts[-1] + len(audio.samples))
-    downmix = np.empty(starts[-1], dtype=np.float64)
-    for index, audio in enumerate(tracks):
-        audio.samples.mean(
-            axis=1, dtype=np.float64, out=downmix[starts[index] : starts[index + 1]]
-        )
-    return _Edition(tracks, starts, downmix)
-
-
 def _measure_editions(a: _Edition, b: _Edition, rate: int) -> dict[str, Any]:
     """Measure how edition B relates to edition A, at the common rate.
 
@@ -671,7 +758,9 @@ def _measure_editions(a: _Edition, b: _Edition, rate: int) -> dict[str, Any]:
     """
     editions = (a, b)
     portions: list[locator.Portion] = []
-    missing = _unsearchable(a.downmix, b.downmix, rate, "edition")
+    missing = _unsearchable(
+        (len(a.downmix), len(b.downmix)), (a.audible, b.audible), rate, "edition"
+    )
     if missing is None:
         portions = locator.locate(a.downmix, b.downmix, rate)
         if not portions:
@@ -700,7 +789,7 @@ def _measure_editions(a: _Edition, b: _Edition, rate: int) -> dict[str, Any]:
                     "start_frame": edition.starts[index],
                     "frames": edition.frames(index),
                 }
-                for index in range(len(edition.tracks))
+                for index in range(len(edition))
             ]
             for name, edition in zip("ab", editions, strict=True)
         },
@@ -786,7 +875,7 @@ def _segment(segment: _Segment, a: _Edition, b: _Edition, rate: int) -> dict[str
         "ratio_fit": span.ratio_fit,
     }
     values, absent = _measure_series(
-        (a.tracks[segment.index_a].samples, b.tracks[segment.index_b].samples),
+        (a.samples(segment.index_a), b.samples(segment.index_b)),
         (a.downmix_of(segment.index_a), b.downmix_of(segment.index_b)),
         span,
         rate,
@@ -825,8 +914,8 @@ def _correspondences(
                 "matched_frames": matched,
                 "fraction": matched / edition.frames(index),
             }
-        digest = a.tracks[index_a].digest
-        if digest is not None and digest == b.tracks[index_b].digest:
+        digest = a.digests[index_a]
+        if digest is not None and digest == b.digests[index_b]:
             entry["identical_audio"] = True
         correspondences.append(entry)
     return correspondences
@@ -838,13 +927,13 @@ def _edition_unmatched(
     """Describe each range of an edition's tracks that no primary portion covers."""
     ranges = []
     for start, stop in locator.uncovered(covered, edition.starts[-1]):
-        for index in range(edition.track_at(start), len(edition.tracks)):
+        for index in range(edition.track_at(start), len(edition)):
             first = edition.starts[index]
             if first >= stop:
                 break
             low, high = max(start, first), min(stop, edition.starts[index + 1])
             if high > low:
-                samples = edition.tracks[index].samples
+                samples = edition.samples(index)
                 ranges.append(
                     {
                         "position": index + 1,
@@ -979,31 +1068,32 @@ def _resample(audio: _Audio, rate: int) -> npt.NDArray[np.float32]:
 
 
 def _unsearchable(
-    a: npt.NDArray[np.float64],
-    b: npt.NDArray[np.float64],
+    frames: tuple[int, int],
+    audible: tuple[bool, bool],
     rate: int,
     noun: str = "track",
 ) -> str | None:
-    """Say why the downmixes leave the search without a candidate, if they do; noun
-    names what each downmix is of, a track or an edition."""
-    downmixes = (("A", a), ("B", b))
-    for name, downmix in downmixes:
-        if (missing := _no_frames(downmix, f"{noun} {name}")) is not None:
+    """Say why the downmixes leave the search without a candidate, if they do, from
+    the frames of A and B and whether each downmix holds a frame other than zero;
+    noun names what each downmix is of, a track or an edition."""
+    names = ("A", "B")
+    for name, count in zip(names, frames, strict=True):
+        if (missing := _no_frames(count, f"{noun} {name}")) is not None:
             return missing
-    for name, downmix in downmixes:
-        if len(downmix) < locator.WINDOW_SECONDS * rate:
+    for name, count in zip(names, frames, strict=True):
+        if count < locator.WINDOW_SECONDS * rate:
             return (
                 f"{noun} {name} is shorter than one window of "
                 f"{locator.WINDOW_SECONDS} s"
             )
-    for name, downmix in downmixes:
-        if not downmix.any():
+    for name, heard in zip(names, audible, strict=True):
+        if not heard:
             return f"the downmix of {noun} {name} is zero throughout"
     return None
 
 
-def _no_frames(downmix: npt.NDArray[np.float64], name: str) -> str | None:
-    return None if len(downmix) else f"{name} has no frames"
+def _no_frames(frames: int, name: str) -> str | None:
+    return None if frames else f"{name} has no frames"
 
 
 def _measure_pair(
