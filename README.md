@@ -246,8 +246,9 @@ Two CDs take about three to five minutes, longer the more of their tracks drift,
 about 1.5 GB to 3 GB of memory, which grows with the longest track and, for the
 search, with the editions' lengths, plus a temporary copy of both editions' decoded
 audio on disk, about 1.4 GB per CD of 65 min.
-Compare exits 1 when a track of either edition could not be inspected or decoded, or
-an edition has no track, and 2 when only one input is the root of a set given without
+Compare exits 1 when a track of either edition could not be inspected or decoded, an
+edition has no track, or it cannot hold the decoded audio in a temporary file, such as
+when the disk is full, and 2 when only one input is the root of a set given without
 its track option.
 
 Play a disc you acquired, or tag its tracks with other tools, from FLAC files that

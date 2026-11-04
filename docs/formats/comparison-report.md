@@ -322,15 +322,16 @@ Otherwise a track of B holding a track of A at the same speed gets no ratio.
 with the longest track of either edition, beyond the downmixes the search decimates and
 the search itself, which grow with the editions' lengths: compare holds a track's
 decoded audio only while a step needs it, and keeps each edition's, as float32 samples
-at the common rate, in a temporary file it removes when it ends. That file takes, on
-the disk of the system's temporary directory, 8 bytes per frame of stereo audio, about
-1.4 GB for a CD of 65 min. Version 7 adds the speed estimate and the stretched
-refinement of each chain at a ratio other than 0, so its cost grows with the audio that
-drifts. Run back to back on one Mac with 24 GB of memory, on AC power, CopyOfA 0.10.0
-and 0.11.0, which give the same Reports, took, with A the 14-track CD pressing of ADR
-0009's spike and the peak as macOS's peak memory footprint (each time the mean of two
-runs and each peak the higher of the two, except for the last two comparisons, run
-once):
+at the common rate, in a temporary file it removes when it ends. That file takes, in
+the system's temporary directory, 8 bytes per frame of stereo audio, about 1.4 GB for
+a CD of 65 min. The `TMPDIR` environment variable, when set, selects that directory;
+one held in memory, such as a `tmpfs`, counts against memory instead of disk. Version 7
+adds the speed estimate and the stretched refinement of each chain at a ratio other
+than 0, so its cost grows with the audio that drifts. Run back to back on one Mac with
+24 GB of memory, on AC power, CopyOfA 0.10.0 and 0.11.0, which give the same Reports,
+took, with A the 14-track CD pressing of ADR 0009's spike and the peak as macOS's peak
+memory footprint (each time the mean of two runs and each peak the higher of the two,
+except for the last two comparisons, run once):
 
 | Comparison | CopyOfA 0.10.0 | CopyOfA 0.11.0 |
 | --- | --- | --- |
