@@ -1,7 +1,7 @@
 # CopyOfA
 
 CopyOfA is a preservation and forensic toolkit for music collectors. It acquires and
-maintains trustworthy evidence of recorded audio, then lets collectors analyze, compare,
+keeps trustworthy evidence of recorded audio, then lets collectors analyze, compare,
 and share what that evidence reveals.
 
 ## Status
