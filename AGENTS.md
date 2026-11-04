@@ -189,12 +189,13 @@ locates matching portions with the windowed method of ADR 0006, which supersedes
 0003's single global offset and overlap, as ADR 0010 amends it: a speed estimate
 before the coarse search, then a constant speed ratio per portion, fitted near its
 chain's strongest window, with refinement and measurements on B stretched along the
-portion's line by the locator's own windowed-sinc interpolator, over the region a
-portion needs, never a whole copy of B. A ratio within 0.05 ppm of 0 is 0, and such a
-portion is ADR 0006's, with an integer offset; the Report's `alignment` is
-`speed_tolerant_portions`. `src/copyofa/locator.py` holds the method and its fixed
-parameters, which each comparison Report states. Given the roots of two
-Evidence Sets without track numbers, compare compares two editions, as
+portion's line by the locator's own windowed-sinc interpolator: for refinement, a
+block at a time as it reads B, never over a portion's whole region; for
+measurements, over a portion's or a segment's range of one track. A ratio within
+0.05 ppm of 0 is 0, and such a portion is ADR 0006's, with an integer offset; the
+Report's `alignment` is `speed_tolerant_portions`. `src/copyofa/locator.py` holds the
+method and its fixed parameters, which each comparison Report states. Given the roots
+of two Evidence Sets without track numbers, compare compares two editions, as
 [ADR 0009](docs/decisions/0009-compare-editions-as-sequences-of-their-tracks.md)
 decides: each edition is its tracks joined in order (an acquired set's in the order of
 its Acquisition Record, an imported set's audio files in the order of their paths), the
@@ -202,7 +203,19 @@ locator runs unchanged on the two sequences, and each portion is split at both
 editions' track boundaries into segments, measured as portions are, from which the
 Report's `scope` `editions` derives track correspondences, unmatched audio per track
 and coverage. Each track is resampled to the common rate, read from the headers
-before decoding, as soon as it is decoded.
+before decoding, block by block as it is decoded, and written as float32 to its
+edition's temporary file, which has no name where the system allows it and goes when
+compare ends, as [brief 0009](docs/briefs/0009-bound-compares-memory-and-time.md)
+decides. Compare reads a track's audio back from that file when a step needs it,
+never holding either edition whole. Resampling and decimation go through soxr's
+streaming resampler, which carries its state across blocks, so each result is a
+single call's: the locator decimates the joined downmix piece by piece, and reads it
+for refinement in blocks (`locator.Lazy`), each placed in memory as one array of the
+whole downmix would place it, so every sum rounds as it would. Each segment is
+measured on its two tracks, read back whole into buffers each edition keeps for its
+longest track, longest segment first, and each unmatched range on pieces of its
+track: macOS keeps memory freed in large blocks in the process's footprint until an
+allocation that fits reuses it, so arrays of many lengths would raise the peak.
 
 ### Disc acquisition
 
