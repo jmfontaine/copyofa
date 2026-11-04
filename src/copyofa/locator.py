@@ -177,6 +177,8 @@ _PIECE_FRAMES = 1 << 20
 _ALIGNMENT_BYTES = 4096
 """Each array a Lazy downmix gives lies where it would in an array of the whole
 downmix, modulo this many bytes (see empty_at)."""
+PLACEMENT_SLACK = _ALIGNMENT_BYTES // 8
+"""The values a buffer given to empty_at needs beyond the frames it places."""
 _PPM = 1e-6
 _EDGE_FRAMES = 2 * BLOCK_FRAMES
 """A portion refined on stretched B that ends this close to the stretched range,
@@ -401,17 +403,18 @@ class _Blocks:
         return block
 
 
-def empty_at(first: int, length: int) -> Samples:
+def empty_at(first: int, length: int, buffer: Samples | None = None) -> Samples:
     """Return an uninitialized array for frames [first, first + length) of a downmix,
     each frame lying where it would in an array of the whole downmix, modulo
-    _ALIGNMENT_BYTES.
+    _ALIGNMENT_BYTES; a view of buffer, of at least length + PLACEMENT_SLACK values,
+    when given.
 
     The dot product of the BLAS NumPy uses can round differently at another alignment
     of the same values, so a downmix held in pieces, each made with this, gives each
     score, fit and sum that the whole downmix, as one array, gives.
     """
-    slack = _ALIGNMENT_BYTES // 8
-    buffer = np.empty(length + slack)
+    if buffer is None:
+        buffer = np.empty(length + PLACEMENT_SLACK)
     shift = (first * 8 - buffer.ctypes.data) % _ALIGNMENT_BYTES // 8
     return buffer[shift : shift + length]
 

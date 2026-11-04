@@ -13,7 +13,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import numpy as np
 import soundfile
@@ -501,6 +501,9 @@ class _Edition:
         """Whether the downmix of the sequence holds a frame other than zero."""
         self._held: tuple[int, npt.NDArray[np.float32]] | None = None
         self._held_downmix: npt.NDArray[np.float64] | None = None
+        self._held_buffers: (
+            tuple[npt.NDArray[np.float32], npt.NDArray[np.float64]] | None
+        ) = None
 
     def add(
         self,
@@ -556,7 +559,7 @@ class _Edition:
     def release(self) -> None:
         """Let go of the audio held, once the comparison ends: the edition and its
         downmix refer to each other, so they go only with the garbage collector."""
-        self._held = self._held_downmix = None
+        self._held = self._held_downmix = self._held_buffers = None
         self.__dict__.pop("downmix", None)
 
     def __len__(self) -> int:
@@ -569,12 +572,23 @@ class _Edition:
     def frames(self, index: int) -> int:
         return self.starts[index + 1] - self.starts[index]
 
+    def channels(self, index: int) -> int:
+        return self._places[index][1]
+
     def samples(self, index: int) -> npt.NDArray[np.float32]:
         """Return a track's samples, shaped (frames, channels); the last track read
-        is kept, with its downmix once asked for, until another is."""
+        is kept, with its downmix once asked for, until another is.
+
+        Both lie in buffers the edition keeps for its longest track, so that reading
+        track after track allocates nothing: macOS keeps memory freed in large blocks
+        for the process to use again, counting it in its footprint, so tracks of
+        many lengths would each leave theirs.
+        """
         if self._held is None or self._held[0] != index:
             self._held = self._held_downmix = None
-            self._held = (index, self._read(index, 0, self.frames(index)))
+            frames, channels = self.frames(index), self.channels(index)
+            out = self._buffers()[0][: frames * channels].reshape(frames, channels)
+            self._held = (index, self.read(index, 0, frames, out))
         return self._held[1]
 
     def downmix_of(self, index: int) -> npt.NDArray[np.float64]:
@@ -582,14 +596,38 @@ class _Edition:
         downmix (see locator.empty_at)."""
         samples = self.samples(index)
         if self._held_downmix is None:
-            out = locator.empty_at(self.starts[index], len(samples))
+            buffer = self._buffers()[1]
+            out = locator.empty_at(self.starts[index], len(samples), buffer)
             self._held_downmix = _downmix(samples, out)
         return self._held_downmix
 
-    def _read(self, index: int, first: int, last: int) -> npt.NDArray[np.float32]:
-        """Read frames [first, last) of a track from the file."""
+    def _buffers(self) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float64]]:
+        if self._held_buffers is None:
+            tracks = range(len(self))
+            self._held_buffers = (
+                np.empty(
+                    max((self.frames(i) * self.channels(i) for i in tracks), default=0),
+                    dtype=np.float32,
+                ),
+                np.empty(
+                    max((self.frames(i) for i in tracks), default=0)
+                    + locator.PLACEMENT_SLACK
+                ),
+            )
+        return self._held_buffers
+
+    def read(
+        self,
+        index: int,
+        first: int,
+        last: int,
+        out: npt.NDArray[np.float32] | None = None,
+    ) -> npt.NDArray[np.float32]:
+        """Read frames [first, last) of a track from the file, into out if given."""
         place, channels = self._places[index]
-        samples = np.empty((last - first, channels), dtype=np.float32)
+        samples = (
+            np.empty((last - first, channels), dtype=np.float32) if out is None else out
+        )
         wanted = memoryview(samples.reshape(-1)).cast("B")
         try:
             self._file.seek(place + first * channels * samples.itemsize)
@@ -613,7 +651,7 @@ class _Edition:
             first = self.starts[index]
             end = min(stop, self.starts[index + 1])
             _downmix(
-                self._read(index, frame - first, end - first),
+                self.read(index, frame - first, end - first),
                 out[frame - start : end - start],
             )
             frame = end
@@ -840,12 +878,27 @@ def _measure_editions(a: _Edition, b: _Edition, rate: int) -> dict[str, Any]:
         portions = locator.locate(a.downmix, b.downmix, rate)
         if not portions:
             missing = "no portion was found"
+    split = [_split(portion, a, b) for portion in portions]
+    # Longest first, so that each segment's arrays fit in memory a longer one freed:
+    # macOS keeps memory freed in large blocks for the process to use again,
+    # counting it in its footprint, so a longer segment after shorter ones would
+    # leave theirs and take its own.
+    measured = {
+        (index, place): _segment(split[index][place], a, b, rate)
+        for index, place in sorted(
+            (
+                (index, place)
+                for index, segments in enumerate(split)
+                for place in range(len(segments))
+            ),
+            key=lambda key: -split[key[0]][key[1]].span.frames,
+        )
+    }
     entries = []
     primary_segments: list[_Segment] = []
-    for portion in portions:
-        segments = _split(portion, a, b)
+    for index, (portion, segments) in enumerate(zip(portions, split, strict=True)):
         entry, absent = _portion_head(portion, rate, identical=False)
-        entry["segments"] = [_segment(segment, a, b, rate) for segment in segments]
+        entry["segments"] = [measured[index, place] for place in range(len(segments))]
         if absent:
             entry["absent"] = absent
         entries.append(entry)
@@ -1008,11 +1061,15 @@ def _edition_unmatched(
                 break
             low, high = max(start, first), min(stop, edition.starts[index + 1])
             if high > low:
-                samples = edition.samples(index)
                 ranges.append(
                     {
                         "position": index + 1,
-                        **_described(samples, low - first, high - first),
+                        **_described(
+                            functools.partial(edition.read, index),
+                            edition.channels(index),
+                            low - first,
+                            high - first,
+                        ),
                     }
                 )
     return ranges
@@ -1118,49 +1175,65 @@ def _unmatched(
 ) -> list[dict[str, Any]]:
     """Describe each range of a track that no primary portion covers."""
     return [
-        _described(samples, start, stop)
-        for start, stop in locator.uncovered(covered, len(samples))
+        _described(lambda first, last: samples[first:last], samples.shape[1], *gap)
+        for gap in locator.uncovered(covered, len(samples))
     ]
 
 
-def _described(
-    samples: npt.NDArray[np.float32], start: int, stop: int
-) -> dict[str, Any]:
-    """Describe a range of a track: whether it is digitally silent, else its level."""
+_Reader: TypeAlias = "Callable[[int, int], npt.NDArray[np.float32]]"
+"""Read frames [first, last) of a track, shaped (frames, channels)."""
+
+_DESCRIBED_FRAMES = 1 << 16
+"""The most frames _described reads at once to find whether a range is silent."""
+
+
+def _described(read: _Reader, channels: int, start: int, stop: int) -> dict[str, Any]:
+    """Describe a range of a track: whether it is digitally silent, else its level.
+
+    The range is read in pieces, so that a range as long as its track costs no copy
+    of the track.
+    """
     entry: dict[str, Any] = {"start_frame": start, "frames": stop - start}
-    part = samples[start:stop]
-    entry["digitally_silent"] = not part.any()
-    if part.any():
-        entry["level_dbfs"] = 10 * math.log10(_power(part))
+    silent = not any(
+        read(first, min(stop, first + _DESCRIBED_FRAMES)).any()
+        for first in range(start, stop, _DESCRIBED_FRAMES)
+    )
+    entry["digitally_silent"] = silent
+    if not silent:
+        entry["level_dbfs"] = 10 * math.log10(_power(read, channels, start, stop))
     return entry
 
 
 _SQUARED_PIECE = 1 << 16
-"""The most values _power squares at once."""
+"""The most values _power reads and squares at once."""
 
 
-def _power(part: npt.NDArray[np.float32]) -> float:
-    """Return the mean square of a range of samples, as
-    np.mean(np.square(part, dtype=np.float64)) gives it, to the bit, without a
-    float64 copy of the range.
+def _power(read: _Reader, channels: int, start: int, stop: int) -> float:
+    """Return the mean square of frames [start, stop) of a track, as
+    np.mean(np.square(samples[start:stop], dtype=np.float64)) gives it, to the bit,
+    reading the range in pieces.
 
     NumPy sums a contiguous float64 array pairwise, splitting it, above 128 values,
     at half its count rounded down to a multiple of 8; splitting it the same way
     down to pieces of _SQUARED_PIECE values gives the same sum.
     """
-    values = part.reshape(-1)
-    return _sum_of_squares(values, 0, len(values)) / len(values)
+    count = (stop - start) * channels
+    return _sum_of_squares(read, channels, start * channels, count) / count
 
 
-def _sum_of_squares(values: npt.NDArray[np.float32], start: int, count: int) -> float:
-    """Sum the squares of count values from start on, in NumPy's pairwise order."""
+def _sum_of_squares(read: _Reader, channels: int, first: int, count: int) -> float:
+    """Sum the squares of count values of a track, its frames' values in order, from
+    value first on, in NumPy's pairwise order."""
     if count <= _SQUARED_PIECE:
-        piece = values[start : start + count]
+        frame = first // channels
+        values = read(frame, -(-(first + count) // channels)).reshape(-1)
+        skip = first - frame * channels
+        piece = values[skip : skip + count]
         return float(np.square(piece, dtype=np.float64).sum())
     half = count // 2
     half -= half % 8
-    return _sum_of_squares(values, start, half) + _sum_of_squares(
-        values, start + half, count - half
+    return _sum_of_squares(read, channels, first, half) + _sum_of_squares(
+        read, channels, first + half, count - half
     )
 
 

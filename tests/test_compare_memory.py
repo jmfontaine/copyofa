@@ -275,12 +275,14 @@ def test_a_downmix_is_the_mean_of_the_channels_to_the_bit(channels: int) -> None
 def test_a_level_is_the_mean_square_of_the_range_to_the_bit(
     frames: int, channels: int
 ) -> None:
-    """Compare takes an unmatched range's level in pieces, without a float64 copy of
-    the range, and gets the value it took from that copy, so the Reports stay the
+    """Compare reads an unmatched range in pieces to take its level, and gets the
+    value it took from a float64 copy of the whole range, so the Reports stay the
     same."""
     rng = np.random.default_rng(frames * channels)
-    samples = rng.uniform(-1, 1, (frames + 3, channels)).astype(np.float32)
-    part = samples[3:]
-    expected = float(np.mean(np.square(part, dtype=np.float64)))
+    samples = rng.uniform(-1, 1, (frames + 5, channels)).astype(np.float32)
+    expected = float(np.mean(np.square(samples[3:-2], dtype=np.float64)))
 
-    assert comparator._power(part) == expected
+    def read(first: int, last: int) -> np.ndarray:
+        return samples[first:last].copy()
+
+    assert comparator._power(read, channels, 3, frames + 3) == expected
