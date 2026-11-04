@@ -57,8 +57,10 @@ The same holds for two CDs, at 4 GB or less.
 
 - Edition comparisons that hold only the audio a step needs, not both editions at full
   rate for the whole run: the locator reads the full-rate downmix track by track, to
-  decimate it and around each portion, and stretches B in pieces rather than over a
-  portion's whole region, the debt brief 0008's delivery notes handed to this release.
+  decimate it, with the resampler's state carried across tracks (soxr's streaming
+  resampler) so the decimated sequence is the one a single call gives, and around each
+  portion; and it stretches B in pieces rather than over a portion's whole region, the
+  debt brief 0008's delivery notes handed to this release.
 - The same Reports: format version 7, its schema, compare's text result and view,
   unchanged.
 - A timed spike on searching each window of A only near where its neighbors were found,
@@ -154,15 +156,17 @@ Each criterion is verified by an automated test unless stated otherwise.
   results. A probe outside the repository captures v0.10.0's Reports once and compares
   them; the pull request records the result. The tests that compare stored Reports
   still pass.
-- **AC2 — Memory grows with the longest track.** In a test, the peak of NumPy's
-  allocations traced by `tracemalloc` during an edition comparison grows by at most
-  40 % when each edition doubles from two to four tracks of the same length; the same
-  holds with B at +1 %, where one portion spans every track. The pull request records
-  that the same test fails on v0.10.0.
+- **AC2 — Memory grows with the longest track.** In a test, the peak `tracemalloc`
+  reports during an edition comparison, NumPy's arrays included, grows by at most 40 %
+  when each edition doubles from two to four tracks of the same length; the same holds
+  with B at +1 %, where one portion spans every track. The pull request records that
+  the same test fails on v0.10.0.
 - **AC3 — Audio read again is the audio checked.** If compare reads a file again, a
-  file changed after the integrity check fails the comparison, with exit 1 and a
-  message naming the file. If compare writes temporary files, none remains after a
-  comparison that succeeds, one that fails, and one canceled with Ctrl-C (exit 130).
+  file changed after the integrity check gives the Report compare gives today for a
+  file modified since import: its track `failed`, with a reason that says the file
+  changed during the comparison, no measurements, and exit 1. If compare writes
+  temporary files, none remains after a comparison that succeeds, one that fails, and
+  one canceled with Ctrl-C (exit 130).
 - **AC4 — Schema and view unchanged.** Every Report the test suite produces validates
   against the version 7 schema, and view renders it as before.
 - **AC5 — Documented.** `docs/formats/comparison-report.md`'s known limit gives
@@ -176,7 +180,9 @@ Each criterion is verified by an automated test unless stated otherwise.
   stretched by +1 % and by +41,667 ppm against that track; *Tron: Ares; Divergence*
   against itself; and *Deviations*, the WAV download against the MP3. v0.10.0 runs
   each pair to its end, swapping if it must. Each pair meets the memory and time
-  bounds above and gives v0.10.0's Report under the rule of Same results. The pull
+  bounds above and gives v0.10.0's Report under the rule of Same results. If v0.10.0
+  does not finish *Deviations* within two hours, the new code's figures for it are
+  recorded and its Same results check is marked unverified, with the reason. The pull
   request records the table.
 - **AC7 — Spike reported.** The spike's issue records, for each edition pair of AC6,
   the localized search's time and v0.10.0's, and whether the primary portions, offsets
