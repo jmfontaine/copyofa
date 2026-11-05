@@ -461,24 +461,27 @@ def test_compare_keeps_no_track_of_an_edition_at_its_own_rate(
             source / "all.flac", np.concatenate([P, Q]), 16, "FLAC"
         )
     )
-    originals: list[weakref.ref[np.ndarray]] = []
-    resample = comparator._resample
+    # Each file's decoded blocks, at its own rate, 48 kHz for edition A's.
+    decoded: dict[str, list[weakref.ref[np.ndarray]]] = {}
     inspect_file = inspector.inspect_file
 
-    def recording(audio: Any, rate: int) -> np.ndarray:
-        if audio.rate != rate:
-            originals.append(weakref.ref(audio.samples))
-        return resample(audio, rate)
+    def checking(
+        root: Path, path: str, expected: str | None, sink: Any = None
+    ) -> dict[str, Any]:
+        assert all(block() is None for kept in decoded.values() for block in kept)
+        kept = decoded.setdefault(path, [])
 
-    def checking(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        assert all(original() is None for original in originals)
-        return inspect_file(*args, **kwargs)
+        def keeping(block: np.ndarray) -> None:
+            kept.append(weakref.ref(block))
+            sink(block)
 
-    monkeypatch.setattr(comparator, "_resample", recording)
+        return inspect_file(root, path, expected, keeping)
+
     monkeypatch.setattr(inspector, "inspect_file", checking)
 
     report = comparator.compare(str(a), str(b))
 
     assert report["method"]["common_sample_rate"] == RATE
-    assert len(originals) == 2
-    assert all(original() is None for original in originals)
+    assert decoded["data/Album/B.flac"]
+    assert decoded["data/Album/a.flac"]
+    assert all(block() is None for kept in decoded.values() for block in kept)

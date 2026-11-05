@@ -1,17 +1,20 @@
 """Locate the portions of one track that appear in another (see ADRs 0006 and 0010).
 
 Both tracks are mono downmixes at one common rate, as float64 samples where 1.0 is
-full scale. In a portion, frame n of track A lines up with frame
+full scale: each an array, or a Lazy downmix read a block at a time, for a sequence
+too long to hold. In a portion, frame n of track A lines up with frame
 n + offset + ratio·(n - start) of track B, where start is the portion's first frame
 of A: at a ratio of 0, frame n + offset, as in ADR 0003.
 """
 
 from __future__ import annotations
 
+import copy
 import functools
 import math
+from collections import OrderedDict
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import numpy as np
 import soxr
@@ -23,6 +26,9 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
     Samples = npt.NDArray[np.float64]
+
+Downmix: TypeAlias = "Samples | Lazy"
+"""A downmix the search reads: an array, or a Lazy downmix."""
 
 # The fixed parameters of ADR 0006, decision 7. A change to any of them changes what
 # a portion is, so it is a new comparison Report format version.
@@ -161,6 +167,18 @@ _GROWTH_BLOCKS = 64
 not to classify a whole track past an edge."""
 _CHUNK_FRAMES = BLOCK_FRAMES << 9
 """Frames summed or stretched at a time over a long range, a whole number of blocks."""
+_LAZY_BLOCK_FRAMES = 1 << 16
+"""Frames a Lazy downmix reads or computes at a time."""
+_KEPT_BLOCKS = 16
+"""The blocks a Lazy downmix keeps, the last read: enough for the ranges refinement
+reads again, such as a chain's core, few enough to hold little whatever the length."""
+_PIECE_FRAMES = 1 << 20
+"""Frames of a Lazy downmix decimated at a time."""
+_ALIGNMENT_BYTES = 4096
+"""Each array a Lazy downmix gives lies where it would in an array of the whole
+downmix, modulo this many bytes (see empty_at)."""
+PLACEMENT_SLACK = _ALIGNMENT_BYTES // 8
+"""The values a buffer given to empty_at needs beyond the frames it places."""
 _PPM = 1e-6
 _EDGE_FRAMES = 2 * BLOCK_FRAMES
 """A portion refined on stretched B that ends this close to the stretched range,
@@ -297,7 +315,116 @@ class _Candidate:
     frames at the common rate: a multiple of DECIMATION, which chaining compares."""
 
 
-def locate(a: Samples, b: Samples, rate: int) -> list[Portion]:
+class Lazy:
+    """A downmix read or computed a block at a time as the search needs it, so that
+    it is never held whole (brief 0009).
+
+    Slicing it, with a step of 1, gives its frames as an array, as slicing an array
+    would. The last _KEPT_BLOCKS blocks are kept, so that a range read again is not
+    read or computed again.
+    """
+
+    def __init__(self, frames: int, read: Callable[[int, Samples], object]) -> None:
+        """Make a downmix of frames frames that read(start, out) fills out with,
+        from its frame start on."""
+        self._blocks = _Blocks(frames, read)
+        self._first = 0
+        self._frames = frames
+
+    def __len__(self) -> int:
+        return self._frames
+
+    def __getitem__(self, key: slice) -> Samples:
+        start, stop, step = key.indices(self._frames)
+        if step != 1:
+            raise ValueError("a Lazy downmix is sliced with a step of 1")
+        return self._blocks.read(self._first + start, self._first + max(start, stop))
+
+    def part(self, start: int, stop: int) -> Lazy:
+        """Return the frames [start, stop) as a downmix of their own, read through
+        the same blocks, as slicing an array gives a view of it."""
+        start, stop, _ = slice(start, stop).indices(self._frames)
+        part = copy.copy(self)
+        part._first += start
+        part._frames = max(0, stop - start)
+        return part
+
+    def pieces(self) -> Iterator[Samples]:
+        """Yield the frames in order, _PIECE_FRAMES at a time, without keeping them."""
+        last = self._first + self._frames
+        for start in range(self._first, last, _PIECE_FRAMES):
+            yield self._blocks.fresh(start, min(last, start + _PIECE_FRAMES))
+
+
+class _Blocks:
+    """The frames of a Lazy downmix, read a block of _LAZY_BLOCK_FRAMES at a time,
+    the last _KEPT_BLOCKS kept."""
+
+    def __init__(self, frames: int, read: Callable[[int, Samples], object]) -> None:
+        self._frames = frames
+        self._read = read
+        self._kept: OrderedDict[int, Samples] = OrderedDict()
+
+    def read(self, start: int, stop: int) -> Samples:
+        """Return the frames [start, stop), a view of a block when one holds them."""
+        if stop <= start:
+            return np.zeros(0)
+        first, last = start // _LAZY_BLOCK_FRAMES, (stop - 1) // _LAZY_BLOCK_FRAMES
+        if first == last:
+            base = first * _LAZY_BLOCK_FRAMES
+            return self._block(first)[start - base : stop - base]
+        out = empty_at(start, stop - start)
+        for index in range(first, last + 1):
+            base = index * _LAZY_BLOCK_FRAMES
+            low = max(start, base)
+            high = min(stop, base + _LAZY_BLOCK_FRAMES)
+            out[low - start : high - start] = self._block(index)[
+                low - base : high - base
+            ]
+        return out
+
+    def fresh(self, start: int, stop: int) -> Samples:
+        """Return the frames [start, stop), read without keeping them."""
+        out = empty_at(start, stop - start)
+        self._read(start, out)
+        return out
+
+    def _block(self, index: int) -> Samples:
+        block = self._kept.get(index)
+        if block is not None:
+            self._kept.move_to_end(index)
+            return block
+        start = index * _LAZY_BLOCK_FRAMES
+        block = self.fresh(start, min(self._frames, start + _LAZY_BLOCK_FRAMES))
+        block.flags.writeable = False
+        self._kept[index] = block
+        if len(self._kept) > _KEPT_BLOCKS:
+            self._kept.popitem(last=False)
+        return block
+
+
+def empty_at(first: int, length: int, buffer: Samples | None = None) -> Samples:
+    """Return an uninitialized array for frames [first, first + length) of a downmix,
+    each frame lying where it would in an array of the whole downmix, modulo
+    _ALIGNMENT_BYTES; a view of buffer, of at least length + PLACEMENT_SLACK values,
+    when given.
+
+    The dot product of the BLAS NumPy uses can round differently at another alignment
+    of the same values, so a downmix held in pieces, each made with this, gives each
+    score, fit and sum that the whole downmix, as one array, gives.
+    """
+    if buffer is None:
+        buffer = np.empty(length + PLACEMENT_SLACK)
+    shift = (first * 8 - buffer.ctypes.data) % _ALIGNMENT_BYTES // 8
+    return buffer[shift : shift + length]
+
+
+def _part(x: Downmix, start: int, stop: int) -> Downmix:
+    """Return the frames [start, stop) of a downmix, without copying them."""
+    return x[start:stop] if isinstance(x, np.ndarray) else x.part(start, stop)
+
+
+def locate(a: Downmix, b: Downmix, rate: int) -> list[Portion]:
     """Return the portions of downmix a found in downmix b, at rate.
 
     Primary portions come first, in A's order, then alternates. An input shorter
@@ -305,10 +432,17 @@ def locate(a: Samples, b: Samples, rate: int) -> list[Portion]:
     """
     if min(len(a), len(b)) < WINDOW_SECONDS * rate:
         return []
-    coarse_a, coarse_b = _coarse(a, rate), _coarse(b, rate)
-    estimate = _estimate(a, b, coarse_a, coarse_b, rate)
+    # Each downmix is read once to decimate it for both the speed estimate and the
+    # coarse search, and once more for A stretched by the estimate.
+    factors = sorted({DECIMATION, *ESTIMATE_DECIMATION_FACTORS})
+    targets = [(factor, 0.0) for factor in factors]
+    levels_a = dict(zip(factors, _coarse(a, rate, targets), strict=True))
+    levels_b = dict(zip(factors, _coarse(b, rate, targets), strict=True))
+    estimate = _estimate(levels_a, levels_b, rate)
+    coarse_a, coarse_b = levels_a[DECIMATION], levels_b[DECIMATION]
+    del levels_a, levels_b
     if estimate:
-        coarse_a = _coarse(a, rate, estimate)
+        (coarse_a,) = _coarse(a, rate, [(DECIMATION, estimate)])
     candidates = _candidates(coarse_a, coarse_b, rate / DECIMATION, estimate)
     del coarse_a, coarse_b
     pair = _Pair(a, b, rate)
@@ -386,19 +520,43 @@ def _nearest(position: float) -> int:
 
 
 def _coarse(
-    x: Samples, rate: int, ratio: float = 0, decimation: int = DECIMATION
-) -> npt.NDArray[np.float64]:
-    """Decimate a downmix for a search, stretched by a ratio, then take its first
-    difference."""
-    target = rate / decimation
-    if ratio:
-        target *= 1 + ratio
-    y = np.asarray(
-        soxr.resample(x, rate, target, quality=DECIMATION_QUALITY),
-        dtype=np.float64,
+    x: Downmix, rate: int, targets: Sequence[tuple[int, float]]
+) -> list[npt.NDArray[np.float64]]:
+    """Decimate a downmix for a search by each (decimation, ratio) of targets,
+    stretched by the ratio, then take each one's first difference.
+
+    The downmix is read once, a piece at a time, through one streaming resampler per
+    target, which carries its state from piece to piece: each result is the one a
+    single call on the whole downmix gives.
+    """
+    streams = []
+    for decimation, ratio in targets:
+        target = rate / decimation
+        if ratio:
+            target *= 1 + ratio
+        streams.append(
+            soxr.ResampleStream(
+                rate, target, 1, dtype="float64", quality=DECIMATION_QUALITY
+            )
+        )
+    outputs: list[list[npt.NDArray[np.float64]]] = [[] for _ in streams]
+    pieces = (
+        [np.ascontiguousarray(x, dtype=np.float64)]
+        if isinstance(x, np.ndarray)
+        else x.pieces()
     )
-    y[1:] -= FIRST_DIFFERENCE * y[:-1]
-    return y
+    for piece in pieces:
+        for stream, output in zip(streams, outputs, strict=True):
+            output.append(stream.resample_chunk(piece))
+    decimated = []
+    for stream, output in zip(streams, outputs, strict=True):
+        output.append(stream.resample_chunk(np.zeros(0), last=True))
+        y = empty_at(0, sum(len(part) for part in output))
+        np.concatenate(output, out=y)
+        output.clear()
+        y[1:] -= FIRST_DIFFERENCE * y[:-1]
+        decimated.append(y)
+    return decimated
 
 
 class _Searched:
@@ -455,26 +613,22 @@ def _windows(
 
 
 def _estimate(
-    a: Samples,
-    b: Samples,
-    coarse_a: npt.NDArray[np.float64],
-    coarse_b: npt.NDArray[np.float64],
+    levels_a: dict[int, npt.NDArray[np.float64]],
+    levels_b: dict[int, npt.NDArray[np.float64]],
     rate: int,
 ) -> float:
     """Estimate the speed of B against A, as a ratio (ADR 0010, decision 1).
 
-    coarse_a and coarse_b are both downmixes as the coarse search takes them, which
-    the second level reuses. Returns 0 when the estimate is not adopted.
+    levels_a and levels_b map each decimation factor of the estimate to the downmix
+    of A and of B decimated by it, as _coarse gives it. Returns 0 when the estimate
+    is not adopted.
     """
     center, span = 0, ESTIMATE_RANGE_PPM
     mean = 0.0
     for decimation, count, step in zip(
         ESTIMATE_DECIMATION_FACTORS, ESTIMATE_WINDOWS, ESTIMATE_STEPS_PPM, strict=True
     ):
-        if decimation == DECIMATION:
-            x, y = coarse_a, coarse_b
-        else:
-            x, y = _coarse(a, rate, 0, decimation), _coarse(b, rate, 0, decimation)
+        x, y = levels_a[decimation], levels_b[decimation]
         coarse_rate = rate / decimation
         length = round(WINDOW_SECONDS * coarse_rate)
         if length < 1 or len(x) < length or len(y) < length:
@@ -614,7 +768,7 @@ def _chains(candidates: list[_Candidate]) -> list[list[_Candidate]]:
 class _Pair:
     """Both downmixes at the common rate, and what refinement computes on them."""
 
-    def __init__(self, a: Samples, b: Samples, rate: int) -> None:
+    def __init__(self, a: Downmix, b: Downmix, rate: int) -> None:
         self.a = a
         self.b = b
         self.rate = rate
@@ -896,7 +1050,7 @@ def _local(
     """Return B stretched along a line over frames [lo, hi) of A, the pair it makes
     with that range of A, and the windows of the chain inside it, counted from lo."""
     along = _Along(pair.b, line, lo, hi)
-    local = _Pair(pair.a[lo:hi], along.samples, pair.rate)
+    local = _Pair(_part(pair.a, lo, hi), along.samples, pair.rate)
     nodes = [
         _Candidate(
             node.window,
@@ -966,11 +1120,19 @@ class _Along:
     B itself, not stretched."""
 
     def __init__(
-        self, b: Samples, line: _Line, low: int, high: int, *, stretch: bool = True
+        self, b: Downmix, line: _Line, low: int, high: int, *, stretch: bool = True
     ) -> None:
+        self.samples: Downmix
         if stretch:
-            self.low = max(0, low)
-            self.samples = _stretch(b, line, self.low, max(self.low, high))
+            first = self.low = max(0, low)
+            # Stretched a block at a time as refinement reads it, never over the
+            # whole range at once (brief 0009).
+            self.samples = Lazy(
+                max(first, high) - first,
+                lambda start, out: _stretch(
+                    b, line, first + start, first + start + len(out), out
+                ),
+            )
         else:
             self.low = 0
             self.samples = b
@@ -988,7 +1150,7 @@ class _Along:
 
 
 def _offsets(
-    a: Samples,
+    a: Downmix,
     along: _Along,
     starts: Sequence[int],
     length: int,
@@ -1016,7 +1178,7 @@ def _offsets(
 
 
 def _offset(
-    a: Samples, along: _Along, start: int, length: int, center: int, radius: int
+    a: Downmix, along: _Along, start: int, length: int, center: int, radius: int
 ) -> tuple[float, float, float] | None:
     """Find one window of A in B along a line, as _offsets does."""
     x = a[start : start + length]
@@ -1100,7 +1262,13 @@ def _kernel() -> npt.NDArray[np.float64]:
     return taps
 
 
-def _stretch(b: npt.NDArray[Any], line: _Line, start: int, stop: int) -> Samples:
+def _stretch(
+    b: Downmix | npt.NDArray[Any],
+    line: _Line,
+    start: int,
+    stop: int,
+    out: Samples | None = None,
+) -> Samples:
     """Return B along a line over frames [start, stop) of A, by the interpolator.
 
     Each value is B at the line's position, from the STRETCH_TAPS frames around it,
@@ -1110,7 +1278,8 @@ def _stretch(b: npt.NDArray[Any], line: _Line, start: int, stop: int) -> Samples
     """
     taps = _kernel()
     half = STRETCH_TAPS // 2
-    out = np.empty(max(0, stop - start))
+    if out is None:
+        out = np.empty(max(0, stop - start))
     origin = line.at(line.start)
     scale = 1 + line.ratio
     chunk = _CHUNK_FRAMES >> 4
@@ -1225,9 +1394,11 @@ def _best_offset(pair: _Pair, start: int, stop: int, coarse: int) -> int | None:
     if stop <= start:
         return None
     a = pair.a[start:stop]
+    # B over every offset searched, read once; each offset's frames are a view of it.
+    reach = pair.b[start + lowest : stop + highest]
     best, chosen = -1.0, None
     for offset in range(lowest, highest + 1):
-        b = pair.b[start + offset : stop + offset]
+        b = reach[offset - lowest : offset - lowest + stop - start]
         energy = float(b @ b)
         if energy == 0:
             continue

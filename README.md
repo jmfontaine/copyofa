@@ -242,11 +242,13 @@ track boundaries of both editions and measures each. Editions whose speeds diffe
 as two masters, match track by track at each track's own ratio, which its line gives,
 as in `at +9.05 ppm`, counting only ratios at the same speed or confirmed and saying
 how many segments it left out. Matching tracks do not make the editions equivalent.
-Two CDs take about three and a half to six and a half minutes, longer the more of
-their tracks drift, and up to about 11 GB of memory; much longer editions may not fit
-in memory.
-Compare exits 1 when a track of either edition could not be inspected or decoded, or
-an edition has no track, and 2 when only one input is the root of a set given without
+Two CDs take about three to five minutes, longer the more of their tracks drift, and
+about 1.5 GB to 3 GB of memory, which grows with the longest track and, for the
+search, with the editions' lengths, plus a temporary copy of both editions' decoded
+audio on disk, about 1.4 GB per CD of 65 min.
+Compare exits 1 when a track of either edition could not be inspected or decoded, an
+edition has no track, or it cannot hold the decoded audio in a temporary file, such as
+when the disk is full, and 2 when only one input is the root of a set given without
 its track option.
 
 Play a disc you acquired, or tag its tracks with other tools, from FLAC files that
