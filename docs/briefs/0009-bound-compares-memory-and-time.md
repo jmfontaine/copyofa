@@ -221,3 +221,63 @@ If the work outgrows it, cut in this order, keeping the same Reports and the tim
 
 The two-disc sets of AC6 are already in the maintainer's vault, imported for the
 measurements above: `TRON-ARES`, `DEVIATIONS-WAV` and `DEVIATIONS-MP3`.
+
+## Delivery notes
+
+Recorded at the v0.11.0 release review.
+
+- **Delivered in about a day of agent work,** the appetite, with no scope cut, by
+  unattended agents: the memory work in
+  [#196](https://github.com/jmfontaine/copyofa/pull/196), and the spike as a comment on
+  [#192](https://github.com/jmfontaine/copyofa/issues/192). AC2–AC4 have tests and the
+  suite holds 829 tests; AC5 passed through the pull request's review of the
+  documents; AC1 was verified by a harness outside the repository, which captured
+  every comparison the suite makes on v0.10.0 and on the branch: 240 Reports, all
+  measurement values equal. A test now checks that soxr's streaming resampler gives
+  one call's result to the bit, on the lowest allowed soxr too.
+- **AC6, on the maintainer's Mac, run by an agent** and recorded on #196, on AC power,
+  each pair back to back with v0.10.0. Every pair gave v0.10.0's Report exactly, text
+  results included:
+
+  | Pair (A is the 14-track pressing unless named) | v0.10.0 | v0.11.0 |
+  | --- | --- | --- |
+  | Other pressing | 189–192 s, 8.51 GB | 191–192 s, 2.47 GB |
+  | 15-track edition | 210–212 s, 9.21 GB | 212–213 s, 1.98 GB |
+  | 2017 download | 300–301 s, 7.81 GB | 297 s, 1.54 GB |
+  | Unrelated release | 183–200 s, 12.40 GB | 191–192 s, 2.93 GB |
+  | Track 13, stretched by +1 % | 8.3–8.4 s, 1.08 GB | 8.9–9.0 s, 0.99 GB |
+  | Track 13, stretched by +41,667 ppm | 7.7 s, 1.03 GB | 8.3–8.7 s, 1.00 GB |
+  | *Tron: Ares; Divergence* against itself | 884 s, 16.20 GB, swapping | 945 s, 2.79 GB |
+  | *Deviations*, WAV against MP3 | 1,441 s, 18.32 GB, swapping | 1,360 s, 3.05 GB |
+
+  v0.10.0 finished *Deviations* by swapping, in 24 minutes, so its Same results check
+  holds; the two two-disc pairs have no time bound.
+- **How it holds the audio:** each track is decoded and checked as before, then
+  resampled a block at a time and written as float32 to one unnamed temporary file per
+  edition, about 1.4 GB per 65-minute CD on disk, or in memory where the temporary
+  directory is RAM-backed. Keeping Reports equal to the bit took more than the brief
+  foresaw: each block of a downmix is placed at the alignment one whole array would
+  have, because Accelerate's BLAS rounds a dot product differently at another
+  alignment, and sums follow NumPy's order, which changed in NumPy 2.3 (a `KLUDGE`,
+  removed once NumPy's minimum is 2.3). A first run peaked at 4.05 GB on the 15-track
+  edition, because macOS keeps freed large blocks in the footprint; buffers sized once
+  for the longest track fixed it.
+- **The spike (AC7):** searching each window of A only within 15 s of where its
+  neighbors were found cut the coarse search from 142–1,185 s to 2–6 s, and `locate`
+  by 2 to 7.5 times on pairs with a chain, but on *Deviations* it missed a 6 s primary
+  portion off the predicted line and lost alternates on both two-disc pairs. The
+  maintainer chose not to adopt it; Parking Lot
+  [#76](https://github.com/jmfontaine/copyofa/discussions/76) holds it for a release
+  that compares many pairs.
+- **Observed during delivery:**
+  - The Mac had to be unplugged in the middle of AC6: the agent paused after the
+    CD-length pairs and ran the two-disc pairs once the Mac was back on AC power.
+  - The spike waited for an idle Mac before each timed run and took most of a day of
+    wall time, mostly waiting on other processes. A merge of #196 during it changed
+    the editable install it imported; its runs after the merge were discarded and
+    repeated on a copy of v0.10.0's source.
+- **Left as they are:** time still grows with the product of the editions' lengths,
+  the coarse search taking most of it; once it is localized, the speed estimate
+  (28–116 s) and refinement take most of what remains. AC1's harness last ran before
+  `c7ed068`, which changes the order of a sum only for NumPy older than 2.3, a path
+  CI's lowest-direct job tests.

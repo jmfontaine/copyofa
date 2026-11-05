@@ -27,7 +27,9 @@ successfully. The ninth, v0.9.0, compares two editions: given two Evidence Sets,
 track boundaries differ and what only one holds. The tenth, v0.10.0, compares masters
 that differ in speed: `compare` fits a speed ratio to each portion it finds, so audio
 whose speed differs by parts per million or by up to 4.5 % matches at its ratio, and
-says how each ratio was set.
+says how each ratio was set. The eleventh, v0.11.0, bounds compare's memory: two CDs
+compare in at most 3 GB instead of up to 12.4 GB, and editions of two discs in about
+3 GB, with the same Reports.
 The roadmap in the Product Map lists what comes next.
 
 The previous implementation, which archived optical discs bit-exactly with redumper, is
