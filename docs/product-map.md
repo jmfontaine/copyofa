@@ -252,20 +252,22 @@ the collector already owns.
 
 ### Next
 
-None planned; the v0.11.0 release review chooses it from Later.
-
-### Later
-
 - **Check a Received Report Against Your Own Copy** — Share and Evaluate Findings. The
   rest of S5: compare a received Report with the recipient's own copy, or reproduce its
   measurements, as checks distinct from validation. Views of inspection and
-  verification Reports may come with it.
+  verification Reports may come with it. Chosen at the v0.11.0 release review.
+
+### Later
+
 - **Acquire More Kinds of Disc** — Acquire Audio and Record Its Origins. S1 beyond
   plain audio CDs: CD-Extra and mixed-mode discs, and audio before the first track.
 - **Export Imported Audio** — Preserve Evidence Throughout Its Lifetime. Lossless
   export, delivered for acquired CDs in v0.5.0, for imported files too.
 - **Find Related Audio Among Selected Material** — Compare and Discover Relationships.
-  S7.
+  S7. Compare's memory no longer limits it; its time, 3 to 5 minutes for two CDs, does.
+  A search localized to where neighboring windows were found, measured in v0.11.0, is
+  several times faster but changes which portions are found
+  ([Parking Lot #76](https://github.com/jmfontaine/copyofa/discussions/76)).
 - **Repair Limited Archive Damage Using Optional Recovery Information** — Preserve
   Evidence Throughout Its Lifetime. S6.
 
