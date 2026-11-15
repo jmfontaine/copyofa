@@ -327,6 +327,24 @@ above, report, and stop.
 
 The process for maintainers is in [CONTRIBUTING.md](CONTRIBUTING.md#releasing).
 
+### Release review
+
+Each release's milestone ends with a documentation-only pull request titled
+`docs: record the vX.Y.Z release review`, with the release's milestone set. It follows
+the release review of the `product-development-system` skill. Besides the artifacts that
+review reconciles, it changes three places in this repository:
+
+- The release's brief gets a `Delivery notes` section, opened by "Recorded at the vX.Y.Z
+  release review": the appetite verdict, with durations taken from GitHub timestamps;
+  the findings, and who found each; technical debt; and each acceptance criterion's
+  result, labeled as a test, a review of the stack or a manual probe. A check made in a
+  session and not recorded on GitHub says so.
+- The README's Status paragraph gets one sentence for the release.
+- The Product Map's Now / Next / Later roadmap moves, with follow-ups as Later entries.
+
+An ADR changes only in its Consequences. Limits and bounds belong in the brief's
+acceptance criteria.
+
 ## Shared workflow
 
 This repository follows the shared workflow: the `github-workflow` skill's repository
