@@ -341,7 +341,7 @@ review reconciles, it records the release in three places of this repository:
 - The README's Status paragraph gets one sentence for the release.
 - The Product Map's Now / Next / Later roadmap is updated.
 
-## Shared workflow
+## Shared Workflow
 
 This repository follows the shared workflow: the `github-workflow` skill's repository
 setup describes its GitHub settings, rulesets, labels and templates. Those settings are
@@ -350,6 +350,6 @@ the GitHub web UI.
 
 It is a pull-request repository: every change reaches `main` through a pull request.
 
-### Deviations from the shared workflow
+### Deviations From the Shared Workflow
 
 None.
