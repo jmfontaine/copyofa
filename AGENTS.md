@@ -327,6 +327,20 @@ above, report, and stop.
 
 The process for maintainers is in [CONTRIBUTING.md](CONTRIBUTING.md#releasing).
 
+### Release review
+
+Each release's milestone ends with a documentation-only pull request titled
+`docs: record the vX.Y.Z release review`, with the release's milestone set. It follows
+the release review of the `product-development-system` skill. Besides the artifacts that
+review reconciles, it records the release in three places of this repository:
+
+- The release's brief gets a `Delivery notes` section, opened by "Recorded at the
+  vX.Y.Z release review", with the assessment: what the acceptance criteria showed and
+  by what evidence (a test, a review of the stack, a manual probe), and any check made
+  in a session and not recorded on GitHub.
+- The README's Status paragraph gets one sentence for the release.
+- The Product Map's Now / Next / Later roadmap is updated.
+
 ## Shared workflow
 
 This repository follows the shared workflow: the `github-workflow` skill's repository
